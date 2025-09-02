@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Excel upload and data management dashboard." />
+  <title>Admin</title>
+
+  <!-- CSS Dependencies -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/global.css') }}">
+</head>
+
+<body class="bg-light">
+  <div class="content-wrapper">
+    <!-- Header -->
+    {% if session.get("username") %} 
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3 class="mb-0">📝 Add New User</h3>
+
+        <div class="d-flex align-items-center gap-2"> 
+          {% if session.get("role") == "Admin" %} 
+            <a href="{{ url_for('upload_file', project_name=first_project_name) }}" class="btn btn-primary" title="Switch to Data">
+              <i class="bi bi-table"></i>
+            </a>
+          {% endif %}
+          
+          <div class="dropdown">
+            <button class="bg-light border rounded px-3 py-2 d-flex align-items-center shadow-sm dropdown-toggle" type="button" id="userMenuButton" data-bs-toggle="dropdown" aria-expanded="false">
+              <i class="bi bi-person-circle me-2 text-primary user-icon"></i>
+              <strong>{{ session["username"] }}</strong>
+            </button>
+            
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userMenuButton">
+              <li>
+                <a class="dropdown-item text-danger" href="{{ url_for('logout') }}">Logout</a>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    {% endif %}
+    
+    <!-- Dashboard Cards -->
+    <div class="d-flex flex-wrap gap-3 mb-1">
+      <div class="card shadow-lg p-4 mb-4 fixed-card-large">
+        <form method="POST">
+          <input type="text" name="username" class="form-control mb-3" placeholder="Username" required>
+          <input type="password" name="password" class="form-control mb-3" placeholder="Password" required>
+
+          <select name="role" class="form-control mb-3" required>
+            <option value="" disabled selected>Select Role</option>
+            <option value="Admin">Admin</option>
+            <option value="User">User</option>
+          </select>
+
+          <button class="btn btn-success w-100">Add User</button>
+        </form>
+      </div>
+
+      <div class="card shadow-lg p-4 fixed-card-size">
+        <h4>Admin Count</h4>
+        <div class="display-6 fw-bold text-primary mt-3">
+          {{ all_users | selectattr("role", "equalto", "Admin") | list | length }}
+        </div>
+      </div>
+
+      <div class="card shadow-lg p-4 fixed-card-size">
+        <h4>User Count</h4>
+        <div class="display-6 fw-bold text-success mt-3">
+          {{ all_users | rejectattr("role", "equalto", "Admin") | list | length }}
+        </div>
+      </div>
+
+      <div class="card shadow-lg p-4 mb-4 fixed-card-large">
+        <form method="POST" action="{{ url_for('add_project') }}">
+          <h4 class="mb-0">📂 Projects</h4><br>
+          <input type="text" class="form-control mb-3" name="project_name" placeholder="Project Name" required>
+          <button type="submit" class="btn btn-success w-100">
+            <i class="bi bi-plus-lg"></i> Add Project
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Users Table -->
+    <div class="row">
+      <div class="col-md-6">
+          <div class="card shadow-lg p-4 mb-1 table-width">
+            <table id="usersTable" class="table table-bordered table-hover table-striped">
+              <thead>
+                <tr>
+                  <th>Email / Username</th>
+                  <th>Role</th>
+                  <th class="col-actions">Actions</th>
+                </tr>
+              </thead>
+
+              <tbody> 
+                {% for user in all_users %}
+                  <tr>
+                    <td>{{ user.username }}</td>
+                    <td>{{ user.role }}</td>
+
+                    <td>
+                      <!-- <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#editModal{{ user.username }}">Edit Password</button> -->
+                      <button class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#editRoleModal{{ user.username }}">Edit Role</button>
+                      <button class="btn btn-sm btn-danger" onclick="confirmDelete('{{ user.username }}')">Delete</button>
+                    </td>
+                  </tr>
+
+                  <div class="modal fade" id="editModal{{ user.username }}" tabindex="-1" aria-labelledby="editModalLabel{{ user.username }}" aria-hidden="true">
+                    <div class="modal-dialog">
+                      <div class="modal-content">
+                        <form method="POST" action="{{ url_for('edit_user_password') }}">
+                          <div class="modal-header">
+                            <h5 class="modal-title" id="editModalLabel{{ user.username }}">Edit Password: {{ user.username }}</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                          </div>
+
+                          <div class="modal-body">
+                            <input type="hidden" name="username" value="{{ user.username }}">
+
+                            <div class="mb-3">
+                              <label for="new_password_{{ user.username }}" class="form-label">New Password</label>
+                              <input type="password" class="form-control" name="new_password" id="new_password_{{ user.username }}" required>
+                            </div>
+                          </div>
+
+                          <div class="modal-footer">
+                            <button type="submit" class="btn btn-primary">Update</button>
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                          </div>
+                        </form>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="modal fade" id="editRoleModal{{ user.username }}" tabindex="-1">
+                    <div class="modal-dialog">
+                      <div class="modal-content">
+                        <form method="POST" action="{{ url_for('edit_user_role') }}">
+                          <div class="modal-header">
+                            <h5 class="modal-title">Edit Role: {{ user.username }}</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                          </div>
+                          <div class="modal-body">
+                            <input type="hidden" name="username" value="{{ user.username }}">
+                            <select name="new_role" class="form-control" required>
+                              <option value="Admin" {% if user.role == 'Admin' %}selected{% endif %}>Admin</option>
+                              <option value="User" {% if user.role == 'User' %}selected{% endif %}>User</option>
+                            </select>
+                          </div>
+                          <div class="modal-footer">
+                            <button type="submit" class="btn btn-primary">Update</button>
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                          </div>
+                        </form>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered">
+                      <form method="POST" action="{{ url_for('delete_user') }}">
+                        <div class="modal-content">
+                          <div class="modal-header bg-danger text-white">
+                            <h5 class="modal-title">Confirm Delete</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                          </div>
+
+                          <div class="modal-body"> Are you sure you want to delete <strong id="modalUsername"></strong>? <input type="hidden" name="username" id="deleteUsername"></div>
+
+                          <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-danger">Yes, Delete</button>
+                          </div>
+                        </div>
+                      </form>
+                    </div>
+                  </div> 
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+      </div>
+
+      <!-- Projects Table -->
+      <div class="col-md-6">
+        <div class="card shadow-lg p-4 mb-1 table-width">
+          <table id="projectsTable" class="table table-bordered table-hover table-striped">
+            <thead>
+              <tr>
+                <th>Project Name</th>
+                <th class="col-actions">Actions</th>
+              </tr>
+            </thead>
+
+            <tbody> 
+              {% for project in all_projects %}
+                <tr>
+                  <td>{{ project.name }}</td>
+                  <td>
+                    <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#editModal{{ project.id }}">Edit Name</button>
+                    <button class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal{{ project.id }}">Delete</button>
+                  </td>
+                </tr>
+
+                <!-- Edit Modal -->
+                <div class="modal fade" id="editModal{{ project.id }}" tabindex="-1">
+                  <div class="modal-dialog">
+                    <div class="modal-content">
+                      <form method="POST" action="{{ url_for('edit_project') }}">
+                        <div class="modal-header">
+                          <h5 class="modal-title">Edit Name: {{ project.name }}</h5>
+                          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                          <input type="hidden" name="project_id" value="{{ project.id }}">
+                          <div class="mb-3">
+                            <label class="form-label">New Name</label>
+                            <input type="text" class="form-control" name="project_name" value="{{ project.name }}" required>
+                          </div>
+                        </div>
+                        <div class="modal-footer">
+                          <button type="submit" class="btn btn-primary">Update</button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Delete Modal -->
+                <div class="modal fade" id="deleteModal{{ project.id }}" tabindex="-1">
+                  <div class="modal-dialog modal-dialog-centered">
+                    <form method="POST" action="{{ url_for('delete_project') }}">
+                      <div class="modal-content">
+                        <div class="modal-header bg-danger text-white">
+                          <h5 class="modal-title">Confirm Delete</h5>
+                          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                          Are you sure you want to delete <strong>{{ project.name }}</strong>?
+                          <input type="hidden" name="project_id" value="{{ project.id }}">
+                        </div>
+                        <div class="modal-footer">
+                          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                          <button type="submit" class="btn btn-danger">Yes, Delete</button>
+                        </div>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+  <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+</body>
+
+</html>
