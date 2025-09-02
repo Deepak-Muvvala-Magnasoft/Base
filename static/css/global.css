@@ -1,0 +1,185 @@
+/* Base */
+body {
+  background-color: #f8f9fa;
+  overflow-x: hidden;
+}
+
+.body-centered {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background-color: #f8f9fa;
+}
+
+html,body {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* Login Page */
+.user-logo{
+  width: 50px; 
+  height: 50px;
+}
+
+.login-card {
+  width: 380px;
+  padding: 2rem;
+  border-radius: 12px;
+}
+
+.bg-container {
+  background: url("/static/images/Frame%2011.png") no-repeat center center fixed;
+  background-size: cover;
+  min-height: 92.5vh;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding: 1rem;
+  padding-right: 5%;
+}
+
+/* Data Page */
+.overflow{
+  overflow-x:auto;
+}
+
+.content-wrapper {
+  padding: 20px;
+}
+
+.dataTables_wrapper .dataTables_filter input {
+  width: 100px;
+}
+
+.dataTables_wrapper .dataTables_filter {
+  display: flex;
+  gap: 5px;
+}
+
+table td {
+  word-break: break-word;
+}
+
+thead th {
+  position: sticky;
+  top: 0;
+  background: #fff;
+  z-index: 2;
+}
+
+/* Admin Page */
+.fixed-card-size {
+  width: 290px;
+  height: 245px;
+}
+
+.fixed-card-large {
+  width: 615px;
+  height: 245px;
+}
+
+.col-actions {
+  width: 200px;
+}
+
+/* Landing Page */
+.logo-height{
+  height: 50px;
+}
+
+.top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 20px;
+  border-bottom: 1px solid #ddd;
+}
+
+.image-card {
+  text-align: center;
+  cursor: pointer;
+  text-decoration: none;
+  color: black;
+}
+
+.image-card img {
+  width: 100%;
+  width: 120px;
+  height: 140px;
+  border-radius: 10px;
+  transition: transform 0.3s ease;
+  padding-bottom: 20px;
+}
+
+.image-card img:hover {
+  transform: scale(1.05);
+}
+
+.container-images {
+  display: flex;
+  justify-content: center;
+  gap: 100px;
+  margin-top: 100px;
+}
+
+/* VMS */
+.center-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 90vh;
+  text-align: center;
+}
+
+.sync-image {
+  width: 1000px;
+}
+
+/* Media Queries */
+@media (max-width: 576px) {
+  /* Login Page */
+  .login-card {
+    padding: 1.5rem;
+  }
+}
+
+@media (max-width: 1919px) {
+  /* Login Page */
+  .bg-container {
+    min-height: 88.75vh;
+  }
+
+  /* Landing Page */
+  .image-card img {
+    width: 60px;
+    height: 80px;
+  }
+
+  .container-images {
+    gap: 50px;
+    margin-top: 50px;
+  }
+
+  /* Admin Page */
+  .fixed-card-size {
+    width: 230px;
+    height: 230px;
+  }
+
+  .fixed-card-large {
+    width: 400px;
+    height: 230px;
+  }
+
+  /* VMS */
+  .center-container {
+    height: 85vh;
+  }
+
+  .sync-image {
+    width: 925px;
+  }
+}

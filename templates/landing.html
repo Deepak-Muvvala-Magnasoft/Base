@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Applications</title>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/MagnasoftIcon.jpg') }}">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/global.css') }}">
+</head>
+
+<body>
+    <!-- Nav Bar -->
+    <header class="d-flex justify-content-between align-items-center p-2 border-bottom">
+        <!-- Left: Logo -->
+        <a href="/">
+            <img src="{{ url_for('static', filename='images/Magnasoft.png') }}" alt="Magnasoft Logo" class="logo-height">
+        </a>
+
+        <!-- Right: Buttons -->
+        <div class="d-flex align-items-center gap-2">
+            <a href="/" class="btn btn-outline-primary">Home</a>
+            <!-- User dropdown -->
+            <div class="dropdown">
+                <button class="btn bg-light border rounded px-3 py-2 d-flex align-items-center shadow-sm dropdown-toggle"
+                    type="button" id="userMenuButton" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-person-circle me-2 text-primary user-icon"></i>
+                    <strong>{{ session["username"] }}</strong>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userMenuButton">
+                    <li><a class="dropdown-item text-danger" href="{{ url_for('logout') }}">Logout</a></li>
+                </ul>
+            </div>
+        </div>
+    </header>
+
+
+    <!-- Modules -->
+    <div class="container-images">
+        <a href="https://accounts.zoho.in/signin?servicename=zohopeople&signupurl=https://www.zoho.com/people/signup.html" class="image-card" target="_blank" rel="noopener noreferrer">
+            <img src="{{ url_for('static', filename='images/ZohoPeople.svg') }}" alt="Zoho People">
+            <h4>Zoho People</h4>
+        </a>
+
+        <a href="https://payroll.zoho.in" class="image-card" target="_blank" rel="noopener noreferrer">
+            <img src="{{ url_for('static', filename='images/ZohoPayroll.png') }}" alt="Zoho Payroll">
+            <h4>Zoho Payroll</h4>
+        </a>
+
+        <a href="https://recruit.zoho.in/" class="image-card" target="_blank" rel="noopener noreferrer">
+            <img src="{{ url_for('static', filename='images/ZohoRecruit.jpg') }}" alt="Zoho Recruit">
+            <h4>Zoho Recruit</h4>
+        </a>
+
+        <a href="https://projects.zoho.in/" class="image-card" target="_blank" rel="noopener noreferrer">
+            <img src="{{ url_for('static', filename='images/ZohoProjects.png') }}" alt="Zoho Projects">
+            <h4>Zoho Projects</h4>
+        </a>
+
+        <a href="https://analytics.zoho.in/" class="image-card" target="_blank" rel="noopener noreferrer">
+            <img src="{{ url_for('static', filename='images/ZohoAnalytics.png') }}" alt="Zoho Analytics">
+            <h4>Zoho Analytics</h4>
+        </a>
+
+        <a href="https://accounts.zoho.in/signin?servicename=ZohoCreator&hide_signup=false&hide_fs=true&serviceurl=https://creatorapp.zoho.in/magnazohoin/risk-management/RedirectAction?serviceUrl=https://creatorapp.zoho.in/magnazohoin/risk-management%2523Form%253AChange_Management" class="image-card" target="_blank" rel="noopener noreferrer">
+            <img src="{{ url_for('static', filename='images/MagnasoftIcon.jpg') }}" alt="MGoverance">
+            <h4>MGovernance</h4>
+        </a>
+    </div>
+
+    <div class="container-images">
+        <a href="https://magnasoft.zohocreatorportal.in/#Home" class="image-card" target="_blank" rel="noopener noreferrer">
+            <img src="{{ url_for('static', filename='images/E-Procurement.jpg') }}" alt="E-Procurement">
+            <h4>E-Procurement</h4>
+        </a>
+
+        <a href="https://support-desk.magnasoft.com/app/project/HomePage.do" class="image-card" target="_blank" rel="noopener noreferrer">
+            <img src="{{ url_for('static', filename='images/Project.jpg') }}" alt="Project Management">
+            <h4>Project Tool</h4>
+        </a>
+
+        <a href="{{ url_for('vms') }}" class="image-card">
+            <img src="{{ url_for('static', filename='images/user-icon.png') }}" alt="Contact">
+            <h4>Contact Details</h4>
+        </a>
+
+        <a href="https://support-desk.magnasoft.com/" class="image-card" target="_blank" rel="noopener noreferrer">
+            <img src="{{ url_for('static', filename='images/HelpDesk.png') }}" alt="Help Desk">
+            <h4>Help Desk</h4>
+        </a>
+
+        <a href="https://login.salesforce.com/" class="image-card" target="_blank" rel="noopener noreferrer">
+            <img src="{{ url_for('static', filename='images/SalesForce.png') }}" alt="SalesForce">
+            <h4>SalesForce</h4>
+        </a>
+
+        <a href="https://docs.google.com/forms/d/e/1FAIpQLSeMA8twei5olIGHQ18FIFZU4aeZsHeKyoVDhyCxEuFkW6ZZ7w/viewform" class="image-card" target="_blank" rel="noopener noreferrer">
+            <img src="{{ url_for('static', filename='images/TravelDesk.png') }}" alt="Travel Desk">
+            <h4>Travel Desk</h4>
+        </a>
+    </div>
+
+    <div class="container-images">
+        <a href="{{ url_for('upload_file', project_name=session.get('selected_project')) }}" class="image-card">
+            <img src="{{ url_for('static', filename='images/E2C.jpg') }}" alt="PMS">
+            <h4>Excel Tool</h4>
+        </a>
+
+        <a href="{{ url_for('vms') }}" class="image-card">
+            <img src="{{ url_for('static', filename='images/VMS.jpg') }}" alt="VMS">
+            <h4>Visitor Tool</h4>
+        </a>
+
+        <a href="{{ url_for('vms') }}" class="image-card">
+            <img src="{{ url_for('static', filename='images/QMS.png') }}" alt="QMS">
+            <h4>QMS</h4>
+        </a>
+
+        <a href="{{ url_for('vms') }}" class="image-card">
+            <img src="{{ url_for('static', filename='images/GatePass.jpg') }}" alt="GatePass">
+            <h4>GatePass</h4>
+        </a>
+    </div>
+
+    <!--Scripts-->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/landing.js') }}"></script>
+
+</body>
+</html>

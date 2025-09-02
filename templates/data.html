@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Excel upload and data management dashboard." />
+  <title>Data</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css">
+  <link rel="stylesheet" href="https://cdn.datatables.net/fixedheader/3.4.0/css/fixedHeader.bootstrap5.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/global.css') }}">
+</head>
+
+<body class="bg-light">
+  <div class="content-wrapper">
+    <div class="d-flex justify-content-between mb-3">
+      <h2>📤 Upload Excel Sheet</h2>
+
+      <div class="d-flex justify-content-end align-items-center gap-2 mb-3">
+        {% if session.get("role") == "Admin" %}
+          <a href="{{ url_for('admin') }}" class="btn btn-primary" title="Go to Admin">
+            <i class="bi bi-person-gear"></i>
+          </a>
+        {% endif %}
+<a href="/" class="btn btn-outline-primary">Home</a>
+        <div class="dropdown">
+          <button class="btn bg-light border rounded px-3 py-2 d-flex align-items-center shadow-sm dropdown-toggle"
+                  type="button" id="userMenuButton" data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="bi bi-person-circle me-2 text-primary user-icon"></i>
+            <strong>{{ session["username"] }}</strong>
+          </button>
+
+          <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userMenuButton">
+            <!-- <li>
+              <button class="dropdown-item" data-bs-toggle="modal" data-bs-target="#editModal{{ session['username'] }}">
+                Edit Password
+              </button>
+            </li> -->
+
+            <li>
+              <a class="dropdown-item text-danger" href="{{ url_for('logout') }}">Logout</a>
+            </li>
+          </ul>
+        </div>
+
+        <div class="modal fade" id="editModal{{ session['username'] }}" tabindex="-1" aria-labelledby="editModalLabel{{ session['username'] }}" aria-hidden="true">
+          <div class="modal-dialog">
+            <div class="modal-content">
+              <form method="POST" action="{{ url_for('edit_user_password') }}">
+                <div class="modal-header">
+                  <h5 class="modal-title" id="editModalLabel{{ session['username'] }}">Edit Password: {{ session['username'] }}</h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body">
+                  <input type="hidden" name="username" value="{{ session['username'] }}">
+                  <div class="mb-3">
+                    <label for="new_password_{{ session['username'] }}" class="form-label">New Password</label>
+                    <input type="password" class="form-control" name="new_password" id="new_password_{{ session['username'] }}" required>
+                  </div>
+                </div>
+
+                <div class="modal-footer">
+                  <button type="submit" class="btn btn-primary">Update</button>
+                  <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="row">
+        <div class="col-md-4">
+          <div class="card shadow-lg p-4 mb-4">
+            <form action="/data" method="post" enctype="multipart/form-data">
+              <div class="mb-3">
+                <label class="form-label">Project Name</label>
+
+                <select name="project_name" id="projectDropdown" class="form-select" required>
+                  <option value="">-- Select Project --</option>
+                  {% for p in projects %}
+                    <option value="{{ p }}" {% if (request.args.get('project_name') or selected_project) == p %}selected{% endif %}>{{ p }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label">User Email</label>
+                <input type="text" value="{{ email }}" class="form-control" disabled>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label">Choose Excel File</label>
+                <input type="file" name="file" class="form-control" accept=".xlsx,.xls" required>
+              </div>
+
+              <button type="submit" class="btn btn-primary w-100">Upload & Save</button>
+            </form>
+          </div>
+        </div>
+
+        <div class="col-md-8">
+          <div class="card shadow-lg p-4 mb-4">
+            <div class="table-responsive">
+              <table id="groupedTable" class="table table-bordered table-sm">
+                <thead class="table-light">
+                  <tr>
+                    <th>Project Name</th>
+                    <th>File Name</th>
+                    <th>Uploaded Time</th>
+                    <th>Records Count</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {% for entry in grouped_data %}
+                    <tr>
+                      <td>{{ entry.project_name }}</td>
+                      <td>{{ entry.file_name }}</td>
+                      <td>{{ entry.upload_time }}</td>
+                      <td>{{ entry.count }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card shadow-lg p-4">
+      <div class="table-responsive overflow">
+        <table id="uploadedTable" class="table table-striped table-bordered">
+          <thead>
+            <tr>
+              {% for col in columns %}
+                <th>{{ col }}</th>
+              {% endfor %}
+            </tr>
+          </thead>
+
+          <tbody>
+            {% for doc in uploaded_data %}
+              <tr>
+                {% for col in columns %}
+                  <td>{{ doc[col] if col in doc else '' }}</td>
+                {% endfor %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.datatables.net/fixedheader/3.4.0/js/dataTables.fixedHeader.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+  <script src="{{ url_for('static', filename='js/data.js') }}"></script>
+</body>
+
+</html>
