@@ -1,9 +1,13 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
 from flask_sqlalchemy import SQLAlchemy
+from flask_pymongo import PyMongo
+from bson.objectid import ObjectId
+from datetime import datetime
+from authlib.integrations.flask_client import OAuth
 from sqlalchemy import func, inspect, text
 import pandas as pd
 from werkzeug.security import generate_password_hash, check_password_hash
-from config import MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DB, MYSQL_PORT, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+from config import MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DB, MYSQL_PORT, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, MONGO_URI
 from datetime import datetime
 from flask_dance.contrib.google import make_google_blueprint, google
 import os
@@ -14,6 +18,9 @@ app = Flask(__name__)
 app.secret_key = "super_secret_key"
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 
+app.config['PREFERRED_URL_SCHEME'] = 'https'
+app.config["MONGO_URI"] = MONGO_URI
+mongo = PyMongo(app)
 
 # Add Google OAuth config
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'  # For HTTP (development only)
@@ -297,8 +304,8 @@ def upload_file():
     )
 
 
-@app.route('/vms')
-def vms():
+@app.route('/vms_demo')
+def vms_demo():
     return render_template('vms.html')
 
 
@@ -456,6 +463,91 @@ def delete_project():
     db.session.delete(proj)
     db.session.commit()
     return redirect(url_for("admin"))
+
+
+@app.route("/vms")
+def vms():
+    if "username" not in session:
+        return redirect(url_for("login"))  # force login first
+
+    return render_template("visitor_form.html", user=session["username"])
+
+
+@app.route("/add_visitor", methods=["POST"])
+def add_visitor():
+    form = request.form
+    visitor = {
+        "name": form.get("name"),
+        "company": form.get("company"),
+        "phone": form.get("phone"),
+        "email": form.get("email"),
+        "location": form.get("location"),
+        "idType": form.get("idType"),
+        "idNumber": form.get("idNumber"),
+        "purpose": form.get("purpose"),
+        "otherPurpose": form.get("otherPurpose"),
+        "contact_person": form.get("contact_person"),
+        "notes": form.get("notes"),
+        "items": request.form.getlist("items"),
+        "otherItems": form.get("otherItems"),
+        "check_in": None,
+        "check_out": None,
+        "remarks": None,
+        "verified": False
+    }
+    mongo.db.visitors.insert_one(visitor)
+    flash("Visitor saved successfully!", "success")
+    return redirect(url_for("vms"))
+
+
+@app.route("/visitors")
+def visitors_list():
+    all_visitors = list(mongo.db.visitors.find())
+    return render_template("visitors_list.html", visitors=all_visitors)
+
+
+@app.route("/api/visitors")
+def visitors_api():
+    visitors = list(mongo.db.visitors.find())
+    for v in visitors:
+        v["_id"] = str(v["_id"])
+    return jsonify(visitors)
+
+
+@app.route("/checkin/<visitor_id>", methods=["POST"])
+def checkin(visitor_id):
+    data = request.get_json()
+    badge = data.get("badge")
+
+    if not badge:
+        return jsonify({"success": False, "message": "Badge number required"}), 400
+
+    mongo.db.visitors.update_one(
+        {"_id": ObjectId(visitor_id)},
+        {"$set": {
+            "check_in": datetime.now(),
+            "badge_number": badge,
+            "verified": True
+        }}
+    )
+
+    return jsonify({"success": True, "message": "Visitor checked in successfully"})
+
+
+@app.route("/checkout/<visitor_id>", methods=["POST"])
+def checkout(visitor_id):
+    data = request.get_json()
+    remarks = data.get("remarks", "")
+
+    mongo.db.visitors.update_one(
+        {"_id": ObjectId(visitor_id)},
+        {"$set": {
+            "check_out": datetime.now(),
+            "remarks": remarks
+        }}
+    )
+
+    return jsonify({"success": True, "message": "Visitor checked out successfully"})
 
 
 if __name__ == "__main__":

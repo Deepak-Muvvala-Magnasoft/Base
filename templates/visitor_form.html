@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Visitor Registration</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  <style>
+    body {
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background: #f4f6f9;
+      margin: 0;
+      padding: 0;
+    }
+
+    .navbar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 98%;
+      z-index: 1000;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: linear-gradient(90deg, #007bff, #0056b3); /* gradient effect */
+      padding: 12px 20px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+
+    .navbar .logo img {
+      height: 45px;
+      transition: transform 0.3s;
+    }
+
+    .navbar .logo img:hover {
+      transform: scale(1.05);
+    }
+
+    .navbar ul {
+      list-style: none;
+      display: flex;
+      margin: 0;
+      padding: 0;
+    }
+
+    .navbar ul li {
+      margin-left: 25px;
+    }
+
+    .navbar ul li a {
+      color: green;
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 15px;
+      padding: 8px 14px;
+      border-radius: 6px;
+      transition: all 0.3s ease;
+    }
+
+    .navbar ul li a:hover,
+    .navbar ul li a.active {
+      background: rgba(255, 255, 255, 0.25);
+      backdrop-filter: blur(4px);
+    }
+
+    .container {
+      background: #fff;
+      padding: 30px 40px;
+      border-radius: 10px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.1);
+      max-width: 600px;
+      width: 100%;
+      margin: 100px auto 40px auto; /* push content below navbar */
+    }
+
+    h2 {
+      text-align: center;
+      color: #007bff;
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      margin: 12px 0 6px;
+      font-weight: 500;
+      color: #333;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 14px;
+      margin-bottom: 10px;
+      transition: border-color 0.3s;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: #007bff;
+      outline: none;
+      box-shadow: 0 0 5px rgba(0,123,255,0.2);
+    }
+
+    .checkbox-group {
+      margin: 8px 0 12px;
+    }
+
+    .checkbox-group label {
+      display: inline-block;
+      margin-right: 15px;
+      font-weight: normal;
+    }
+
+    button {
+      background: #007bff;
+      color: #fff;
+      border: none;
+      padding: 12px;
+      width: 100%;
+      border-radius: 6px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    button:hover {
+      background: #0056b3;
+    }
+
+    ul {
+      list-style: none;
+      padding: 0;
+      margin-bottom: 15px;
+    }
+
+    li {
+      padding: 8px;
+      background: #e6f9e6;
+      border: 1px solid #b2e6b2;
+      color: #2d7a2d;
+      border-radius: 6px;
+      margin-bottom: 8px;
+    }
+  .nav-links {
+    list-style: none;
+    display: flex;
+    gap: 15px;
+    margin: 0;
+    padding-right: 30px;
+  }
+
+  .nav-links li a {
+    color: #fff;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 15px;
+    padding: 8px 14px;
+    border-radius: 6px;
+    transition: all 0.3s ease;
+  }
+
+  .nav-links li a:hover,
+  .nav-links li a.active {
+    background: rgba(255, 255, 255, 0.25);
+    backdrop-filter: blur(4px);
+  }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <div class="logo">
+      <a href="{{ url_for('vms') }}">
+        <img src="{{ url_for('static', filename='images/Magnasoft.png') }}" alt="Company Logo">
+      </a>
+    </div>
+    <ul class="nav-links">
+      <li><a href="{{ url_for('visitors_list') }}" class="{% if active_page=='list' %}active{% endif %}">Visitors List</a></li>
+      <li><a href="{{ url_for('logout') }}">Logout</a></li>
+    </ul>
+  </nav>
+  <div class="container">
+    <h2>Visitor Registration</h2>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <ul>
+          {% for category, message in messages %}
+            <li>{{ message }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    {% endwith %}
+
+    <form method="POST" action="{{ url_for('add_visitor') }}">
+      <label>Name*</label>
+      <input type="text" name="name" required>
+
+      <label>Company*</label>
+      <input type="text" name="company" required>
+
+      <label>Phone*</label>
+      <input type="text" name="phone" required>
+
+      <label>Email</label>
+      <input type="email" name="email">
+
+      <label>Location*</label>
+      <select name="location" required>
+        <option value="">Select Location</option>
+        <option value="BLG">Bangalore</option>
+        <option value="HYD">Hyderabad</option>
+        <option value="HSN">Hassan</option>
+      </select>
+
+      <label>ID Proof</label>
+      <select name="idType">
+        <option value="">Select ID Type</option>
+        <option value="Aadhaar">Aadhaar</option>
+        <option value="PAN">PAN</option>
+        <option value="Driving License">Driving License</option>
+        <option value="Passport">Passport</option>
+      </select>
+      <input type="text" name="idNumber" placeholder="Enter ID Number">
+
+      <label>Purpose*</label>
+      <select name="purpose" required>
+        <option value="">Select Purpose</option>
+        <option value="Meeting">Meeting</option>
+        <option value="Interview">Interview</option>
+        <option value="Delivery">Delivery</option>
+        <option value="Maintenance">Maintenance</option>
+        <option value="Other">Other</option>
+      </select>
+
+      <label>Other Purpose</label>
+      <input type="text" name="otherPurpose">
+
+      <label>Items Carried</label>
+      <div class="checkbox-group">
+        <label><input type="checkbox" name="items" value="Laptop"> Laptop</label>
+        <label><input type="checkbox" name="items" value="Pendrive"> Pendrive</label>
+        <label><input type="checkbox" name="items" value="Ipad"> Ipad</label>
+        <label><input type="checkbox" name="items" value="Other"> Other</label>
+      </div>
+
+      <label>If Other Items</label>
+      <input type="text" name="otherItems">
+
+      <label>Contact Person*</label>
+      <input type="text" name="contact_person" required>
+
+      <label>Notes</label>
+      <textarea name="notes" rows="3"></textarea>
+
+      <button type="submit">Submit</button>
+    </form>
+  </div>
+</body>
+</html>
