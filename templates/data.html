@@ -21,8 +21,8 @@
       <h2>📤 Upload Excel Sheet</h2>
 
       <div class="d-flex justify-content-end align-items-center gap-2 mb-3">
-        {% if session.get("role") == "Admin" %}
-          <a href="{{ url_for('admin') }}" class="btn btn-primary" title="Go to Admin">
+        {% if session.get("role") == "Super Admin" %}
+          <a href="{{ url_for('superadmin') }}" class="btn btn-primary" title="Go to Admin">
             <i class="bi bi-person-gear"></i>
           </a>
         {% endif %}

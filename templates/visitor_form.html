@@ -175,6 +175,7 @@
       </a>
     </div>
     <ul class="nav-links">
+      <li><a href="/" class="btn btn-outline-primary">Home</a></li>
       <li><a href="{{ url_for('visitors_list') }}" class="{% if active_page=='list' %}active{% endif %}">Visitors List</a></li>
       <li><a href="{{ url_for('logout') }}">Logout</a></li>
     </ul>
@@ -247,8 +248,22 @@
       <label>If Other Items</label>
       <input type="text" name="otherItems">
 
-      <label>Contact Person*</label>
-      <input type="text" name="contact_person" required>
+<label>Contact Person*</label>
+<select name="dept" required onchange="fetchUsers(this.value)">
+  <option value="">Select Department</option>
+  <option value="HR">HR</option>
+  <option value="IT">IT</option>
+  <option value="Admin">Admin</option>
+  <option value="Others">Others</option>
+</select>
+
+<select id="contact_person" name="contact_person" required>
+  <option value="">Select Contact Person</option>
+</select>
+
+<!-- Hidden input to hold email -->
+<input type="hidden" id="contact_email" name="contact_email">
+
 
       <label>Notes</label>
       <textarea name="notes" rows="3"></textarea>
@@ -256,5 +271,37 @@
       <button type="submit">Submit</button>
     </form>
   </div>
+  <script>
+function fetchUsers(dept) {
+    if (!dept) return;
+
+    fetch(`/get_users/${dept}`)
+        .then(res => res.json())
+        .then(data => {
+            const contactSelect = document.getElementById('contact_person');
+            contactSelect.innerHTML = '<option value="">Select Contact Person</option>';
+
+            data.forEach(user => {
+                const option = document.createElement('option');
+                option.value = user.username;
+                option.setAttribute('data-email', user.email); // store email
+                option.textContent = user.username;
+                contactSelect.appendChild(option);
+            });
+
+            // Reset hidden email field
+            document.getElementById('contact_email').value = '';
+        });
+}
+
+
+// When user selects a contact person, fill hidden email
+document.getElementById('contact_person').addEventListener('change', function() {
+    const selectedOption = this.options[this.selectedIndex];
+    document.getElementById('contact_email').value = selectedOption.getAttribute('data-email') || '';
+});
+
+</script>
+
 </body>
 </html>

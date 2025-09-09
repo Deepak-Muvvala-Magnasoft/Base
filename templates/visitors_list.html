@@ -202,6 +202,7 @@
         <th>Notes</th>
         <th>Check-in</th>
         <th>Check-out</th>
+        <th>Approval Status</th>
       </tr>
     </thead>
     <tbody>
@@ -237,13 +238,14 @@
                     onchange="toggleCheckIn('{{ v._id }}')">
               Verified
             </label>
-
-            <button id="checkin-btn-{{ v._id }}" 
-                    onclick="checkInVisitor('{{ v._id }}')" 
-                    disabled>
-              Check In
-            </button>
-          {% else %}
+            {% if user_role == 'Security' and v.approved == True %}
+              <!-- Enable the button -->
+              <button id="checkin-btn-{{ v._id }}" onclick="checkInVisitor('{{ v._id }}')">Check In</button>
+            {% else %}
+              <!-- Disabled button -->
+              <button id="checkin-btn-{{ v._id }}" disabled>Check In</button>
+            {% endif %}
+            {% else %}
             ✅ {{ v.badge_number }} <br>
             {{ v.check_in.strftime("%Y-%m-%d %H:%M:%S") }}
           {% endif %}
@@ -274,6 +276,7 @@
 
             <button id="checkout-btn-{{ v._id }}" 
                     onclick="checkOutVisitor('{{ v._id }}')"
+                    {% if user_role != 'Security' %} disabled {% endif %}
                     {% if v["items"] or v.otherItems %}disabled{% endif %}>
               Check Out
             </button>
@@ -282,6 +285,15 @@
             Remarks: {{ v.remarks or '—' }}
           {% else %}
             —
+          {% endif %}
+        </td>
+        <td>
+          {% if v.approved == True %}
+            <span style="color: green; font-weight: bold;">✅ Approved</span>
+          {% elif v.approved == False %}
+            <span style="color: red; font-weight: bold;">❌ Declined</span>
+          {% else %}
+            <span style="color: orange; font-weight: bold;">⏳ Pending</span>
           {% endif %}
         </td>
       </tr>
@@ -322,10 +334,23 @@
     }
   </script>
   <script>
+    const userRole = "{{ user_role }}";
+
+    function toggleCheckIn(visitorId) {
+      if (userRole !== 'Security') return;
+
+      const badge = document.getElementById("badge-" + visitorId).value.trim();
+      const verified = document.getElementById("verify-" + visitorId).checked;
+      const btn = document.getElementById("checkin-btn-" + visitorId);
+
+      btn.disabled = !(badge && verified);
+    }
+
     function toggleCheckout(visitorId) {
+      if (userRole !== 'Security') return;
+
       const checkboxes = document.querySelectorAll(".checkout-item-" + visitorId);
       if (checkboxes.length === 0) {
-        // No items → enable checkout button immediately
         document.getElementById("checkout-btn-" + visitorId).disabled = false;
         return;
       }

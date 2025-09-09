@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Excel upload and data management dashboard." />
-  <title>Admin</title>
+  <title>Super Admin</title>
 
   <!-- CSS Dependencies -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
@@ -21,7 +21,8 @@
         <h3 class="mb-0">📝 Add New User</h3>
 
         <div class="d-flex align-items-center gap-2"> 
-          {% if session.get("role") == "Admin" %} 
+          {% if session.get("role") == "Super Admin" %}
+            <a href="/" class="btn btn-outline-primary">Home</a>
             <a href="{{ url_for('upload_file', project_name=first_project_name) }}" class="btn btn-primary" title="Switch to Data">
               <i class="bi bi-table"></i>
             </a>
@@ -54,6 +55,8 @@
             <option value="" disabled selected>Select Role</option>
             <option value="Admin">Admin</option>
             <option value="User">User</option>
+            <option value="Super Admin">Super Admin</option>
+            <option value="Security">Security</option>
           </select>
 
           <button class="btn btn-success w-100">Add User</button>
@@ -61,16 +64,16 @@
       </div>
 
       <div class="card shadow-lg p-4 fixed-card-size">
-        <h4>Admin Count</h4>
+        <h4>Super Admin Count</h4>
         <div class="display-6 fw-bold text-primary mt-3">
-          {{ all_users | selectattr("role", "equalto", "Admin") | list | length }}
+          {{ all_users | selectattr("role", "equalto", "Super Admin") | list | length }}
         </div>
       </div>
 
       <div class="card shadow-lg p-4 fixed-card-size">
         <h4>User Count</h4>
         <div class="display-6 fw-bold text-success mt-3">
-          {{ all_users | rejectattr("role", "equalto", "Admin") | list | length }}
+          {{ all_users | rejectattr("role", "equalto", "Super Admin") | list | length }}
         </div>
       </div>
 
@@ -151,6 +154,8 @@
                             <select name="new_role" class="form-control" required>
                               <option value="Admin" {% if user.role == 'Admin' %}selected{% endif %}>Admin</option>
                               <option value="User" {% if user.role == 'User' %}selected{% endif %}>User</option>
+                              <option value="Super Admin" {% if user.role == 'Super Admin' %}selected{% endif %}>Super Admin</option>
+                              <option value="Security" {% if user.role == 'Security' %}selected{% endif %}>Security</option>
                             </select>
                           </div>
                           <div class="modal-footer">
