@@ -1,19 +1,30 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
 from flask_sqlalchemy import SQLAlchemy
+from flask_pymongo import PyMongo
+from bson.objectid import ObjectId
+from datetime import datetime
+from authlib.integrations.flask_client import OAuth
 from sqlalchemy import func, inspect, text
 import pandas as pd
 from werkzeug.security import generate_password_hash, check_password_hash
-from config import MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DB, MYSQL_PORT, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+from config import MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DB, MYSQL_PORT, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, MONGO_URI, SMTP_SERVER, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_MAIL
 from datetime import datetime
 from flask_dance.contrib.google import make_google_blueprint, google
 import os
 import requests
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+import smtplib
+from urllib.parse import quote_plus
 
 
 app = Flask(__name__)
 app.secret_key = "super_secret_key"
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 
+app.config['PREFERRED_URL_SCHEME'] = 'https'
+app.config["MONGO_URI"] = MONGO_URI
+mongo = PyMongo(app)
 
 # Add Google OAuth config
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'  # For HTTP (development only)
@@ -297,19 +308,19 @@ def upload_file():
     )
 
 
-@app.route('/vms')
-def vms():
+@app.route('/vms_demo')
+def vms_demo():
     return render_template('vms.html')
 
 
-@app.route("/admin", methods=["GET", "POST"])
-def admin():
+@app.route("/superadmin", methods=["GET", "POST"])
+def superadmin():
     if not session.get("username"):
         flash("Login required", "danger")
         return redirect(url_for("login"))
 
     user = User.query.filter_by(username=session["username"]).first()
-    if not user or user.role != "Admin":
+    if not user or user.role != "Super Admin":
         flash("Access denied", "danger")
         return redirect(url_for("upload_file"))
 
@@ -342,17 +353,17 @@ def edit_user_role():
 
     if not username or not new_role:
         flash("Missing username or role", "danger")
-        return redirect(request.referrer or url_for("admin"))
+        return redirect(request.referrer or url_for("superadmin"))
 
     user = User.query.filter_by(username=username).first()
     if not user:
         flash("User not found.", "danger")
-        return redirect(url_for("admin"))
+        return redirect(url_for("superadmin"))
 
     user.role = new_role
     db.session.commit()
     flash(f"Role for '{username}' updated to '{new_role}' successfully!", "success")
-    return redirect(url_for("admin"))
+    return redirect(url_for("superadmin"))
 
 
 @app.route("/edit_user_password", methods=["POST"])
@@ -385,7 +396,7 @@ def delete_user():
         flash(f"User '{username_to_delete}' deleted successfully!", "success")
     else:
         flash(f"User '{username_to_delete}' not found.", "danger")
-    return redirect(url_for("admin"))
+    return redirect(url_for("superadmin"))
 
 
 @app.route("/add_project", methods=["POST"])
@@ -393,7 +404,7 @@ def add_project():
     name = request.form["project_name"].strip()
     if not name:
         flash("Project name required.", "warning")
-        return redirect(url_for("admin"))
+        return redirect(url_for("superadmin"))
 
     new_project = Project(name=name)
     db.session.add(new_project)
@@ -413,7 +424,7 @@ def add_project():
     db.session.commit()
 
     flash(f"Project '{name}' created with table '{table_name}'.", "success")
-    return redirect(url_for("admin"))
+    return redirect(url_for("superadmin"))
 
 
 @app.route("/edit_project", methods=["POST"])
@@ -424,7 +435,7 @@ def edit_project():
     proj = Project.query.get(project_id)
     if not proj:
         flash("Project not found.", "danger")
-        return redirect(url_for("admin"))
+        return redirect(url_for("superadmin"))
 
     old_name = proj.name
     old_table = safe_table_name(old_name)
@@ -443,7 +454,7 @@ def edit_project():
 
     db.session.commit()
     flash(f"Project '{old_name}' renamed to '{new_name}' and updated in excel_data.", "success")
-    return redirect(url_for("admin"))
+    return redirect(url_for("superadmin"))
 
 
 @app.route("/delete_project", methods=["POST"])
@@ -452,10 +463,180 @@ def delete_project():
     proj = Project.query.get(project_id)
     if not proj:
         flash("Project not found.", "danger")
-        return redirect(url_for("admin"))
+        return redirect(url_for("superadmin"))
     db.session.delete(proj)
     db.session.commit()
-    return redirect(url_for("admin"))
+    return redirect(url_for("superadmin"))
+
+
+@app.route("/vms")
+def vms():
+    if "username" not in session:
+        return redirect(url_for("login"))  # force login first
+
+    return render_template("visitor_form.html", user=session["username"])
+
+
+@app.route("/add_visitor", methods=["POST"])
+def add_visitor():
+    form = request.form
+    contact_person_email = request.form.get('contact_email')
+    visitor = {
+        "name": form.get("name"),
+        "company": form.get("company"),
+        "phone": form.get("phone"),
+        "email": form.get("email"),
+        "location": form.get("location"),
+        "idType": form.get("idType"),
+        "idNumber": form.get("idNumber"),
+        "purpose": form.get("purpose"),
+        "otherPurpose": form.get("otherPurpose"),
+        "contact_person": form.get("contact_person"),
+        "contact_email": form.get("contact_email"),
+        "notes": form.get("notes"),
+        "items": request.form.getlist("items"),
+        "otherItems": form.get("otherItems"),
+        "check_in": None,
+        "check_out": None,
+        "remarks": None,
+        "verified": False,
+        "approved": None,
+    }
+    mongo.db.visitors.insert_one(visitor)
+
+    # Send email notification
+    try:
+        send_email_to_contact(visitor)
+        flash("Visitor saved and email sent successfully!", "success")
+    except Exception as e:
+        flash(f"Visitor saved but email failed: {str(e)}", "warning")
+
+    flash("Visitor saved successfully!", "success")
+    return redirect(url_for("vms"))
+
+
+def send_email_to_contact(visitor):
+    contact_email = visitor.get("contact_email")
+    contact_name = visitor.get("contact_person")
+    visitor_id = str(visitor["_id"])
+
+    approve_link = f"https://348845d3f496.ngrok-free.app/approve_visitor/{visitor_id}"
+    decline_link = f"https://348845d3f496.ngrok-free.app/decline_visitor/{visitor_id}"
+
+    subject = "New Visitor Approval Required"
+    body = f"""
+    <html>
+    <body>
+        <p>Hello {contact_name},</p>
+
+        <p>A new visitor has registered to meet you:</p>
+
+        <ul>
+            <li><strong>Name:</strong> {visitor.get('name')}</li>
+            <li><strong>Company:</strong> {visitor.get('company')}</li>
+            <li><strong>Phone:</strong> {visitor.get('phone')}</li>
+            <li><strong>Purpose:</strong> {visitor.get('purpose')}</li>
+        </ul>
+
+        <p>Please choose an option below:</p>
+        <a href="{approve_link}" style="display: inline-block; padding: 10px 20px; margin-right: 10px; background-color: #28a745; color: white; text-decoration: none; border-radius: 5px;">✅ Approve</a>
+        <a href="{decline_link}" style="display: inline-block; padding: 10px 20px; background-color: #dc3545; color: white; text-decoration: none; border-radius: 5px;">❌ Decline</a>
+
+        <p>Regards,<br>VMS System</p>
+    </body>
+    </html>
+    """
+
+    message = MIMEMultipart()
+    message["From"] = SMTP_MAIL
+    message["To"] = contact_email
+    message["Subject"] = subject
+    message.attach(MIMEText(body, "html"))
+
+    with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+        server.starttls()
+        server.login(SMTP_USERNAME, SMTP_PASSWORD)
+        server.sendmail(message["From"], contact_email, message.as_string())
+
+
+@app.route("/approve_visitor/<visitor_id>")
+def approve_visitor(visitor_id):
+    mongo.db.visitors.update_one(
+        {"_id": ObjectId(visitor_id)},
+        {"$set": {"approved": True}}
+    )
+    return "Visitor approved ✅. Security can now check-in the visitor."
+
+
+@app.route("/decline_visitor/<visitor_id>")
+def decline_visitor(visitor_id):
+    mongo.db.visitors.update_one(
+        {"_id": ObjectId(visitor_id)},
+        {"$set": {"approved": False}}
+    )
+    return "Visitor declined ❌. They will not be allowed to check-in."
+
+
+@app.route("/get_users/<dept>")
+def get_users(dept):
+    users = db.session.execute(
+        text("SELECT username, email FROM contact_person WHERE dept = :dept"),
+        {"dept": dept}
+    ).mappings().all()
+
+    # Return list of objects: name + email
+    return jsonify([{"username": u["username"], "email": u["email"]} for u in users])
+
+
+@app.route("/visitors")
+def visitors_list():
+    all_visitors = list(mongo.db.visitors.find())
+    user_role = session.get('role')  # Get role directly from session
+    return render_template("visitors_list.html", visitors=all_visitors, user_role=user_role)
+
+
+@app.route("/api/visitors")
+def visitors_api():
+    visitors = list(mongo.db.visitors.find())
+    for v in visitors:
+        v["_id"] = str(v["_id"])
+    return jsonify(visitors)
+
+
+@app.route("/checkin/<visitor_id>", methods=["POST"])
+def checkin(visitor_id):
+    data = request.get_json()
+    badge = data.get("badge")
+
+    if not badge:
+        return jsonify({"success": False, "message": "Badge number required"}), 400
+
+    mongo.db.visitors.update_one(
+        {"_id": ObjectId(visitor_id)},
+        {"$set": {
+            "check_in": datetime.now(),
+            "badge_number": badge,
+            "verified": True
+        }}
+    )
+
+    return jsonify({"success": True, "message": "Visitor checked in successfully"})
+
+
+@app.route("/checkout/<visitor_id>", methods=["POST"])
+def checkout(visitor_id):
+    data = request.get_json()
+    remarks = data.get("remarks", "")
+
+    mongo.db.visitors.update_one(
+        {"_id": ObjectId(visitor_id)},
+        {"$set": {
+            "check_out": datetime.now(),
+            "remarks": remarks
+        }}
+    )
+
+    return jsonify({"success": True, "message": "Visitor checked out successfully"})
 
 
 if __name__ == "__main__":

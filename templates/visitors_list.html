@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Visitors List</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+<style>
+  body {
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    background: #f4f6f9;
+    margin: 0;
+    padding: 20px;
+    color: #333;
+  }
+
+  h2 {
+    text-align: center;
+    color: #007bff;
+    margin: 100px 0 20px 0;
+    font-size: 28px;
+    font-weight: 600;
+  }
+
+  /* Navbar */
+  .navbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 1000;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(90deg, #007bff, #0056b3);
+    padding: 12px 20px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  }
+
+  .navbar .logo img {
+    height: 42px;
+    transition: transform 0.3s;
+  }
+
+  .navbar .logo img:hover {
+    transform: scale(1.05);
+  }
+
+  .nav-links {
+    list-style: none;
+    display: flex;
+    gap: 15px;
+    margin: 0;
+    padding-right: 30px;
+  }
+
+  .nav-links li a {
+    color: #fff;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 15px;
+    padding: 8px 14px;
+    border-radius: 6px;
+    transition: all 0.3s ease;
+  }
+
+  .nav-links li a:hover,
+  .nav-links li a.active {
+    background: rgba(255, 255, 255, 0.25);
+    backdrop-filter: blur(4px);
+  }
+
+  /* Table container */
+  .table-container {
+    background: #fff;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.1);
+    overflow-x: auto;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 1000px;
+  }
+
+  th, td {
+    padding: 14px 16px;
+    text-align: left;
+    font-size: 14px;
+  }
+
+  th {
+    background: #007bff;
+    color: #fff;
+    text-transform: uppercase;
+    font-size: 12px;
+    letter-spacing: 0.05em;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+
+  tr:nth-child(even) {
+    background-color: #f9f9f9;
+  }
+
+  tr:hover {
+    background-color: #eef5ff;
+    transition: 0.3s;
+  }
+
+  td {
+    border-bottom: 1px solid #eee;
+    vertical-align: middle;
+  }
+
+  .empty-row td {
+    text-align: center;
+    font-style: italic;
+    color: #666;
+  }
+
+  /* Buttons */
+  button {
+    background: #007bff;
+    color: #fff;
+    border: none;
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.3s;
+  }
+
+  button:hover {
+    background: #0056b3;
+  }
+
+  button:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+  }
+
+  /* Inputs inside table */
+  input[type="text"], textarea {
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 13px;
+    width: auto;
+    min-width: 80px;
+  }
+
+  input:focus, textarea:focus {
+    border-color: #007bff;
+    outline: none;
+    box-shadow: 0 0 4px rgba(0,123,255,0.3);
+  }
+
+  textarea {
+    width: 100%;
+    resize: vertical;
+    min-height: 50px;
+  }
+
+  label {
+    font-size: 13px;
+    margin-right: 8px;
+  }
+</style>
+</head>
+
+<body>
+<nav class="navbar">
+  <div class="logo">
+    <a href="{{ url_for('vms') }}">
+      <img src="{{ url_for('static', filename='images/Magnasoft.png') }}" alt="Company Logo">
+    </a>
+  </div>
+  <ul class="nav-links">
+    <li><a href="/" class="btn btn-outline-primary">Home</a></li>
+    <li><a href="{{ url_for('vms') }}" class="{% if active_page=='form' %}active{% endif %}">Add Visitor</a></li>
+    <li><a href="{{ url_for('logout') }}">Logout</a></li>
+  </ul>
+</nav>
+<h2>Visitors List</h2>
+<div class="table-container">
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Company</th>
+        <th>Phone</th>
+        <th>Email</th>
+        <th>Location</th>
+        <th>ID Proof</th>
+        <th>Purpose</th>
+        <th>Items</th>
+        <th>Contact Person</th>
+        <th>Notes</th>
+        <th>Check-in</th>
+        <th>Check-out</th>
+        <th>Approval Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for v in visitors %}
+      <tr>
+        <td>{{ v.name }}</td>
+        <td>{{ v.company }}</td>
+        <td>{{ v.phone }}</td>
+        <td>{{ v.email }}</td>
+        <td>{{ v.location }}</td>
+        <td>{{ v.idType }} {{ v.idNumber }}</td>
+        <td>
+          {{ v.purpose }}
+          {% if v.otherPurpose %} ({{ v.otherPurpose }}) {% endif %}
+        </td>
+        <td>
+          {% if v["items"] %}
+            {{ v["items"] | join(", ") }}
+          {% endif %}
+          {% if v["otherItems"] %} ({{ v["otherItems"] }}) {% endif %}
+        </td>
+        <td>{{ v.contact_person }}</td>
+        <td>{{ v.notes }}</td>
+        <td>
+          {% if not v.check_in %}
+            <input type="text" placeholder="Badge #" 
+                  id="badge-{{ v._id }}" 
+                  oninput="toggleCheckIn('{{ v._id }}')"
+                  style="width: 80px;">
+
+            <label>
+              <input type="checkbox" id="verify-{{ v._id }}" 
+                    onchange="toggleCheckIn('{{ v._id }}')">
+              Verified
+            </label>
+            {% if user_role == 'Security' and v.approved == True %}
+              <!-- Enable the button -->
+              <button id="checkin-btn-{{ v._id }}" onclick="checkInVisitor('{{ v._id }}')">Check In</button>
+            {% else %}
+              <!-- Disabled button -->
+              <button id="checkin-btn-{{ v._id }}" disabled>Check In</button>
+            {% endif %}
+            {% else %}
+            ✅ {{ v.badge_number }} <br>
+            {{ v.check_in.strftime("%Y-%m-%d %H:%M:%S") }}
+          {% endif %}
+        </td>
+        <td>
+          {% if v.check_in and not v.check_out %}
+            <div>
+              <strong>Return Items:</strong><br>
+              {% for item in v["items"] %}
+                <label>
+                  <input type="checkbox" 
+                        class="checkout-item-{{ v._id }}" 
+                        onchange="toggleCheckout('{{ v._id }}')">
+                  {{ item }}
+                </label><br>
+              {% endfor %}
+              {% if v.otherItems %}
+                <label>
+                  <input type="checkbox" 
+                        class="checkout-item-{{ v._id }}" 
+                        onchange="toggleCheckout('{{ v._id }}')">
+                  {{ v.otherItems }}
+                </label>
+              {% endif %}
+            </div>
+
+            <textarea id="remarks-{{ v._id }}" placeholder="Remarks (optional)"></textarea>
+
+            <button id="checkout-btn-{{ v._id }}" 
+                    onclick="checkOutVisitor('{{ v._id }}')"
+                    {% if user_role != 'Security' %} disabled {% endif %}
+                    {% if v["items"] or v.otherItems %}disabled{% endif %}>
+              Check Out
+            </button>
+          {% elif v.check_out %}
+            ✅ {{ v.check_out.strftime("%Y-%m-%d %H:%M:%S") }} <br>
+            Remarks: {{ v.remarks or '—' }}
+          {% else %}
+            —
+          {% endif %}
+        </td>
+        <td>
+          {% if v.approved == True %}
+            <span style="color: green; font-weight: bold;">✅ Approved</span>
+          {% elif v.approved == False %}
+            <span style="color: red; font-weight: bold;">❌ Declined</span>
+          {% else %}
+            <span style="color: orange; font-weight: bold;">⏳ Pending</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr class="empty-row">
+        <td colspan="11">No visitors found.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+  <script>
+    function toggleCheckIn(visitorId) {
+      const badge = document.getElementById("badge-" + visitorId).value.trim();
+      const verified = document.getElementById("verify-" + visitorId).checked;
+      const btn = document.getElementById("checkin-btn-" + visitorId);
+
+      // Enable only if both conditions are met
+      btn.disabled = !(badge && verified);
+    }
+
+    function checkInVisitor(visitorId) {
+      const badge = document.getElementById("badge-" + visitorId).value.trim();
+
+      fetch(`/checkin/${visitorId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ badge: badge })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          location.reload(); // Refresh to update table
+        } else {
+          alert("Error: " + data.message);
+        }
+      });
+    }
+  </script>
+  <script>
+    const userRole = "{{ user_role }}";
+
+    function toggleCheckIn(visitorId) {
+      if (userRole !== 'Security') return;
+
+      const badge = document.getElementById("badge-" + visitorId).value.trim();
+      const verified = document.getElementById("verify-" + visitorId).checked;
+      const btn = document.getElementById("checkin-btn-" + visitorId);
+
+      btn.disabled = !(badge && verified);
+    }
+
+    function toggleCheckout(visitorId) {
+      if (userRole !== 'Security') return;
+
+      const checkboxes = document.querySelectorAll(".checkout-item-" + visitorId);
+      if (checkboxes.length === 0) {
+        document.getElementById("checkout-btn-" + visitorId).disabled = false;
+        return;
+      }
+
+      const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+      document.getElementById("checkout-btn-" + visitorId).disabled = !allChecked;
+    }
+
+    function checkOutVisitor(visitorId) {
+      const remarks = document.getElementById("remarks-" + visitorId).value.trim();
+
+      fetch(`/checkout/${visitorId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ remarks: remarks })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          location.reload();
+        } else {
+          alert("Error: " + data.message);
+        }
+      });
+    }
+  </script>
+</body>
+</html>
