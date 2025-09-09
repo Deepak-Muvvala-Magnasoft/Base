@@ -247,7 +247,7 @@
             {% endif %}
             {% else %}
             ✅ {{ v.badge_number }} <br>
-            {{ v.check_in.strftime("%Y-%m-%d %H:%M:%S") }}
+            {{ v.check_in }}
           {% endif %}
         </td>
         <td>
@@ -281,7 +281,7 @@
               Check Out
             </button>
           {% elif v.check_out %}
-            ✅ {{ v.check_out.strftime("%Y-%m-%d %H:%M:%S") }} <br>
+           ✅ {{ v.check_out }} <br>
             Remarks: {{ v.remarks or '—' }}
           {% else %}
             —

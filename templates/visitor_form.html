@@ -6,180 +6,296 @@
   <title>Visitor Registration</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   <style>
-    body {
-      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-      background: #f4f6f9;
-      margin: 0;
-      padding: 0;
-    }
+/* ===== Global & Reset ===== */
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; padding: 0; }
+body {
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  background: #f4f6f9;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: #111827;
+}
 
-    .navbar {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 98%;
-      z-index: 1000;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: linear-gradient(90deg, #007bff, #0056b3); /* gradient effect */
-      padding: 12px 20px;
-      box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    }
+/* ---------- Navbar (fixed) ---------- */
+/* main bar */
+.navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  z-index: 1000;
+  background: linear-gradient(90deg, #007bff, #0056b3);
+  /* subtle bottom border so navbar visually separates from page */
+  box-shadow: 0 4px 10px rgba(14,30,37,0.06);
+  padding: 8px 0;
+  -webkit-font-smoothing: antialiased;
+}
 
-    .navbar .logo img {
-      height: 45px;
-      transition: transform 0.3s;
-    }
+/* container inside navbar aligned with form container width */
+.nav-inner {
+  max-width: 1000px;               /* same as .container */
+  width: calc(100% - 40px);        /* same horizontal margins as .container */
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
 
-    .navbar .logo img:hover {
-      transform: scale(1.05);
-    }
+/* logo */
+.nav-inner .logo img {
+  height: 46px;
+  display: block;
+  transition: transform .18s ease;
+  margin-left: 4px;
+}
+.nav-inner .logo img:hover { transform: scale(1.03); }
 
-    .navbar ul {
-      list-style: none;
-      display: flex;
-      margin: 0;
-      padding: 0;
-    }
+/* nav links list */
+.nav-links {
+  list-style: none;
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+}
 
-    .navbar ul li {
-      margin-left: 25px;
-    }
+/* primary nav link look (override any bootstrap defaults inside the navbar) */
+.nav-link,
+.nav-btn-outline,
+.navbar .btn,
+.navbar .btn-outline-primary,
+.navbar a.btn {
+  color: #ffffff !important;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 14px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  transition: background .18s ease, transform .12s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.06); /* subtle translucent pill */
+}
 
-    .navbar ul li a {
-      color: green;
-      text-decoration: none;
-      font-weight: 500;
-      font-size: 15px;
-      padding: 8px 14px;
-      border-radius: 6px;
-      transition: all 0.3s ease;
-    }
+/* keep the Home button slightly more prominent (outline-style pill) */
+.nav-btn-outline {
+  border-radius: 999px;
+  background: rgba(255,255,255,0.12);
+  padding: 8px 14px;
+  font-weight: 700;
+}
 
-    .navbar ul li a:hover,
-    .navbar ul li a.active {
-      background: rgba(255, 255, 255, 0.25);
-      backdrop-filter: blur(4px);
-    }
+/* Hover / active */
+.nav-link:hover,
+.nav-btn-outline:hover,
+.navbar .btn:hover,
+.navbar .btn-outline-primary:hover {
+  background: rgba(255,255,255,0.18);
+  transform: translateY(-2px);
+}
 
-    .container {
-      background: #fff;
-      padding: 30px 40px;
-      border-radius: 10px;
-      box-shadow: 0 6px 18px rgba(0,0,0,0.1);
-      max-width: 600px;
-      width: 100%;
-      margin: 100px auto 40px auto; /* push content below navbar */
-    }
+/* If you have classes like .active from Jinja, style them here */
+.nav-link.active,
+.nav-links li a.active {
+  background: rgba(255,255,255,0.18);
+}
 
-    h2 {
-      text-align: center;
-      color: #007bff;
-      margin-bottom: 20px;
-    }
+/* Remove any inherited Bootstrap backgrounds/green look inside navbar specifically */
+.navbar .btn-outline-primary,
+.navbar .btn {
+  background-image: none !important;
+  background-color: transparent !important;
+  color: #fff !important;
+  border-color: rgba(255,255,255,0.12) !important;
+  box-shadow: none !important;
+}
 
-    label {
-      display: block;
-      margin: 12px 0 6px;
-      font-weight: 500;
-      color: #333;
-    }
+/* If some links still use .btn class with background-color, force transparent */
+.navbar .btn[style],
+.navbar a[style] {
+  background: transparent !important;
+}
 
-    input, select, textarea {
-      width: 100%;
-      padding: 10px;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      font-size: 14px;
-      margin-bottom: 10px;
-      transition: border-color 0.3s;
-    }
+/* mobile: keep layout tidy */
+@media (max-width: 780px) {
+  .nav-inner { width: calc(100% - 28px); gap: 8px; }
+  .nav-inner .logo img { height: 40px; }
+  .nav-links { gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  .nav-btn-outline, .nav-link { padding: 6px 10px; font-size: 13px; }
+}
 
-    input:focus, select:focus, textarea:focus {
-      border-color: #007bff;
-      outline: none;
-      box-shadow: 0 0 5px rgba(0,123,255,0.2);
-    }
+/* ---------- Container / Card (form area) ---------- */
+.container {
+  background: linear-gradient(180deg, #ffffff 0%, #fbfbfd 100%);
+  padding: 30px 40px;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(14, 30, 37, 0.06);
+  max-width: 1000px;
+  width: calc(100% - 40px);
+  margin: 92px auto 40px;
+}
 
-    .checkbox-group {
-      margin: 8px 0 12px;
-    }
+/* center heading inside the .container card */
+.container h2 {
+  text-align: center;
+  width: 100%;
+  margin: 0 0 18px;   /* keep spacing under the title */
+  color: #007bff;
+  font-weight: 700;
+  line-height: 1.15;
+}
 
-    .checkbox-group label {
-      display: inline-block;
-      margin-right: 15px;
-      font-weight: normal;
-    }
+/* keep the rest of your form styles (labels, grid, fields, buttons) -- paste or keep existing below */
+/* ---------- Form grid: labels | fields ---------- */
+.form-grid {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  column-gap: 28px;
+  row-gap: 14px;
+  align-items: start;
+}
+.col-label {
+  text-align: right;
+  padding-top: 10px;
+  color: #2f3b46;
+  font-weight: 600;
+  font-size: 14px;
+}
+.col-label .required::after {
+  content: " *";
+  color: #e11d48;
+  margin-left: 4px;
+  font-weight: 700;
+}
+.form-grid .col-field input,
+.form-grid .col-field select,
+.form-grid .col-field textarea,
+.form-grid .col-field .btn-submit {
+  box-sizing: border-box;
+}
+.col-field input[type="text"],
+.col-field input[type="email"],
+.col-field input[type="tel"],
+.col-field select,
+.col-field textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid #e6edf3;
+  background: #fbfcfd;
+  font-size: 14px;
+  color: #111827;
+  transition: box-shadow .18s, border-color .18s;
+  min-height: 44px;
+}
+.col-field input::placeholder,
+.col-field textarea::placeholder { color: #9aa4b2; }
+.col-field input:focus,
+.col-field select:focus,
+.col-field textarea:focus {
+  outline: none;
+  border-color: #5b8cff;
+  box-shadow: 0 6px 18px rgba(91,140,255,0.12);
+}
+.col-field textarea { min-height: 120px; resize: vertical; padding-top: 12px; }
 
-    button {
-      background: #007bff;
-      color: #fff;
-      border: none;
-      padding: 12px;
-      width: 100%;
-      border-radius: 6px;
-      font-size: 16px;
-      cursor: pointer;
-      transition: background 0.3s;
-    }
+/* inline rows */
+.inline-row { display: flex; gap: 12px; align-items: center; }
+.inline-row select { flex: 0 0 34%; min-width: 150px; height: 44px; }
+.inline-row input  { flex: 1; height: 44px; }
+.inline-row select, .inline-row input {
+  border-radius: 8px; border: 1px solid #e6edf3; background: #fbfcfd; padding: 10px 12px;
+}
+.checkbox-inline, .checkbox-group {
+  display: flex; gap: 16px; align-items: center; margin-top: 6px; flex-wrap: wrap;
+}
+.checkbox-inline label, .checkbox-group label {
+  display: inline-flex; gap: 8px; align-items: center; font-weight: 500; color: #374151; cursor: pointer;
+}
+.checkbox-inline input[type="checkbox"], .checkbox-group input[type="checkbox"] { width: 16px; height: 16px; }
+.helper { font-size:13px; color:#6b7280; margin-top:6px; }
 
-    button:hover {
-      background: #0056b3;
-    }
+.form-actions {
+  display: flex;
+  justify-content: center; /* horizontally center inside the right column */
+  align-items: center;
+  padding-top: 12px;
+}
 
-    ul {
-      list-style: none;
-      padding: 0;
-      margin-bottom: 15px;
-    }
+.btn-submit {
+  display: inline-block;
+  margin: 0;
+  padding: 10px 26px;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  background: linear-gradient(90deg, #6b8cff, #20d0c6);
+  color: #fff;
+  font-weight: 700;
+  font-size: 15px;
+  box-shadow: 0 8px 24px rgba(50,130,255,0.12);
+  transition: transform .14s ease, box-shadow .14s ease;
+  min-width: 160px;
+}
 
-    li {
-      padding: 8px;
-      background: #e6f9e6;
-      border: 1px solid #b2e6b2;
-      color: #2d7a2d;
-      border-radius: 6px;
-      margin-bottom: 8px;
-    }
-  .nav-links {
-    list-style: none;
-    display: flex;
-    gap: 15px;
-    margin: 0;
-    padding-right: 30px;
-  }
+.submit-wrap {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+}
+.btn-submit:hover { display:inline-block;transform: translateY(-2px); box-shadow: 0 12px 30px rgba(50,130,255,0.14); }
 
-  .nav-links li a {
-    color: #fff;
-    text-decoration: none;
-    font-weight: 500;
-    font-size: 15px;
-    padding: 8px 14px;
-    border-radius: 6px;
-    transition: all 0.3s ease;
-  }
+/* keep flash/list styles */
+ul { list-style: none; padding: 0; margin-bottom: 15px; }
+li { background: #539de2; border: 1px solid #b2e6b2; color: #2d7a2d; border-radius: 6px; margin-bottom: 8px; }
 
-  .nav-links li a:hover,
-  .nav-links li a.active {
-    background: rgba(255, 255, 255, 0.25);
-    backdrop-filter: blur(4px);
-  }
-  </style>
+/* responsive */
+@media (max-width: 880px) {
+  .form-grid { grid-template-columns: 1fr; }
+  .col-label { text-align: left; padding-top: 0; margin-bottom: 6px; }
+  .container { padding: 22px; margin: 80px 12px 24px; }
+  .inline-row { flex-direction: column; gap: 8px; }
+  .inline-row select { width: 100%; min-width: auto; flex: none; }
+  .inline-row input { width: 100%; }
+  .btn-submit { width: 100%; min-width: 0; }
+}
+@media (max-width: 420px) {
+  .container { padding: 18px; }
+  .col-field input, .col-field select, .col-field textarea { padding: 10px; font-size: 13px; }
+  .col-label { font-size: 13px; }
+}
+</style>
+
+
+
 </head>
 <body>
-  <nav class="navbar">
+  <nav class="navbar" role="navigation" aria-label="Main navigation">
+  <div class="nav-inner">
     <div class="logo">
       <a href="{{ url_for('vms') }}">
         <img src="{{ url_for('static', filename='images/Magnasoft.png') }}" alt="Company Logo">
       </a>
     </div>
+
     <ul class="nav-links">
-      <li><a href="/" class="btn btn-outline-primary">Home</a></li>
-      <li><a href="{{ url_for('visitors_list') }}" class="{% if active_page=='list' %}active{% endif %}">Visitors List</a></li>
-      <li><a href="{{ url_for('logout') }}">Logout</a></li>
+      <li><a href="/" class="nav-btn-outline">Home</a></li>
+      <li>
+        <a href="{{ url_for('visitors_list') }}"
+           class="nav-link {% if active_page=='list' %}active{% endif %}">
+           Visitors List
+        </a>
+      </li>
+      <li><a href="{{ url_for('logout') }}" class="nav-link">Logout</a></li>
     </ul>
-  </nav>
+  </div>
+</nav>
   <div class="container">
     <h2>Visitor Registration</h2>
 
@@ -194,39 +310,63 @@
     {% endwith %}
 
     <form method="POST" action="{{ url_for('add_visitor') }}">
-      <label>Name*</label>
-      <input type="text" name="name" required>
+  <div class="form-grid">
 
-      <label>Company*</label>
-      <input type="text" name="company" required>
+    <!-- Name -->
+    <div class="col-label"><label class="required">Name</label></div>
+    <div class="col-field">
+      <input type="text" name="name" required placeholder="Enter full name">
+    </div>
 
-      <label>Phone*</label>
-      <input type="text" name="phone" required>
+    <!-- Company -->
+    <div class="col-label"><label class="required">Company</label></div>
+    <div class="col-field">
+      <input type="text" name="company" required placeholder="Enter company name">
+    </div>
 
-      <label>Email</label>
-      <input type="email" name="email">
-
-      <label>Location*</label>
+    <!-- Location -->
+    <div class="col-label"><label class="required">Location</label></div>
+    <div class="col-field">
       <select name="location" required>
         <option value="">Select Location</option>
         <option value="BLG">Bangalore</option>
         <option value="HYD">Hyderabad</option>
         <option value="HSN">Hassan</option>
       </select>
+    </div>
 
-      <label>ID Proof</label>
-      <select name="idType">
-        <option value="">Select ID Type</option>
-        <option value="Aadhaar">Aadhaar</option>
-        <option value="PAN">PAN</option>
-        <option value="Driving License">Driving License</option>
-        <option value="Passport">Passport</option>
-      </select>
-      <input type="text" name="idNumber" placeholder="Enter ID Number">
+    <!-- Mobile -->
+    <div class="col-label"><label class="required">Mobile</label></div>
+    <div class="col-field">
+      <input type="text" name="phone" required placeholder="Enter mobile number">
+    </div>
 
-      <label>Purpose*</label>
-      <select name="purpose" required>
-        <option value="">Select Purpose</option>
+    <!-- ID Proof: select + number inline -->
+    <div class="col-label"><label>ID Proof</label></div>
+    <div class="col-field">
+      <div class="inline-row">
+        <select name="idType">
+          <option value="">Select ID Type</option>
+          <option value="Aadhaar">Aadhaar</option>
+          <option value="PAN">PAN</option>
+          <option value="Driving License">Driving License</option>
+          <option value="Passport">Passport</option>
+        </select>
+        <input type="text" name="idNumber" placeholder="Enter ID Number">
+      </div>
+    </div>
+
+    <!-- Email -->
+    <div class="col-label"><label>Email</label></div>
+    <div class="col-field">
+      <input type="email" name="email" placeholder="Enter email address">
+    </div>
+
+    <!-- Purpose -->
+    <div class="col-label"><label class="required">Purpose</label></div>
+    <div class="col-field">
+      <select id="purpose" name="purpose" required>
+        <option value="">Select Purpose of Visit</option>
         <option value="Meeting">Meeting</option>
         <option value="Interview">Interview</option>
         <option value="Delivery">Delivery</option>
@@ -234,42 +374,68 @@
         <option value="Other">Other</option>
       </select>
 
-      <label>Other Purpose</label>
-      <input type="text" name="otherPurpose">
-
-      <label>Items Carried</label>
-      <div class="checkbox-group">
-        <label><input type="checkbox" name="items" value="Laptop"> Laptop</label>
-        <label><input type="checkbox" name="items" value="Pendrive"> Pendrive</label>
-        <label><input type="checkbox" name="items" value="Ipad"> Ipad</label>
-        <label><input type="checkbox" name="items" value="Other"> Other</label>
+      <!-- Other purpose (hidden by default) -->
+      <div id="otherPurposeWrap" style="display:none; margin-top:10px;">
+        <input id="otherPurpose" type="text" name="otherPurpose" placeholder="Please describe other purpose">
       </div>
+    </div>
 
-      <label>If Other Items</label>
-      <input type="text" name="otherItems">
+    <!-- Items Carried -->
+<div class="col-label"><label class="required">Items Carried</label></div>
+<div class="col-field">
+  <div class="checkbox-inline">
+    <label><input type="checkbox" name="items" value="Laptop"> Laptop</label>
+    <label><input type="checkbox" name="items" value="Pendrive"> Pendrive</label>
+    <label><input type="checkbox" name="items" value="Ipad"> Ipad</label>
 
-<label>Contact Person*</label>
-<select name="dept" required onchange="fetchUsers(this.value)">
-  <option value="">Select Department</option>
-  <option value="HR">HR</option>
-  <option value="IT">IT</option>
-  <option value="Admin">Admin</option>
-  <option value="Others">Others</option>
-</select>
+    <!-- 'Others' checkbox with id so we can toggle the textbox -->
+    <label>
+      <input id="itemsOtherCheckbox" type="checkbox" name="items" value="Other"> Others
+    </label>
+  </div>
 
-<select id="contact_person" name="contact_person" required>
-  <option value="">Select Contact Person</option>
-</select>
+  <!-- Other items text (hidden by default) -->
+  <div id="itemsOtherWrap" style="display:none; margin-top:10px;">
+    <input id="itemsOtherText" type="text" name="items_other" placeholder="Describe other items">
+  </div>
 
-<!-- Hidden input to hold email -->
-<input type="hidden" id="contact_email" name="contact_email">
+</div>
 
+    <!-- Contact Person (department select above contact person select) -->
+<div class="col-label"><label class="required">Contact Person</label></div>
+<div class="col-field">
+  <div class="inline-row">
+    <!-- left: department (select) -->
+    <select id="dept" name="dept" required>
+      <option value="">Select Department</option>
+      <option value="HR">HR</option>
+      <option value="IT">IT</option>
+      <option value="Admin">Admin</option>
+      <option value="Support">Support</option>
+      <option value="Other">Other</option>
+    </select>
 
-      <label>Notes</label>
-      <textarea name="notes" rows="3"></textarea>
+    <!-- right: contact person (text input) -->
+    <input id="contact_person" name="contact_person" type="text" placeholder="Enter contact person" required>
+  </div>
 
-      <button type="submit">Submit</button>
-    </form>
+  <!-- optional helper / fallback email (kept hidden if you used this before) -->
+  <input type="hidden" id="contact_email" name="contact_email" value="">
+  <div class="helper">Select department and type the contact person name.</div>
+</div>
+
+    <!-- Notes -->
+    <div class="col-label"><label>Additional Notes</label></div>
+    <div class="col-field">
+      <textarea name="notes" rows="3" placeholder="Optional notes..."></textarea>
+    </div>
+
+  </div>
+</form>
+<div class="submit-wrap">
+  <button type="submit" class="btn-submit">Submit</button>
+</div>
+
   </div>
   <script>
 function fetchUsers(dept) {
@@ -300,6 +466,72 @@ document.getElementById('contact_person').addEventListener('change', function() 
     const selectedOption = this.options[this.selectedIndex];
     document.getElementById('contact_email').value = selectedOption.getAttribute('data-email') || '';
 });
+
+
+  (function() {
+    // Elements
+    const purposeSelect = document.getElementById('purpose');
+    const otherPurposeWrap = document.getElementById('otherPurposeWrap');
+    const otherPurposeInput = document.getElementById('otherPurpose');
+
+    const itemsOtherCheckbox = document.getElementById('itemsOtherCheckbox');
+    const itemsOtherWrap = document.getElementById('itemsOtherWrap');
+    const itemsOtherText = document.getElementById('itemsOtherText');
+
+    // Show/hide helper for select (Purpose)
+    function toggleOtherPurpose() {
+      if (!purposeSelect) return;
+      const isOther = purposeSelect.value === 'Other';
+      otherPurposeWrap.style.display = isOther ? 'block' : 'none';
+      if (otherPurposeInput) {
+        otherPurposeInput.required = isOther;
+        if (!isOther) otherPurposeInput.value = '';
+      }
+    }
+
+    // Show/hide helper for items 'Others' checkbox
+    function toggleItemsOther() {
+      if (!itemsOtherCheckbox) return;
+      const checked = itemsOtherCheckbox.checked;
+      itemsOtherWrap.style.display = checked ? 'block' : 'none';
+      if (itemsOtherText) {
+        itemsOtherText.required = checked;
+        if (!checked) itemsOtherText.value = '';
+      }
+    }
+
+    // Attach listeners
+    if (purposeSelect) {
+      purposeSelect.addEventListener('change', toggleOtherPurpose);
+      // call once on load to set correct state (handles back/forward)
+      toggleOtherPurpose();
+    }
+
+    if (itemsOtherCheckbox) {
+      itemsOtherCheckbox.addEventListener('change', toggleItemsOther);
+      // call once on load
+      toggleItemsOther();
+    }
+
+    // Optional: final validation before submit (extra safety)
+    const form = document.querySelector('form');
+    if (form) {
+      form.addEventListener('submit', function(e) {
+        // if purpose is Other but empty, prevent submit (browser also blocks due to required)
+        if (purposeSelect && purposeSelect.value === 'Other' && otherPurposeInput && !otherPurposeInput.value.trim()) {
+          otherPurposeInput.reportValidity();
+          e.preventDefault();
+          return;
+        }
+        if (itemsOtherCheckbox && itemsOtherCheckbox.checked && itemsOtherText && !itemsOtherText.value.trim()) {
+          itemsOtherText.reportValidity();
+          e.preventDefault();
+          return;
+        }
+      });
+    }
+  })();
+
 
 </script>
 

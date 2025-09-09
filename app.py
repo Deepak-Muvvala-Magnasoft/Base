@@ -520,8 +520,8 @@ def send_email_to_contact(visitor):
     contact_name = visitor.get("contact_person")
     visitor_id = str(visitor["_id"])
 
-    approve_link = f"https://348845d3f496.ngrok-free.app/approve_visitor/{visitor_id}"
-    decline_link = f"https://348845d3f496.ngrok-free.app/decline_visitor/{visitor_id}"
+    approve_link = f"http://localhost:5001/approve_visitor/{visitor_id}"
+    decline_link = f"http://localhost:5001/decline_visitor/{visitor_id}"
 
     subject = "New Visitor Approval Required"
     body = f"""
@@ -591,8 +591,18 @@ def get_users(dept):
 @app.route("/visitors")
 def visitors_list():
     all_visitors = list(mongo.db.visitors.find())
-    user_role = session.get('role')  # Get role directly from session
+    user_role = session.get('role')
+
+    # 🟢 Convert datetime → string (safe for template)
+    for v in all_visitors:
+        for field in ["check_in", "check_out"]:
+            if isinstance(v.get(field), datetime):
+                v[field] = v[field].strftime("%Y-%m-%d %H:%M:%S")
+            elif v.get(field) is None:
+                v[field] = ""  # empty if no value
+
     return render_template("visitors_list.html", visitors=all_visitors, user_role=user_role)
+
 
 
 @app.route("/api/visitors")
