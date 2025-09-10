@@ -346,14 +346,20 @@ input:invalid { outline: 1px solid rgba(200,0,0,0.15); }
     </div>
 
     <!-- Mobile -->
-    <div class="col-label"><label class="required" for="phone">Mobile</label></div>
-    <div class="col-field">
-        <input type="tel" id="phone" name="phone" required inputmode="tel"
-          maxlength="13" pattern="^(\+91[\-\s]?)?[6-9]\d{9}$"
-          placeholder="Enter mobile number" aria-describedby="phoneError"
-        >
-        <small id="phoneError" class="error" aria-live="polite"></small>
-    </div>
+    <!-- Mobile (no validation) -->
+<div class="col-label"><label class="required" for="phone">Mobile</label></div>
+<div class="col-field">
+  <input
+    type="tel"
+    id="phone"
+    name="phone"
+    inputmode="tel"
+    maxlength="13"
+    placeholder="Enter mobile number"
+    aria-describedby="phoneError"
+  >
+  <small id="phoneError" class="error" aria-live="polite"></small>
+</div>
 
 <!-- ID Proof: select + number inline -->
 <div class="col-label"><label for="idType">ID Proof</label></div>
