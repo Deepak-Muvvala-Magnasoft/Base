@@ -160,7 +160,7 @@ body {
   align-items: start;
 }
 .col-label {
-  text-align: right;
+  text-align: left;
   padding-top: 10px;
   color: #2f3b46;
   font-weight: 600;
@@ -319,7 +319,7 @@ li { background: #539de2; border: 1px solid #b2e6b2; color: #2d7a2d; border-radi
     </div>
 
     <!-- Company -->
-    <div class="col-label"><label class="required">Company</label></div>
+    <div class="col-label"><label class="required">Company / Coming From</label></div>
     <div class="col-field">
       <input type="text" name="company" required placeholder="Enter company name">
     </div>
@@ -402,7 +402,7 @@ li { background: #539de2; border: 1px solid #b2e6b2; color: #2d7a2d; border-radi
 </div>
 
     <!-- Contact Person (department select above contact person select) -->
-<div class="col-label"><label class="required">Contact Person</label></div>
+<div class="col-label"><label class="required">Contact Department</label></div>
 <div class="col-field">
   <div class="inline-row">
     <!-- left: department (select) -->
@@ -431,11 +431,10 @@ li { background: #539de2; border: 1px solid #b2e6b2; color: #2d7a2d; border-radi
     </div>
 
   </div>
+   <div class="submit-wrap">
+    <button type="submit" class="btn-submit">Submit</button>
+  </div>
 </form>
-<div class="submit-wrap">
-  <button type="submit" class="btn-submit">Submit</button>
-</div>
-
   </div>
   <script>
 function fetchUsers(dept) {
