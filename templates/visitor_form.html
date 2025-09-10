@@ -416,9 +416,9 @@ li { background: #539de2; border: 1px solid #b2e6b2; color: #2d7a2d; border-radi
     </select>
 
     <!-- right: contact person (text input) -->
-    <input id="contact_person" name="contact_person" type="text" placeholder="Enter contact person" required>
-  </div>
-
+    <select id="contact_person" name="contact_person" required>
+      <option value="">Select Contact Person</option>
+    </select>
   <!-- optional helper / fallback email (kept hidden if you used this before) -->
   <input type="hidden" id="contact_email" name="contact_email" value="">
   <div class="helper">Select department and type the contact person name.</div>
@@ -466,6 +466,10 @@ document.getElementById('contact_person').addEventListener('change', function() 
     document.getElementById('contact_email').value = selectedOption.getAttribute('data-email') || '';
 });
 
+document.getElementById('dept').addEventListener('change', function() {
+    const dept = this.value;
+    fetchUsers(dept);
+});
 
   (function() {
     // Elements
