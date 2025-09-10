@@ -17,6 +17,7 @@ from email.mime.text import MIMEText
 import smtplib
 from urllib.parse import quote_plus
 from flask import render_template, request, redirect, url_for, flash
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 
 app = Flask(__name__)
@@ -26,6 +27,8 @@ app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.config['PREFERRED_URL_SCHEME'] = 'https'
 app.config["MONGO_URI"] = MONGO_URI
 mongo = PyMongo(app)
+
+
 
 # Add Google OAuth config
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'  # For HTTP (development only)
@@ -146,7 +149,7 @@ def google_login():
         project_name = first_project.name if first_project else ""
         session["selected_project"] = project_name
 
-        return render_template("landing.html")
+        return render_template("home")
         # ✅ Redirect to data page
         # return redirect(url_for("upload_file", project_name=project_name))
 
@@ -171,7 +174,7 @@ def login():
             # ✅ Save in session
             session["selected_project"] = project_name
 
-            return render_template("landing.html")
+            return render_template("home")
             # ✅ Redirect to /data?project_name=<first_project>
             #return redirect(url_for("upload_file", project_name=project_name))
 
