@@ -480,7 +480,9 @@ def vms():
 @app.route("/add_visitor", methods=["POST"])
 def add_visitor():
     form = request.form
-    contact_person_email = request.form.get('contact_email')
+    dept = form.get('dept')
+    location = form.get('location')
+    selected_contact_person = form.get('contact_person')
     visitor = {
         "name": form.get("name"),
         "company": form.get("company"),
@@ -504,10 +506,23 @@ def add_visitor():
     }
     mongo.db.visitors.insert_one(visitor)
 
-    # Send email notification
+    # If a contact person is selected, send to that person
     try:
-        send_email_to_contact(visitor)
-        flash("Visitor saved and email sent successfully!", "success")
+        if selected_contact_person:
+            send_email_to_contact(visitor)
+        else:
+            # No single contact selected → Send to all matching users
+            users = db.session.execute(
+                text("SELECT username, email FROM contact_person WHERE dept = :dept AND location = :location"),
+                {"dept": dept, "location": location}
+            ).mappings().all()
+
+            for user in users:
+                visitor["contact_person"] = user["username"]
+                visitor["contact_email"] = user["email"]
+                send_email_to_contact(visitor)
+
+        flash("Visitor saved and email(s) sent successfully!", "success")
     except Exception as e:
         flash(f"Visitor saved but email failed: {str(e)}", "warning")
 
@@ -577,14 +592,19 @@ def decline_visitor(visitor_id):
     return "Visitor declined ❌. They will not be allowed to check-in."
 
 
-@app.route("/get_users/<dept>")
-def get_users(dept):
+@app.route("/get_users")
+def get_users():
+    dept = request.args.get("dept")
+    location = request.args.get("location")
+
+    if not dept or not location:
+        return jsonify([])
+
     users = db.session.execute(
-        text("SELECT username, email FROM contact_person WHERE dept = :dept"),
-        {"dept": dept}
+        text("SELECT username, email FROM contact_person WHERE dept = :dept AND location = :location"),
+        {"dept": dept, "location": location}
     ).mappings().all()
 
-    # Return list of objects: name + email
     return jsonify([{"username": u["username"], "email": u["email"]} for u in users])
 
 

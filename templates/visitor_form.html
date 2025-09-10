@@ -414,14 +414,6 @@ li { background: #539de2; border: 1px solid #b2e6b2; color: #2d7a2d; border-radi
       <option value="Support">Support</option>
       <option value="Other">Other</option>
     </select>
-
-    <!-- right: contact person (text input) -->
-    <select id="contact_person" name="contact_person" required>
-      <option value="">Select Contact Person</option>
-    </select>
-  <!-- optional helper / fallback email (kept hidden if you used this before) -->
-  <input type="hidden" id="contact_email" name="contact_email" value="">
-  <div class="helper">Select department and type the contact person name.</div>
 </div>
 
     <!-- Notes -->
@@ -437,10 +429,12 @@ li { background: #539de2; border: 1px solid #b2e6b2; color: #2d7a2d; border-radi
 </form>
   </div>
   <script>
-function fetchUsers(dept) {
-    if (!dept) return;
+    function fetchUsers() {
+    const dept = document.getElementById('dept').value;
+    const location = document.querySelector('select[name="location"]').value;
+    if (!dept || !location) return;  // both must be selected
 
-    fetch(`/get_users/${dept}`)
+    fetch(`/get_users?dept=${encodeURIComponent(dept)}&location=${encodeURIComponent(location)}`)
         .then(res => res.json())
         .then(data => {
             const contactSelect = document.getElementById('contact_person');
@@ -454,21 +448,19 @@ function fetchUsers(dept) {
                 contactSelect.appendChild(option);
             });
 
-            // Reset hidden email field
             document.getElementById('contact_email').value = '';
         });
 }
+
+// Trigger when dept or location changes
+document.getElementById('dept').addEventListener('change', fetchUsers);
+document.querySelector('select[name="location"]').addEventListener('change', fetchUsers);
 
 
 // When user selects a contact person, fill hidden email
 document.getElementById('contact_person').addEventListener('change', function() {
     const selectedOption = this.options[this.selectedIndex];
     document.getElementById('contact_email').value = selectedOption.getAttribute('data-email') || '';
-});
-
-document.getElementById('dept').addEventListener('change', function() {
-    const dept = this.value;
-    fetchUsers(dept);
 });
 
   (function() {
