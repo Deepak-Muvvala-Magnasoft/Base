@@ -160,7 +160,7 @@ def google_login():
         project_name = first_project.name if first_project else ""
         session["selected_project"] = project_name
 
-        return redirect(url_for("home"))
+        return render_template("landing.html")
         # ✅ Redirect to data page
         # return redirect(url_for("upload_file", project_name=project_name))
 
@@ -185,7 +185,7 @@ def login():
             # ✅ Save in session
             session["selected_project"] = project_name
 
-            return redirect(url_for("home"))
+            return render_template("landing.html")
             # ✅ Redirect to /data?project_name=<first_project>
             #return redirect(url_for("upload_file", project_name=project_name))
 
