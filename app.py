@@ -16,6 +16,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import smtplib
 from urllib.parse import quote_plus
+from flask import render_template, request, redirect, url_for, flash
 
 
 app = Flask(__name__)
@@ -48,6 +49,14 @@ app.config["SQLALCHEMY_DATABASE_URI"] = (
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 
+@app.route('/visitor', methods=['GET', 'POST'])
+def visitor_qr():
+    # if POST, you can reuse your existing add_visitor logic or call the same handler
+    if request.method == 'POST':
+        # quick reuse: delegate to same function that handles add_visitor
+        return add_visitor()   # only if add_visitor() returns a response
+    # GET: render the same template but hide navbar
+    return render_template('visitor_form.html', visitor_only=True)
 
 # --- Models ---
 class User(db.Model):
@@ -480,9 +489,13 @@ def vms():
 @app.route("/add_visitor", methods=["POST"])
 def add_visitor():
     form = request.form
+    # marker coming from the visitor-only form (hidden input)
+    visitor_only = form.get("visitor_only")
+
     dept = form.get('dept')
     location = form.get('location')
     selected_contact_person = form.get('contact_person')
+
     visitor = {
         "name": form.get("name"),
         "company": form.get("company"),
@@ -504,14 +517,21 @@ def add_visitor():
         "verified": False,
         "approved": None,
     }
+
+    # save to Mongo
     mongo.db.visitors.insert_one(visitor)
 
-    # If a contact person is selected, send to that person
+    # prepare default flash
+    flash_msg = "Visitor saved successfully!"
+    flash_cat = "success"
+
+    # try to send emails (if configured)
     try:
         if selected_contact_person:
             send_email_to_contact(visitor)
+            flash_msg = "Visitor saved and email sent successfully!"
         else:
-            # No single contact selected → Send to all matching users
+            # send to all matching users for dept+location
             users = db.session.execute(
                 text("SELECT username, email FROM contact_person WHERE dept = :dept AND location = :location"),
                 {"dept": dept, "location": location}
@@ -522,12 +542,20 @@ def add_visitor():
                 visitor["contact_email"] = user["email"]
                 send_email_to_contact(visitor)
 
-        flash("Visitor saved and email(s) sent successfully!", "success")
+            flash_msg = "Visitor saved and email(s) sent successfully!"
     except Exception as e:
-        flash(f"Visitor saved but email failed: {str(e)}", "warning")
+        # keep visitor saved but report email failure
+        flash_msg = f"Visitor saved but email failed: {str(e)}"
+        flash_cat = "warning"
 
-    flash("Visitor saved successfully!", "success")
+    # redirect back to visitor page when form came from the public/QR page
+    if visitor_only:
+        flash("Thank you — your visit has been recorded.", "success")
+        return redirect(url_for("visitor_qr"))   # change name if your visitor route is different
+    flash(flash_msg, flash_cat)
+    # default staff flow
     return redirect(url_for("vms"))
+
 
 
 def send_email_to_contact(visitor):

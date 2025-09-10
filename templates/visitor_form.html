@@ -255,6 +255,8 @@ body {
 ul { list-style: none; padding: 0; margin-bottom: 15px; }
 li { background: #539de2; border: 1px solid #b2e6b2; color: #2d7a2d; border-radius: 6px; margin-bottom: 8px; }
 
+.error { color: #c33; font-size: 0.85rem; display: block; margin-top: 4px; min-height: 1em; }
+input:invalid { outline: 1px solid rgba(200,0,0,0.15); }
 /* responsive */
 @media (max-width: 880px) {
   .form-grid { grid-template-columns: 1fr; }
@@ -276,7 +278,8 @@ li { background: #539de2; border: 1px solid #b2e6b2; color: #2d7a2d; border-radi
 
 </head>
 <body>
-  <nav class="navbar" role="navigation" aria-label="Main navigation">
+  {% if not visitor_only %}
+<nav class="navbar" role="navigation" aria-label="Main navigation">
   <div class="nav-inner">
     <div class="logo">
       <a href="{{ url_for('vms') }}">
@@ -296,6 +299,7 @@ li { background: #539de2; border: 1px solid #b2e6b2; color: #2d7a2d; border-radi
     </ul>
   </div>
 </nav>
+{% endif %}
   <div class="container">
     <h2>Visitor Registration</h2>
 
@@ -309,7 +313,13 @@ li { background: #539de2; border: 1px solid #b2e6b2; color: #2d7a2d; border-radi
       {% endif %}
     {% endwith %}
 
-    <form method="POST" action="{{ url_for('add_visitor') }}">
+    <form id="visitorForm" method="POST" action="{{ url_for('add_visitor') }}">
+      <!-- mark this POST as coming from the public/QR visitor page -->
+  <input type="hidden" name="visitor_only" value="{{ '1' if visitor_only else '' }}">
+
+  <!-- keep these hidden so backend/email logic has the fields available even if staff selects are not shown -->
+  <input type="hidden" id="contact_person" name="contact_person" value="">
+  <input type="hidden" id="contact_email"  name="contact_email"  value="">
   <div class="form-grid">
 
     <!-- Name -->
@@ -336,31 +346,37 @@ li { background: #539de2; border: 1px solid #b2e6b2; color: #2d7a2d; border-radi
     </div>
 
     <!-- Mobile -->
-    <div class="col-label"><label class="required">Mobile</label></div>
+    <div class="col-label"><label class="required" for="phone">Mobile</label></div>
     <div class="col-field">
-      <input type="text" name="phone" required placeholder="Enter mobile number">
+        <input type="tel" id="phone" name="phone" required inputmode="tel"
+          maxlength="13" pattern="^(\+91[\-\s]?)?[6-9]\d{9}$"
+          placeholder="Enter mobile number" aria-describedby="phoneError"
+        >
+        <small id="phoneError" class="error" aria-live="polite"></small>
     </div>
 
-    <!-- ID Proof: select + number inline -->
-    <div class="col-label"><label>ID Proof</label></div>
-    <div class="col-field">
-      <div class="inline-row">
-        <select name="idType">
-          <option value="">Select ID Type</option>
-          <option value="Aadhaar">Aadhaar</option>
-          <option value="PAN">PAN</option>
-          <option value="Driving License">Driving License</option>
-          <option value="Passport">Passport</option>
-        </select>
-        <input type="text" name="idNumber" placeholder="Enter ID Number">
-      </div>
-    </div>
+<!-- ID Proof: select + number inline -->
+<div class="col-label"><label for="idType">ID Proof</label></div>
+<div class="col-field">
+  <div class="inline-row">
+    <select id="idType" name="idType" aria-describedby="idError">
+      <option value="">Select ID Type</option>
+      <option value="Aadhaar">Aadhaar</option>
+      <option value="PAN">PAN</option>
+      <option value="DrivingLicense">Driving License</option>
+      <option value="Passport">Passport</option>
+    </select>
+    <input type="text" id="idNumber" name="idNumber" placeholder="Enter ID Number" aria-describedby="idError">
+  </div>
+  <small id="idError" class="error" aria-live="polite"></small>
+</div>
 
-    <!-- Email -->
-    <div class="col-label"><label>Email</label></div>
-    <div class="col-field">
-      <input type="email" name="email" placeholder="Enter email address">
-    </div>
+<!-- Email -->
+<div class="col-label"><label for="email">Email</label></div>
+<div class="col-field">
+  <input type="email" id="email" name="email" required placeholder="Enter email address" aria-describedby="emailError">
+  <small id="emailError" class="error" aria-live="polite"></small>
+</div>
 
     <!-- Purpose -->
     <div class="col-label"><label class="required">Purpose</label></div>
@@ -396,7 +412,7 @@ li { background: #539de2; border: 1px solid #b2e6b2; color: #2d7a2d; border-radi
 
   <!-- Other items text (hidden by default) -->
   <div id="itemsOtherWrap" style="display:none; margin-top:10px;">
-    <input id="itemsOtherText" type="text" name="items_other" placeholder="Describe other items">
+    <input id="itemsOtherText" type="text" name="otherItems" placeholder="Describe other items">
   </div>
 
 </div>
@@ -437,18 +453,33 @@ li { background: #539de2; border: 1px solid #b2e6b2; color: #2d7a2d; border-radi
     fetch(`/get_users?dept=${encodeURIComponent(dept)}&location=${encodeURIComponent(location)}`)
         .then(res => res.json())
         .then(data => {
-            const contactSelect = document.getElementById('contact_person');
+           const contactSelect = document.getElementById('contact_person');
+          if (contactSelect) {
             contactSelect.innerHTML = '<option value="">Select Contact Person</option>';
-
             data.forEach(user => {
                 const option = document.createElement('option');
                 option.value = user.username;
-                option.setAttribute('data-email', user.email); // store email
+                option.setAttribute('data-email', user.email);
                 option.textContent = user.username;
                 contactSelect.appendChild(option);
             });
+            if (contactEmailEl) contactEmailEl.value = '';
+          }
 
-            document.getElementById('contact_email').value = '';
+
+            const contactperson = document.getElementById('contact_person');
+            if (contactperson) {
+              contactperson.innerHTML = '<option value="">Select Contact Person</option>';
+              data.forEach(user => {
+                  const option = document.createElement('option');
+                  option.value = user.username;
+                  option.setAttribute('data-email', user.email);
+                  option.textContent = user.username;
+                  contactperson.appendChild(option);
+              });
+              // use the cached reference if available
+              if (typeof contactEmailEl !== 'undefined' && contactEmailEl) contactEmailEl.value = '';
+            }
         });
 }
 
@@ -457,11 +488,15 @@ document.getElementById('dept').addEventListener('change', fetchUsers);
 document.querySelector('select[name="location"]').addEventListener('change', fetchUsers);
 
 
-// When user selects a contact person, fill hidden email
-document.getElementById('contact_person').addEventListener('change', function() {
-    const selectedOption = this.options[this.selectedIndex];
-    document.getElementById('contact_email').value = selectedOption.getAttribute('data-email') || '';
-});
+// When user selects a contact person, fill hidden email (defensive)
+const contactPersonEl = document.getElementById('contact_person');
+const contactEmailEl  = document.getElementById('contact_email');
+if (contactPersonEl) {
+  contactPersonEl.addEventListener('change', function() {
+    const selectedOption = this.options[this.selectedIndex] || {};
+    if (contactEmailEl) contactEmailEl.value = selectedOption.getAttribute('data-email') || '';
+  });
+}
 
   (function() {
     // Elements
@@ -528,6 +563,82 @@ document.getElementById('contact_person').addEventListener('change', function() 
   })();
 
 
+document.addEventListener('DOMContentLoaded', () => {
+  const form = document.getElementById('visitorForm');
+  if (!form) return; // nothing to do if form id missing
+  const phone = document.getElementById('phone');
+  const idType = document.getElementById('idType');
+  const idNumber = document.getElementById('idNumber');
+  const email = document.getElementById('email');
+  const phoneError = document.getElementById('phoneError');
+  const idError = document.getElementById('idError');
+  const emailError = document.getElementById('emailError');
+  const ID_PATTERNS = {
+    Aadhaar: { pattern: '^\\d{12}$', placeholder: '12 digits (e.g. 123412341234)', title: '12 digit Aadhaar number' },
+    PAN: { pattern: '^[A-Z]{5}[0-9]{4}[A-Z]{1}$', placeholder: 'PAN (e.g. ABCDE1234F)', title: 'PAN: 5 letters, 4 digits, 1 letter' },
+    DrivingLicense: { pattern: '^[A-Za-z0-9\\-\\/\\s]{6,16}$', placeholder: 'Driving license (6-16 chars)', title: 'Driving license number (6–16 chars)' },
+    Passport: { pattern: '^[A-PR-WY][0-9]{7}$', placeholder: 'Passport (e.g. A1234567)', title: 'Passport: 1 letter + 7 digits' }
+  };
+  function showError(el, msg) {
+    if (!el) return;
+    el.textContent = msg || '';
+  }
+  function updateIdValidation() {
+    const val = idType.value;
+    if (ID_PATTERNS[val]) {
+      idNumber.setAttribute('pattern', ID_PATTERNS[val].pattern);
+      idNumber.setAttribute('title', ID_PATTERNS[val].title);
+      idNumber.placeholder = ID_PATTERNS[val].placeholder;
+      idNumber.required = true;
+    } else {
+      idNumber.removeAttribute('pattern');
+      idNumber.removeAttribute('title');
+      idNumber.placeholder = 'Enter ID Number';
+      idNumber.required = false;
+      showError(idError, '');
+    }
+    idNumber.value = idNumber.value.trim();
+    idNumber.setCustomValidity('');
+  }
+  phone.addEventListener('input', () => {
+    const ok = phone.checkValidity();
+    if (!ok) {
+      showError(phoneError, 'Enter valid mobile number (10 digits, start 6-9). Optional +91 prefix allowed.');
+    } else {
+      showError(phoneError, '');
+    }
+    phone.setCustomValidity(ok ? '' : 'invalid');
+  });
+  email.addEventListener('input', () => {
+    const ok = email.checkValidity();
+    showError(emailError, ok ? '' : 'Enter a valid email address.');
+    email.setCustomValidity(ok ? '' : 'invalid');
+  });
+  idType.addEventListener('change', updateIdValidation);
+  idNumber.addEventListener('input', () => {
+    if (idNumber.hasAttribute('pattern')) {
+      const ok = idNumber.checkValidity();
+      showError(idError, ok ? '' : 'ID number does not match expected format for selected ID type.');
+      idNumber.setCustomValidity(ok ? '' : 'invalid');
+    } else {
+      showError(idError, '');
+      idNumber.setCustomValidity('');
+    }
+  });
+  form.addEventListener('submit', (ev) => {
+    updateIdValidation();
+    if (!form.checkValidity()) {
+      ev.preventDefault();
+      if (!phone.checkValidity()) showError(phoneError, 'Enter valid mobile number (10 digits, start 6-9).');
+      if (!email.checkValidity()) showError(emailError, 'Enter a valid email address.');
+      if (idNumber.required && !idNumber.checkValidity()) showError(idError, 'ID number invalid for selected ID type.');
+      const firstInvalid = form.querySelector(':invalid');
+      if (firstInvalid) firstInvalid.focus();
+      return false;
+    }
+  });
+  updateIdValidation();
+});
 </script>
 
 </body>
