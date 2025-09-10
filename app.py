@@ -17,13 +17,27 @@ from email.mime.text import MIMEText
 import smtplib
 from urllib.parse import quote_plus
 from flask import render_template, request, redirect, url_for, flash
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 
 app = Flask(__name__)
-app.secret_key = "super_secret_key"
+app.secret_key = os.environ.get("SECRET_KEY", "super_secret_key")
+
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 
-app.config['PREFERRED_URL_SCHEME'] = 'https'
+# Use http by default unless you set the env var; prevents mismatched scheme issues
+app.config['PREFERRED_URL_SCHEME'] = os.environ.get("PREFERRED_URL_SCHEME", "http")
+
+# Cookie flags — if you're serving over plain http (http://IP:PORT) keep SECURE=False.
+# If you later use HTTPS, set SESSION_COOKIE_SECURE=True in env or change here.
+app.config['SESSION_COOKIE_SECURE'] = False
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+
+# If your app is fronted by a reverse proxy (nginx, OpenLiteSpeed, ALB), enable ProxyFix.
+# It's harmless if you don't have a proxy, but required when a proxy forwards X-Forwarded-* headers.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
 app.config["MONGO_URI"] = MONGO_URI
 mongo = PyMongo(app)
 
@@ -146,7 +160,7 @@ def google_login():
         project_name = first_project.name if first_project else ""
         session["selected_project"] = project_name
 
-        return render_template("landing.html")
+        return redirect(url_for("home"))
         # ✅ Redirect to data page
         # return redirect(url_for("upload_file", project_name=project_name))
 
@@ -171,7 +185,7 @@ def login():
             # ✅ Save in session
             session["selected_project"] = project_name
 
-            return render_template("landing.html")
+            return redirect(url_for("home"))
             # ✅ Redirect to /data?project_name=<first_project>
             #return redirect(url_for("upload_file", project_name=project_name))
 
