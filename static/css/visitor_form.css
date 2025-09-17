@@ -1,0 +1,528 @@
+/* ===== Global & Reset ===== */
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    background: #f4f6f9;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    color: #111827;
+}
+
+/* ---------- Navbar (fixed) ---------- */
+/* main bar */
+.navbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 1000;
+    background: linear-gradient(90deg, #007bff, #0056b3);
+    /* subtle bottom border so navbar visually separates from page */
+    box-shadow: 0 4px 10px rgba(14, 30, 37, 0.06);
+    padding: 8px 0;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* container inside navbar aligned with form container width */
+.nav-inner {
+    max-width: 1000px;
+    /* same as .container */
+    width: calc(100% - 40px);
+    /* same horizontal margins as .container */
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+/* logo */
+.nav-inner .logo img {
+    height: 46px;
+    display: block;
+    transition: transform .18s ease;
+    margin-left: 4px;
+}
+
+.nav-inner .logo img:hover {
+    transform: scale(1.03);
+}
+
+/* nav links list */
+.nav-links {
+    list-style: none;
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    margin: 0;
+    padding: 0;
+}
+
+/* primary nav link look (override any bootstrap defaults inside the navbar) */
+.nav-link,
+.nav-btn-outline,
+.navbar .btn,
+.navbar .btn-outline-primary,
+.navbar a.btn {
+    color: #ffffff !important;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 14px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    transition: background .18s ease, transform .12s;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.06);
+    /* subtle translucent pill */
+}
+
+/* keep the Home button slightly more prominent (outline-style pill) */
+.nav-btn-outline {
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    padding: 8px 14px;
+    font-weight: 700;
+}
+
+/* Hover / active */
+.nav-link:hover,
+.nav-btn-outline:hover,
+.navbar .btn:hover,
+.navbar .btn-outline-primary:hover {
+    background: rgba(255, 255, 255, 0.18);
+    transform: translateY(-2px);
+}
+
+/* If you have classes like .active from Jinja, style them here */
+.nav-link.active,
+.nav-links li a.active {
+    background: rgba(255, 255, 255, 0.18);
+}
+
+/* Remove any inherited Bootstrap backgrounds/green look inside navbar specifically */
+.navbar .btn-outline-primary,
+.navbar .btn {
+    background-image: none !important;
+    background-color: transparent !important;
+    color: #fff !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
+    box-shadow: none !important;
+}
+
+/* If some links still use .btn class with background-color, force transparent */
+.navbar .btn[style],
+.navbar a[style] {
+    background: transparent !important;
+}
+
+/* mobile: keep layout tidy */
+@media (max-width: 780px) {
+    .nav-inner {
+        width: calc(100% - 28px);
+        gap: 8px;
+    }
+
+    .nav-inner .logo img {
+        height: 40px;
+    }
+
+    .nav-links {
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .nav-btn-outline,
+    .nav-link {
+        padding: 6px 10px;
+        font-size: 13px;
+    }
+}
+
+/* ---------- Container / Card (form area) ---------- */
+.container {
+    background: linear-gradient(180deg, #ffffff 0%, #fbfbfd 100%);
+    padding: 30px 40px;
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(14, 30, 37, 0.06);
+    max-width: 1000px;
+    width: calc(100% - 40px);
+    margin: 92px auto 40px;
+}
+
+
+/* Neon glow heading */
+.visitor-center h2 {
+    margin: 0;
+    padding: 6px 14px;
+    font-size: clamp(1.1rem, 2.2vw, 1.6rem);
+    font-weight: 800;
+    color: #5058c7c5;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    background: transparent;
+    text-shadow:
+        0 2px 0 rgba(43, 76, 223, 0.45),
+        /* small crisp offset */
+        0 6px 6px rgba(59, 130, 246, 0.30),
+        /* softer blurred mid shadow */
+        0 12px 18px rgba(83, 89, 104, 0.35);
+    /* larger diffuse ground shadow */
+    border-radius: 8px;
+    position: relative;
+}
+
+
+/* reduce effect for accessibility */
+@media (prefers-reduced-motion: reduce) {
+
+    .visitor-center h2,
+    .visitor-center h2::after {
+        transition: none;
+        filter: none;
+    }
+}
+
+/* center only this visitor header block without changing global .container */
+.visitor-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    /* centers img and h2 horizontally */
+    justify-content: center;
+    /* centers vertically if container has height */
+    gap: 8px;
+    /* space between logo and title */
+    text-align: center;
+    /* ensures multi-line headings are centered */
+    padding-top: 10px;
+    /* optional — adjust spacing from top */
+}
+
+/* keep logo responsive and remove unexpected margins */
+.visitor-center .logo-height {
+    display: block;
+    margin: 0;
+    /* centering handled by flex */
+    max-width: 85px;
+    width: clamp(120px, 20vw, 200px);
+    height: auto;
+}
+
+/* tidy up the heading */
+.visitor-center h2 {
+    margin: 0;
+    font-size: 1.4rem;
+    /* tweak if needed */
+    font-weight: 600;
+}
+
+
+/* keep the rest of your form styles (labels, grid, fields, buttons) -- paste or keep existing below */
+/* ---------- Form grid: labels | fields ---------- */
+.form-grid {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    column-gap: 28px;
+    row-gap: 14px;
+    align-items: start;
+    margin-top: 10px;
+}
+
+.col-label {
+    text-align: left;
+    padding-top: 10px;
+    color: #2f3b46;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.col-label .required::after {
+    content: " *";
+    color: #e11d48;
+    margin-left: 4px;
+    font-weight: 700;
+}
+
+.form-grid .col-field input,
+.form-grid .col-field select,
+.form-grid .col-field textarea,
+.form-grid .col-field .btn-submit {
+    box-sizing: border-box;
+}
+
+.col-field input[type="text"],
+.col-field input[type="email"],
+.col-field input[type="tel"],
+.col-field select,
+.col-field textarea {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 8px;
+    border: 1px solid #e6edf3;
+    background: #f4f7f9;
+    font-size: 14px;
+    color: #111827;
+    transition: box-shadow .18s, border-color .18s;
+    min-height: 44px;
+}
+
+.col-field input::placeholder,
+.col-field textarea::placeholder {
+    color: #9aa4b2;
+}
+
+.col-field input:focus,
+.col-field select:focus,
+.col-field textarea:focus {
+    outline: none;
+    border-color: #5b8cff;
+    box-shadow: 0 6px 18px rgba(91, 140, 255, 0.12);
+}
+
+.col-field textarea {
+    min-height: 120px;
+    resize: vertical;
+    padding-top: 12px;
+}
+
+/* inline rows */
+.inline-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.inline-row select {
+    flex: 0 0 34%;
+    min-width: 170px;
+    height: 44px;
+}
+
+.inline-row input {
+    flex: 1;
+    height: 44px;
+}
+
+.inline-row select,
+.inline-row input {
+    border-radius: 8px;
+    border: 1px solid #e6edf3;
+    background: #e0e8ef;
+    padding: 10px 12px;
+}
+
+.checkbox-inline,
+.checkbox-group {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    margin-top: 6px;
+    flex-wrap: wrap;
+}
+
+.checkbox-inline label,
+.checkbox-group label {
+    display: inline-flex;
+    gap: 8px;
+    align-items: center;
+    font-weight: 500;
+    color: #374151;
+    cursor: pointer;
+}
+
+.checkbox-inline input[type="checkbox"],
+.checkbox-group input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+}
+
+.helper {
+    font-size: 13px;
+    color: #6b7280;
+    margin-top: 6px;
+}
+
+.form-actions {
+    display: flex;
+    justify-content: center;
+    /* horizontally center inside the right column */
+    align-items: center;
+    padding-top: 12px;
+}
+
+.btn-submit {
+    display: inline-block;
+    margin: 0;
+    padding: 10px 26px;
+    border-radius: 999px;
+    border: none;
+    cursor: pointer;
+    background: linear-gradient(90deg, #6b8cff, #20d0c6);
+    color: #fff;
+    font-weight: 700;
+    font-size: 15px;
+    box-shadow: 0 8px 24px rgba(50, 130, 255, 0.12);
+    transition: transform .14s ease, box-shadow .14s ease;
+    min-width: 160px;
+}
+
+.submit-wrap {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    margin-top: 16px;
+}
+
+.btn-submit:hover {
+    display: inline-block;
+    transform: translateY(-2px);
+    box-shadow: 0 12px 30px rgba(50, 130, 255, 0.14);
+}
+
+/* keep flash/list styles */
+ul {
+    list-style: none;
+    padding: 0;
+    margin-bottom: 15px;
+}
+
+li {
+    background: #539de2;
+    border: 1px solid #b2e6b2;
+    color: #2d7a2d;
+    border-radius: 6px;
+    margin-bottom: 8px;
+}
+
+.error {
+    color: #c33;
+    font-size: 0.85rem;
+    display: block;
+    margin-top: 4px;
+    min-height: 1em;
+}
+
+input:invalid {
+    outline: 1px solid rgba(200, 0, 0, 0.15);
+}
+
+
+/* tiny modal styles - self contained */
+#submitModal {
+    position: fixed;
+    left: 50%;
+    top: 20%;
+    transform: translateX(-50%);
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+    padding: 14px 18px;
+    z-index: 1100;
+    min-width: 280px;
+    display: none;
+    text-align: center;
+    font-family: Arial, sans-serif;
+}
+
+#submitModal.success {
+    border-left: 6px solid #16a34a;
+}
+
+#submitModal.warning {
+    border-left: 6px solid #f59e0b;
+}
+
+#submitModal.error {
+    border-left: 6px solid #ef4444;
+}
+
+#submitModal .msg {
+    margin-bottom: 8px;
+    font-size: 14px;
+    color: #0f172a;
+}
+
+#submitModal .closeBtn {
+    background: none;
+    border: none;
+    font-weight: 700;
+    cursor: pointer;
+    color: #334155;
+}
+
+#modalBackdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(2, 6, 23, 0.35);
+    z-index: 1050;
+    display: none;
+}
+
+/* responsive */
+@media (max-width: 880px) {
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .col-label {
+        text-align: left;
+        padding-top: 0;
+        margin-bottom: 6px;
+    }
+
+    .container {
+        padding: 22px;
+        margin: 80px 24px 24px;
+    }
+
+    .inline-row {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .inline-row select {
+        width: 100%;
+        min-width: auto;
+        flex: none;
+    }
+
+    .inline-row input {
+        width: 100%;
+    }
+
+    .btn-submit {
+        width: 100%;
+        min-width: 0;
+    }
+}
+
+@media (max-width: 420px) {
+    .container {
+        padding: 18px;
+    }
+
+    .col-field input,
+    .col-field select,
+    .col-field textarea {
+        padding: 10px;
+        font-size: 13px;
+    }
+
+    .col-label {
+        font-size: 13px;
+    }
+}

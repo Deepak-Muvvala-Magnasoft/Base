@@ -1,558 +1,326 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Visitors List</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-<style>
-  body {
-    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-    background: #f4f6f9;
-    margin: 0;
-    padding: 20px;
-    color: #333;
-  }
-
-  h2 {
-    text-align: center;
-    color: #007bff;
-    margin: 100px 0 20px 0;
-    font-size: 28px;
-    font-weight: 600;
-  }
-
-  /* Navbar */
-  .navbar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    z-index: 1000;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: linear-gradient(90deg, #007bff, #0056b3);
-    padding: 12px 20px;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-  }
-
-  .navbar .logo img {
-    height: 42px;
-    transition: transform 0.3s;
-  }
-
-  .navbar .logo img:hover {
-    transform: scale(1.05);
-  }
-
-  .nav-links {
-    list-style: none;
-    display: flex;
-    gap: 15px;
-    margin: 0;
-    padding-right: 30px;
-  }
-
-  .nav-links li a {
-    color: #fff;
-    text-decoration: none;
-    font-weight: 500;
-    font-size: 15px;
-    padding: 8px 14px;
-    border-radius: 6px;
-    transition: all 0.3s ease;
-  }
-
-  .nav-links li a:hover,
-  .nav-links li a.active {
-    background: rgba(255, 255, 255, 0.25);
-    backdrop-filter: blur(4px);
-  }
-
-  /* Table container */
-  .table-container {
-    background: #fff;
-    padding: 20px;
-    border-radius: 10px;
-    box-shadow: 0 6px 18px rgba(0,0,0,0.1);
-    overflow-x: auto;
-  }
-
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    min-width: 1000px;
-  }
-
-  th, td {
-    padding: 14px 16px;
-    text-align: left;
-    font-size: 14px;
-  }
-
-  th {
-    background: #007bff;
-    color: #fff;
-    text-transform: uppercase;
-    font-size: 12px;
-    letter-spacing: 0.05em;
-    position: sticky;
-    top: 0;
-    z-index: 2;
-  }
-
-  tr:nth-child(even) {
-    background-color: #f9f9f9;
-  }
-
-  tr:hover {
-    background-color: #eef5ff;
-    transition: 0.3s;
-  }
-
-  td {
-    border-bottom: 1px solid #eee;
-    vertical-align: middle;
-  }
-
-  .empty-row td {
-    text-align: center;
-    font-style: italic;
-    color: #666;
-  }
-
-  /* Buttons */
-  button {
-    background: #007bff;
-    color: #fff;
-    border: none;
-    padding: 8px 14px;
-    border-radius: 6px;
-    font-size: 13px;
-    cursor: pointer;
-    transition: background 0.3s;
-  }
-
-  button:hover {
-    background: #0056b3;
-  }
-
-  button:disabled {
-    background: #ccc;
-    cursor: not-allowed;
-  }
-
-  /* Inputs inside table */
-  input[type="text"], textarea {
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    padding: 6px 8px;
-    font-size: 13px;
-    width: auto;
-    min-width: 80px;
-  }
-
-  input:focus, textarea:focus {
-    border-color: #007bff;
-    outline: none;
-    box-shadow: 0 0 4px rgba(0,123,255,0.3);
-  }
-
-  textarea {
-    width: 100%;
-    resize: vertical;
-    min-height: 50px;
-  }
-
-  label {
-    font-size: 13px;
-    margin-right: 8px;
-  }
-
-/* Narrow stacked columns for Check-in / Check-out */
-.checkin-cell.narrow,
-.checkout-cell.narrow {
-  width: 150px;          /* target narrow width */
-  max-width: 180px;
-  vertical-align: top;
-  padding: 8px 10px;
-  white-space: normal;
-}
-
-/* Re-usable stacked layout */
-.stacked { display:flex; flex-direction:column; gap:8px; align-items:stretch; }
-.stack-row { display:block; }
-
-/* Inputs & small controls - take full available narrow width */
-.badge-input {
-  width:100%;
-  box-sizing:border-box;
-  padding:8px 8px;
-  border-radius:6px;
-  border:1px solid #e6e9ef;
-  font-weight:600;
-  font-size:13px;
-}
-.badge-input:focus { outline:none; border-color:#6b8cff; box-shadow:0 6px 14px rgba(107,140,255,0.06); }
-
-/* verify */
-.verify-label { display:flex; gap:8px; align-items:center; font-size:13px; color:#222; }
-.verify-label input { width:16px; height:16px; }
-
-/* Checkout items list - compact */
-.items-wrap { max-height:120px; overflow:auto; padding-right:4px; }
-.checkout-item-row { display:flex; gap:8px; align-items:center; font-size:13px; margin-bottom:6px; }
-.checkout-item-row input { width:14px; height:14px; }
-
-/* remarks textarea compact */
-.checkout-remarks {
-  width:100%;
-  min-height:56px;
-  max-height:90px;
-  resize:vertical;
-  padding:8px;
-  border:1px solid #e6e9ef;
-  border-radius:6px;
-  font-size:13px;
-}
-
-/* Buttons - small variant used inside narrow column */
-.btn.small {
-  display: inline-block;
-  width: 100%;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: none;
-  font-weight: 700;
-  font-size: 13px;
-  cursor: pointer; /* clickable by default */
-}
-/* primary (enabled) */
-.btn.small.primary {
-  background: linear-gradient(90deg,#2e8bff,#20d0c6);
-  color: #fff;
-  box-shadow: 0 6px 16px rgba(46,139,255,0.10);
-  cursor: pointer;
-}
-
-/* explicit disabled styles keep not-allowed */
-.btn.small.disabled,
-.btn.small[disabled] {
-  background: #f2f4f7;
-  color: #9aa1aa;
-  box-shadow: none;
-  cursor: not-allowed;
-}
-/* small compact checked state */
-.checked-compact { display:flex; flex-direction:column; gap:4px; }
-.checked-top { font-size:13px; font-weight:700; color:#0b6b3a; display:flex; gap:6px; align-items:center; }
-.checked-bottom { font-size:12px; color:#666; }
-
-
-/* pill styles (small meta) */
-.pill { font-size:11px; padding:4px 8px; border-radius:999px; display:inline-block; font-weight:700; }
-.pill.approved { background:#e6f7ee; color:#06754b; }
-.pill.pending  { background:#fff7e6; color:#7a5a00; }
-
-
-/* responsive tweak - if space is larger, keep items stacked but centered */
-@media (min-width:900px){
-  .checkin-cell.narrow, .checkout-cell.narrow { width:150px; }
-}
-</style>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/visitor_list.css') }}">
 </head>
 
 <body>
-<nav class="navbar">
-  <div class="logo">
-    <a href="{{ url_for('vms') }}">
-      <img src="{{ url_for('static', filename='images/Magnasoft.png') }}" alt="Company Logo">
-    </a>
-  </div>
-  <ul class="nav-links">
-    <li><a href="/" class="btn btn-outline-primary">Home</a></li>
-    <li><a href="{{ url_for('vms') }}" class="{% if active_page=='form' %}active{% endif %}">Add Visitor</a></li>
-    <li><a href="{{ url_for('logout') }}">Logout</a></li>
-  </ul>
-</nav>
-<h2>Visitors List</h2>
-<div class="table-container">
-  <table>
-    <thead>
-      <tr>
-        <th>Name</th>
-        <th>Company</th>
-        <!-- <th>Phone</th>
+  <nav class="navbar">
+    <div class="logo">
+      <a href="{{ url_for('vms') }}">
+        <img src="{{ url_for('static', filename='images/Magnasoft.png') }}" alt="Company Logo">
+      </a>
+    </div>
+    <ul class="nav-links">
+      <li><a href="/" class="btn btn-outline-primary">Home</a></li>
+      <li><a href="{{ url_for('vms') }}" class="{% if active_page=='form' %}active{% endif %}">Add Visitor</a></li>
+      <li><a href="{{ url_for('logout') }}">Logout</a></li>
+    </ul>
+  </nav>
+  <h2>Visitors List</h2>
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Company</th>
+          <!-- <th>Phone</th>
         <th>Email</th> -->
-        <th>Location</th>
-        <th>ID Proof</th>
-        <!-- <th>Purpose</th> -->
-        <th>Items</th>
-        <!-- <th>Contact Person</th>
+          <th>Location</th>
+          <th>Badge ID</th>
+          <th>ID Proof</th>
+          <!-- <th>Purpose</th> -->
+          <th>Items</th>
+          <!-- <th>Contact Person</th>
         <th>Notes</th> -->
-        <th>Check-in</th>
-        <th>Check-out</th>
-        <th>Approval Status</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for v in visitors|reverse %}
-      <tr>
-        <td>{{ v.name }}</td>
-        <td>{{ v.company }}</td>
-        <!-- <td>{{ v.phone }}</td> -->
-        <!-- <td>{{ v.email }}</td> -->
-        <td>{{ v.location }}</td>
-        <td>{{ v.idNumber }}</td>
-        <!-- <td>
-          {{ v.purpose }}
-          {% if v.otherPurpose %} ({{ v.otherPurpose }}) {% endif %}
-        </td> -->
-        <td>
-          {% if v["items"] %}
-            {{ v["items"] | join(", ") }}
-          {% endif %}
-          {% if v["otherItems"] %} ({{ v["otherItems"] }}) {% endif %}
-        </td>
-        <!-- <td>{{ v.contact_person }}</td>
-        <td>{{ v.notes }}</td> -->
-<td class="checkin-cell narrow">
-  {% if not v.check_in %}
-  <div class="stacked">
-    <div class="stack-row">
-      <label class="sr-only" for="badge-{{ v._id }}">Badge</label>
-      <input
-        type="text"
-        id="badge-{{ v._id }}"
-        name="badge_number"
-        class="badge-input"
-        placeholder="Badge #"
-        maxlength="20"
-        oninput="toggleCheckIn('{{ v._id }}')"
-      >
-    </div>
-    <div class="stack-row">
-      <label class="verify-label">
-        <input
-          type="checkbox"
-          id="verify-{{ v._id }}"
-          onchange="toggleCheckIn('{{ v._id }}')"
-        >
-        <span>Verified</span>
-      </label>
-    </div>
-    <div class="stack-row">
-      {% if user_role == 'Security' and v.approved == True %}
-  <button
-    id="checkin-btn-{{ v._id }}"
-    class="btn small primary"
-    disabled
-    onclick="checkInVisitor('{{ v._id }}')"
-  >
-    Check In
-  </button>
-{% else %}
-  <button class="btn small disabled" disabled title="Only approved Security can check in">Check In</button>
-{% endif %}
+          <th>Check-in</th>
+          <th>Check-out</th>
+          <th>Approval Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for v in visitors %}
+        {# normalize items: support list OR comma-string, remove literal "Other" and append typed otherItems #}
+        {% set raw_items = v.get('items', []) %}
+        {% if raw_items is string %}
+          {% set items_list = (raw_items|split(',') | map('trim')) | list %}
+        {% else %}
+          {% set items_list = raw_items %}
+        {% endif %}
+        {% set other = (v.get('otherItems') or '') | trim %}
+        {% set items_base = (items_list | reject('equalto','Other') | list) %}
+        {% if other %}
+          {% set items_with_other = items_base + [other] %}
+        {% else %}
+          {% set items_with_other = items_base %}
+        {% endif %}
+        <tr>
+          <td>{{ v.name }}</td>
+          <td>{{ v.company }}</td>
+          <td>{{ v.location }}</td>
+          <td>{{ v.badge_number or v.get('badge_number', '—') }}</td>
+          <td>{{ v.idNumber }}</td>
+          <td>
+            {{ items_with_other | join(', ') if items_with_other else '—' }}
+          </td>
+          <td class="checkin-cell narrow">
+            {% if v.check_in %}
+            <!-- Already checked-in: show badge (if any) and check-in time -->
+            <div class="checked-compact">
+              <div class="checked-top">✅ Checked In</div>
+              <div class="checked-bottom">{{ v.check_in }}</div>
+            </div>
+            {% else %}
+            <!-- Not checked-in yet: show input + verify + checkin button (security only) -->
+            <div class="stacked">
+              <div class="stack-row">
+                <label class="sr-only" for="badge-{{ v._id }}">Badge</label>
+                <input type="text" id="badge-{{ v._id }}" name="badge_number" class="badge-input" placeholder="Badge #"
+                  maxlength="20" oninput="toggleCheckIn('{{ v._id }}')" {% if user_role !='security' %}disabled
+                  readonly{% endif %}>
+              </div>
+              <div class="stack-row">
+                <label class="verify-label">
+                  <input type="checkbox" id="verify-{{ v._id }}" onchange="toggleCheckIn('{{ v._id }}')" {% if user_role
+                    !='security' %}disabled{% endif %} {{ 'checked' if v.get('verified') else '' }}>
+                  <span>Verified</span>
+                </label>
+              </div>
+              <div class="stack-row">
+                {% if user_role == 'security' and v.approved == True %}
+                <button id="checkin-btn-{{ v._id }}" class="btn small primary" disabled
+                  onclick="checkInVisitor('{{ v._id }}')" {% if user_role !='security' %}disabled{% endif %}>
+                  Check In
+                </button>
+                {% else %}
+                <button class="btn small disabled" disabled title="Only approved security can check in">Check
+                  In</button>
+                {% endif %}
+              </div>
+            </div>
+            {% endif %}
+          </td>
 
-    </div>
-  </div>
-  {% else %}
-  <div class="checked-compact">
-    <div class="checked-top">✅ <span class="badge-num">{{ v.badge_number }}</span></div>
-    <div class="checked-bottom">{{ v.check_in }}</div>
-  </div>
-  {% endif %}
-</td>
-<td class="checkout-cell narrow">
-  {% if v.check_in and not v.check_out %}
-  <div class="stacked checkout-stacked">
-    <div class="stack-row items-wrap">
-      <strong style="font-size:13px;display:block;margin-bottom:6px;">Return Items</strong>
-      {% for item in v["items"] %}
-        <label class="checkout-item-row">
-          <input type="checkbox"
-                 class="checkout-item-{{ v._id }}"
-                 onchange="toggleCheckout('{{ v._id }}')">
-          <span class="item-text">{{ item }}</span>
-        </label>
-      {% endfor %}
-      {% if v.otherItems %}
-        <label class="checkout-item-row">
-          <input type="checkbox"
-                 class="checkout-item-{{ v._id }}"
-                 onchange="toggleCheckout('{{ v._id }}')">
-          <span class="item-text">{{ v.otherItems }}</span>
-        </label>
-      {% endif %}
-    </div>
-    <div class="stack-row">
-      <textarea id="remarks-{{ v._id }}" class="checkout-remarks" placeholder="Remarks (optional)"></textarea>
-    </div>
+          <td class="checkout-cell narrow">
+            {% if v.check_out %}
+            <!-- Already checked out: show check-out time only -->
+            <div class="checked-compact">
+              <div class="checked-top">✅ Checked Out</div>
+              <div class="checked-bottom">{{ v.check_out }}</div>
+            </div>
 
+            {% elif v.check_in and not v.check_out %}
+            <!-- Visitor present and not yet checked out: show item checkboxes, remarks, checkout button (security only) -->
+            <div class="stacked checkout-stacked">
+              <div class="stack-row items-wrap">
+                <strong style="font-size:13px;display:block;margin-bottom:6px;">Return Items</strong>
+                {% for item in items_with_other %}
+                  <label class="checkout-item-row">
+                    <input type="checkbox"
+                          class="checkout-item-{{ v._id }}"
+                          {% if user_role != 'security' %} disabled{% endif %}
+                          {{ 'checked' if item in v.get('checked_items', []) else '' }}
+                          onchange="toggleCheckout('{{ v._id }}')">
+                    <span class="item-text">{{ item }}</span>
+                  </label>
+                {% endfor %}
+              </div>
 
-    <div class="stack-row">
-      <button id="checkout-btn-{{ v._id }}"
-              class="btn small primary"
-              onclick="checkOutVisitor('{{ v._id }}')"
-              {% if user_role != 'Security' %} disabled {% endif %}
-              {% if v["items"] or v.otherItems %}disabled{% endif %}>
-        Check Out
-      </button>
-    </div>
-  </div>
-  {% elif v.check_out %}
-    <div class="checked-compact">
-      <div class="checked-top">✅ <span class="badge-num">{{ v.check_out }}</span></div>
-      <div class="checked-bottom">Remarks: {{ v.remarks or '—' }}</div>
-    </div>
-  {% else %}
-    —
-  {% endif %}
-</td>
-        <td>
-          {% if v.approved == True %}
+              <div class="stack-row">
+                <textarea id="remarks-{{ v._id }}" class="checkout-remarks" placeholder="Remarks (optional)"></textarea>
+              </div>
+
+              <div class="stack-row">
+                <button id="checkout-btn-{{ v._id }}" class="btn small primary" onclick="checkOutVisitor('{{ v._id }}')"
+                  {% if user_role !='security' %} disabled {% endif %}>
+                  Check Out
+                </button>
+              </div>
+            </div>
+
+            {% else %}
+            —
+            {% endif %}
+          </td>
+
+          <td>
+            {% if v.approved == True %}
             <span style="color: green; font-weight: bold;">✅ Approved</span>
-          {% elif v.approved == False %}
+            {% elif v.approved == False %}
             <span style="color: red; font-weight: bold;">❌ Declined</span>
-          {% else %}
+            {% else %}
             <span style="color: orange; font-weight: bold;">⏳ Pending</span>
-          {% endif %}
-        </td>
-      </tr>
-      {% else %}
-      <tr class="empty-row">
-        <td colspan="11">No visitors found.</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr class="empty-row">
+          <td colspan="11">No visitors found.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
   <script>
-  // normalize user role coming from server (safe compare)
-  const userRole = String("{{ user_role }}").trim().toLowerCase();
+    // normalize user role coming from server (safe compare)
+    const userRole = String("{{ user_role }}").trim().toLowerCase();
 
-  // Safe helper to check if current user is security
-  function isSecurity() {
-    return userRole === 'security';
-  }
-
-  // Called from badge input onchange/oninput and verify checkbox onchange
-  // We guard against missing button (visitor not allowed / not approved)
-  function toggleCheckIn(visitorId) {
-    if (!isSecurity()) return; // only security can enable button
-
-    const badgeEl = document.getElementById("badge-" + visitorId);
-    const verifyEl = document.getElementById("verify-" + visitorId);
-    const btn = document.getElementById("checkin-btn-" + visitorId);
-
-    if (!btn) return; // nothing to enable (visitor might not be approved or button not rendered)
-
-    const badge = badgeEl ? badgeEl.value.trim() : "";
-    const verified = verifyEl ? verifyEl.checked : false;
-
-    btn.disabled = !(badge && verified);
-  }
-
-  // POST check-in to server
-  function checkInVisitor(visitorId) {
-    if (!isSecurity()) {
-      alert("Only Security can perform check-in.");
-      return;
+    // Safe helper to check if current user is security
+    function issecurity() {
+      return userRole === 'security';
     }
 
-    const badgeEl = document.getElementById("badge-" + visitorId);
-    const badge = badgeEl ? badgeEl.value.trim() : "";
+    // Called from badge input onchange/oninput and verify checkbox onchange
+    // We guard against missing button (visitor not allowed / not approved)
+    function toggleCheckIn(visitorId) {
+      if (!issecurity()) return; // only security can enable button
 
-    if (!badge) {
-      alert("Enter badge number before Check In.");
-      return;
+      const badgeEl = document.getElementById("badge-" + visitorId);
+      const verifyEl = document.getElementById("verify-" + visitorId);
+      const btn = document.getElementById("checkin-btn-" + visitorId);
+
+      if (!btn) return; // nothing to enable (visitor might not be approved or button not rendered)
+
+      const badge = badgeEl ? badgeEl.value.trim() : "";
+      const verified = verifyEl ? verifyEl.checked : false;
+
+      btn.disabled = !(badge && verified);
     }
 
-    fetch(`/checkin/${visitorId}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ badge: badge })
-    })
-    .then(res => res.json())
-    .then(data => {
-      if (data && data.success) {
-        location.reload();
-      } else {
-        alert("Error: " + (data.message || "check-in failed"));
+    // Replace only this function in your page
+    function checkInVisitor(visitorId) {
+      if (!issecurity()) return;
+
+      const btn = document.getElementById("checkin-btn-" + visitorId);
+      // read the server-generated URL from data attribute, fallback to old behavior
+      const url = (btn && btn.dataset && btn.dataset.checkinUrl) ? btn.dataset.checkinUrl : `/checkin/${visitorId}`;
+
+      const badgeEl = document.getElementById("badge-" + visitorId);
+      const badge = badgeEl ? badgeEl.value.trim() : "";
+
+      if (!badge) {
+        alert("Enter badge number before Check In.");
+        return;
       }
-    })
-    .catch(err => {
-      console.error("checkin error", err);
-      alert("Network error during check-in");
-    });
-  }
 
-  // Toggle Checkout button when item checkboxes change
-  function toggleCheckout(visitorId) {
-    if (!isSecurity()) return;
+      fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ badge: badge })
+      })
+        .then(res => {
+          // If server returned 204 No Content — treat as success if status ok
+          if (res.status === 204) return { success: true };
 
-    const boxes = document.querySelectorAll(".checkout-item-" + visitorId);
-    const btn = document.getElementById("checkout-btn-" + visitorId);
-    if (!btn) return;
+          // If server responded with JSON content-type, parse it
+          const ct = res.headers.get("content-type") || "";
+          if (ct.includes("application/json")) {
+            return res.json();
+          }
 
-    // if no items present -> allow immediate checkout
-    if (boxes.length === 0) {
-      btn.disabled = false;
-      return;
+          // Not JSON — maybe HTML (login redirect) or plain text. Read text for debugging.
+          return res.text().then(text => {
+            console.warn("checkin: non-json response", res.status, text);
+            // If server returned 200 but HTML, we treat as failure (likely redirect to login)
+            return { success: false, message: "Non-JSON response from server", status: res.status, body: text };
+          });
+        })
+        .then(data => {
+          if (data && data.success) {
+            location.reload();
+          } else {
+            // Improved logging for easier debugging
+            console.warn("Check-in failed:", data && data.message, data);
+          }
+        })
+        .catch(err => {
+          console.error("checkin network error", err);
+        });
     }
 
-    // require all items checked
-    const allChecked = Array.from(boxes).every(cb => cb.checked);
-    btn.disabled = !allChecked;
-  }
+    // Toggle Checkout button when item checkboxes change
+    function toggleCheckout(visitorId) {
+      if (!issecurity()) return;
 
-  // POST checkout to server
-  function checkOutVisitor(visitorId) {
-    if (!isSecurity()) {
-      alert("Only Security can perform check-out.");
-      return;
-    }
+      const boxes = document.querySelectorAll(".checkout-item-" + visitorId);
+      const btn = document.getElementById("checkout-btn-" + visitorId);
+      if (!btn) return;
 
-    const remarksEl = document.getElementById("remarks-" + visitorId);
-    const remarks = remarksEl ? remarksEl.value.trim() : "";
-
-    fetch(`/checkout/${visitorId}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ remarks: remarks })
-    })
-    .then(res => res.json())
-    .then(data => {
-      if (data && data.success) {
-        location.reload();
-      } else {
-        alert("Error: " + (data.message || "check-out failed"));
+      // if no items present -> allow immediate checkout
+      if (boxes.length === 0) {
+        btn.disabled = false;
+        return;
       }
-    })
-    .catch(err => {
-      console.error("checkout error", err);
-      alert("Network error during check-out");
-    });
-  }
 
-  // Optional: on page load, initialize button states for rendered rows
-  // (calls toggleCheckIn for each badge input so buttons show correct enabled state)
-  document.addEventListener('DOMContentLoaded', function () {
-    // initialize check-in controls
-    document.querySelectorAll('input[id^="badge-"]').forEach(el => {
-      const id = el.id.replace('badge-', '');
-      try { toggleCheckIn(id); } catch (e) { /* ignore */ }
-    });
+      // require all items checked
+      const allChecked = Array.from(boxes).every(cb => cb.checked);
+      btn.disabled = !allChecked;
+    }
 
-    // initialize checkout controls (in case some boxes are already checked)
-    document.querySelectorAll('textarea[id^="remarks-"]').forEach(el => {
-      const id = el.id.replace('remarks-', '');
-      try { toggleCheckout(id); } catch (e) { /* ignore */ }
-    });
-  });
-</script>
+    // POST checkout to server
+    function checkOutVisitor(visitorId) {
+      // silently ignore clicks from non-security
+      if (!issecurity()) return;
 
+      const remarksEl = document.getElementById("remarks-" + visitorId);
+      const remarks = remarksEl ? remarksEl.value.trim() : "";
+
+      fetch(`/checkout/${visitorId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ remarks: remarks })
+      })
+        .then(res => res.json().catch(() => ({ success: false, message: "Invalid JSON response" })))
+        .then(data => {
+          if (data && data.success) {
+            location.reload();
+          } else {
+            // log failure instead of alert
+            console.warn("Check-out failed:", data && data.message);
+          }
+        })
+        .catch(err => {
+          console.error("checkout network error", err);
+        });
+    }
+
+    // Optional: on page load, initialize button states for rendered rows
+    // (calls toggleCheckIn for each badge input so buttons show correct enabled state)
+    document.addEventListener('DOMContentLoaded', function () {
+      // If current user is not security, disable check-in/check-out related controls
+      if (!issecurity()) {
+        // disable checkin buttons, badge inputs, verify checkboxes
+        document.querySelectorAll('[id^="checkin-btn-"]').forEach(btn => btn.disabled = true);
+        document.querySelectorAll('[id^="badge-"]').forEach(input => input.disabled = true);
+        document.querySelectorAll('[id^="verify-"]').forEach(cb => cb.disabled = true);
+
+        // disable checkout buttons and item checkboxes if present
+        document.querySelectorAll('[id^="checkout-btn-"]').forEach(btn => btn.disabled = true);
+        document.querySelectorAll('[class^="checkout-item-"]').forEach(cb => cb.disabled = true);
+        document.querySelectorAll('[id^="remarks-"]').forEach(area => area.disabled = true);
+
+        return; // nothing more to initialize for non-security
+      }
+
+      // initialize check-in controls for security users
+      document.querySelectorAll('input[id^="badge-"]').forEach(el => {
+        const id = el.id.replace('badge-', '');
+        try { toggleCheckIn(id); } catch (e) { /* ignore */ }
+      });
+
+      // initialize checkout controls (in case some boxes are already checked)
+      // find unique ids from remarks-* or checkout-btn-*
+      document.querySelectorAll('textarea[id^="remarks-"]').forEach(el => {
+        const id = el.id.replace('remarks-', '');
+        try { toggleCheckout(id); } catch (e) { /* ignore */ }
+      });
+    });
+  </script>
 </body>
+
 </html>

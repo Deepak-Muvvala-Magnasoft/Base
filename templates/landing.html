@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -16,20 +17,22 @@
     <header class="d-flex justify-content-between align-items-center p-2 border-bottom">
         <!-- Left: Logo -->
         <a href="/">
-            <img src="{{ url_for('static', filename='images/Magnasoft.png') }}" alt="Magnasoft Logo" class="logo-height">
+            <img src="{{ url_for('static', filename='images/Magnasoft.png') }}" alt="Magnasoft Logo"
+                class="logo-height">
         </a>
 
         <!-- Right: Buttons -->
         <div class="d-flex align-items-center gap-2">
-            {% if session.get("role") == "Super Admin" %}
-                <a href="{{ url_for('superadmin') }}" class="btn btn-primary" title="Go to Admin">
-                    <i class="bi bi-person-gear"></i>
-                </a>
+            {% if session.get('role','')|lower == 'super admin' %}
+            <a href="{{ url_for('superadmin') }}" class="btn btn-primary" title="Go to Admin">
+                <i class="bi bi-person-gear"></i>
+            </a>
             {% endif %}
             <a href="/" class="btn btn-outline-primary">Home</a>
             <!-- User dropdown -->
             <div class="dropdown">
-                <button class="btn bg-light border rounded px-3 py-2 d-flex align-items-center shadow-sm dropdown-toggle"
+                <button
+                    class="btn bg-light border rounded px-3 py-2 d-flex align-items-center shadow-sm dropdown-toggle"
                     type="button" id="userMenuButton" data-bs-toggle="dropdown" aria-expanded="false">
                     <i class="bi bi-person-circle me-2 text-primary user-icon"></i>
                     <strong>{{ session["username"] }}</strong>
@@ -44,7 +47,8 @@
 
     <!-- Modules -->
     <div class="container-images">
-        <a href="https://accounts.zoho.in/signin?servicename=zohopeople&signupurl=https://www.zoho.com/people/signup.html" class="image-card" target="_blank" rel="noopener noreferrer">
+        <a href="https://accounts.zoho.in/signin?servicename=zohopeople&signupurl=https://www.zoho.com/people/signup.html"
+            class="image-card" target="_blank" rel="noopener noreferrer">
             <img src="{{ url_for('static', filename='images/ZohoPeople.svg') }}" alt="Zoho People">
             <h4>Zoho People</h4>
         </a>
@@ -69,19 +73,22 @@
             <h4>Zoho Analytics</h4>
         </a>
 
-        <a href="https://accounts.zoho.in/signin?servicename=ZohoCreator&hide_signup=false&hide_fs=true&serviceurl=https://creatorapp.zoho.in/magnazohoin/risk-management/RedirectAction?serviceUrl=https://creatorapp.zoho.in/magnazohoin/risk-management%2523Form%253AChange_Management" class="image-card" target="_blank" rel="noopener noreferrer">
+        <a href="https://accounts.zoho.in/signin?servicename=ZohoCreator&hide_signup=false&hide_fs=true&serviceurl=https://creatorapp.zoho.in/magnazohoin/risk-management/RedirectAction?serviceUrl=https://creatorapp.zoho.in/magnazohoin/risk-management%2523Form%253AChange_Management"
+            class="image-card" target="_blank" rel="noopener noreferrer">
             <img src="{{ url_for('static', filename='images/MagnasoftIcon.jpg') }}" alt="MGoverance">
             <h4>MGovernance</h4>
         </a>
     </div>
 
     <div class="container-images">
-        <a href="https://magnasoft.zohocreatorportal.in/#Home" class="image-card" target="_blank" rel="noopener noreferrer">
+        <a href="https://magnasoft.zohocreatorportal.in/#Home" class="image-card" target="_blank"
+            rel="noopener noreferrer">
             <img src="{{ url_for('static', filename='images/E-Procurement.jpg') }}" alt="E-Procurement">
             <h4>E-Procurement</h4>
         </a>
 
-        <a href="https://support-desk.magnasoft.com/app/project/HomePage.do" class="image-card" target="_blank" rel="noopener noreferrer">
+        <a href="https://support-desk.magnasoft.com/app/project/HomePage.do" class="image-card" target="_blank"
+            rel="noopener noreferrer">
             <img src="{{ url_for('static', filename='images/Project.jpg') }}" alt="Project Management">
             <h4>Project Tool</h4>
         </a>
@@ -101,7 +108,8 @@
             <h4>SalesForce</h4>
         </a>
 
-        <a href="https://docs.google.com/forms/d/e/1FAIpQLSeMA8twei5olIGHQ18FIFZU4aeZsHeKyoVDhyCxEuFkW6ZZ7w/viewform" class="image-card" target="_blank" rel="noopener noreferrer">
+        <a href="https://docs.google.com/forms/d/e/1FAIpQLSeMA8twei5olIGHQ18FIFZU4aeZsHeKyoVDhyCxEuFkW6ZZ7w/viewform"
+            class="image-card" target="_blank" rel="noopener noreferrer">
             <img src="{{ url_for('static', filename='images/TravelDesk.png') }}" alt="Travel Desk">
             <h4>Travel Desk</h4>
         </a>
@@ -134,4 +142,5 @@
     <script src="{{ url_for('static', filename='js/landing.js') }}"></script>
 
 </body>
+
 </html>

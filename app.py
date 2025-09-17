@@ -4,10 +4,13 @@ from flask_pymongo import PyMongo
 from bson.objectid import ObjectId
 from datetime import datetime
 from authlib.integrations.flask_client import OAuth
-from sqlalchemy import func, inspect, text
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import text
+from flask import redirect, url_for
+from sqlalchemy import func, inspect, text, Boolean, DateTime, Text
 import pandas as pd
 from werkzeug.security import generate_password_hash, check_password_hash
-from config import MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DB, MYSQL_PORT, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, MONGO_URI, SMTP_SERVER, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_MAIL
+from config import MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DB, MYSQL_PORT, SMTP_SERVER, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_MAIL, VISITOR_BASE_URL, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET 
 from datetime import datetime
 from flask_dance.contrib.google import make_google_blueprint, google
 import os
@@ -15,17 +18,34 @@ import requests
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import smtplib
+import json
 from urllib.parse import quote_plus
 from flask import render_template, request, redirect, url_for, flash
-
 
 app = Flask(__name__)
 app.secret_key = "super_secret_key"
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 
 app.config['PREFERRED_URL_SCHEME'] = 'https'
-app.config["MONGO_URI"] = MONGO_URI
-mongo = PyMongo(app)
+
+
+@app.context_processor
+def inject_user_role():
+    """
+    Normalise role for templates:
+      - user_role: lowercase role (e.g. "super admin")
+      - role_display: original / title cased role for UI
+      - is_superadmin: boolean
+    """
+    role_raw = (session.get("role") or "").strip()
+    role_norm = role_raw.lower()
+    role_display = session.get("role_display") or (role_raw.title() if role_raw else "")
+    return {
+        "user_role": role_norm,
+        "role_display": role_display,
+        "is_superadmin": role_norm == "super admin"
+    }
+
 
 # Add Google OAuth config
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'  # For HTTP (development only)
@@ -59,6 +79,32 @@ def visitor_qr():
     return render_template('visitor_form.html', visitor_only=True)
 
 # --- Models ---
+
+class Visitor(db.Model):
+    __tablename__ = "visitors"
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(200))
+    company = db.Column(db.String(200))
+    phone = db.Column(db.String(50))
+    email = db.Column(db.String(200))
+    location = db.Column(db.String(100))
+    badge_number = db.Column(db.String(50), nullable=True)
+    idType = db.Column(db.String(100))
+    idNumber = db.Column(db.String(200))
+    purpose = db.Column(db.String(200))
+    otherPurpose = db.Column(db.Text)
+    contact_person = db.Column(db.String(200))
+    contact_email = db.Column(db.String(200))
+    notes = db.Column(db.Text)
+    items = db.Column(db.Text)        # store as JSON string
+    otherItems = db.Column(db.String(200))
+    check_in = db.Column(db.DateTime, nullable=True)
+    check_out = db.Column(db.DateTime, nullable=True)
+    remarks = db.Column(db.Text)
+    verified = db.Column(db.Boolean, default=False)
+    approved = db.Column(db.Boolean, nullable=True)
+    created_at = db.Column(db.DateTime, default=func.now())
+
 class User(db.Model):
     __tablename__ = "users"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -70,7 +116,6 @@ class Project(db.Model):
     __tablename__ = "projects"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     name = db.Column(db.String(255), nullable=False)
-
 
 # --- Utilities ---
 def safe_colname(col: str) -> str:
@@ -140,11 +185,13 @@ def google_login():
 
         # ✅ Create session
         session["username"] = email
-        session["role"] = user.role
+        session["role"] = (user.role or "").strip().lower()
+        project_name = request.args.get('project_name') or session.get('selected_project') or ''
+        session["selected_project"] = project_name
 
         first_project = Project.query.order_by(Project.name).first()
         project_name = first_project.name if first_project else ""
-        session["selected_project"] = project_name
+
 
         return render_template("landing.html")
         # ✅ Redirect to data page
@@ -161,8 +208,9 @@ def login():
 
         user = User.query.filter_by(username=username).first()
         if user and check_password_hash(user.password, password):
-            session["username"] = username
-            session["role"] = user.role or "User"
+            session["username"] = user.username
+            session["role"] = (user.role or "").strip().lower()
+            session["role_display"] = (user.role or "").strip()
 
             # ✅ Find the first project name alphabetically
             first_project = Project.query.order_by(Project.name).first()
@@ -185,6 +233,8 @@ def login():
 def logout():
     session.pop("username", None)
     session.pop("role", None)
+    session.pop("role_display", None)
+
     return redirect(url_for("login"))
 
 
@@ -342,7 +392,7 @@ def superadmin():
             flash("Username already exists", "warning")
         else:
             hashed_pw = generate_password_hash(password)
-            new_user = User(username=username, password=hashed_pw, role=role)
+            new_user = User(username=username, password=hashed_pw, role=(role or "").strip().title())
             db.session.add(new_user)
             db.session.commit()
             flash("User added successfully", "success")
@@ -358,21 +408,32 @@ def superadmin():
 @app.route("/edit_user_role", methods=["POST"])
 def edit_user_role():
     username = request.form.get("username")
-    new_role = request.form.get("new_role")
+    new_role_raw = request.form.get("new_role", "")           # comes as lowercase (from select)
+    new_role_norm = new_role_raw.strip().lower()              # ensure normalized
 
-    if not username or not new_role:
-        flash("Missing username or role", "danger")
+    if not username or not new_role_norm:
+        flash("Invalid input", "danger")
         return redirect(request.referrer or url_for("superadmin"))
+
+    # store a nice display value in DB (title case)
+    display_role = new_role_norm.title()                      # "security" -> "Security", "super admin" -> "Super Admin"
 
     user = User.query.filter_by(username=username).first()
     if not user:
-        flash("User not found.", "danger")
-        return redirect(url_for("superadmin"))
+        flash("User not found", "danger")
+        return redirect(request.referrer or url_for("superadmin"))
 
-    user.role = new_role
+    user.role = display_role
     db.session.commit()
-    flash(f"Role for '{username}' updated to '{new_role}' successfully!", "success")
-    return redirect(url_for("superadmin"))
+
+    # if the logged-in user changed their own role, update the session role (normalized)
+    if session.get("username") == username:
+        session["role"] = new_role_norm
+        session["role_display"] = display_role
+
+    flash(f"Role updated to {display_role} for {username}", "success")
+    return redirect(request.referrer or url_for("superadmin"))
+
 
 
 @app.route("/edit_user_password", methods=["POST"])
@@ -485,109 +546,164 @@ def vms():
 
     return render_template("visitor_form.html", user=session["username"])
 
-
 @app.route("/add_visitor", methods=["POST"])
 def add_visitor():
     form = request.form
-    # marker coming from the visitor-only form (hidden input)
     visitor_only = form.get("visitor_only")
-
     dept = form.get('dept')
     location = form.get('location')
     selected_contact_person = form.get('contact_person')
 
-    visitor = {
-        "name": form.get("name"),
-        "company": form.get("company"),
-        "phone": form.get("phone"),
-        "email": form.get("email"),
-        "location": form.get("location"),
-        "idType": form.get("idType"),
-        "idNumber": form.get("idNumber"),
-        "purpose": form.get("purpose"),
-        "otherPurpose": form.get("otherPurpose"),
-        "contact_person": form.get("contact_person"),
-        "contact_email": form.get("contact_email"),
-        "notes": form.get("notes"),
-        "items": request.form.getlist("items"),
-        "otherItems": form.get("otherItems"),
-        "check_in": None,
-        "check_out": None,
-        "remarks": None,
-        "verified": False,
-        "approved": None,
-    }
+        # --- normalize items submitted from the form ---
+    # support both `items` and `items[]` usage on the client
+    items_raw = request.form.getlist("items") or request.form.getlist("items[]") or []
+    other_text = (form.get("otherItems") or "").strip()
 
-    # save to Mongo
-    mongo.db.visitors.insert_one(visitor)
+    # Build normalized list: replace literal "Other" with typed text (if present)
+    normalized_items = []
+    for it in items_raw:
+        if not it:
+            continue
+        if it == "Other":
+            if other_text:
+                normalized_items.append(other_text)
+            # if no typed text, skip the literal "Other"
+        else:
+            normalized_items.append(it)
 
-    # prepare default flash
-    flash_msg = "Visitor saved successfully!"
-    flash_cat = "success"
+    # If user typed something in otherItems but did not check the 'Other' box,
+    if other_text and other_text not in normalized_items:
+        normalized_items.append(other_text)
 
-    # try to send emails (if configured)
+    # Finally create visitor record (store items as JSON string; keep otherItems too)
+    visitor = Visitor(
+        name=form.get("name"),
+        company=form.get("company"),
+        phone=form.get("phone"),
+        email=form.get("email"),
+        location=form.get("location"),
+        idType=form.get("idType"),
+        idNumber=form.get("idNumber"),
+        purpose=form.get("purpose"),
+        otherPurpose=form.get("otherPurpose"),
+        contact_person=form.get("contact_person"),
+        contact_email=form.get("contact_email"),
+        notes=form.get("notes"),
+        items=json.dumps(normalized_items),
+        otherItems=other_text,
+        check_in=None,
+        check_out=None,
+        remarks=None,
+        verified=False,
+        approved=None
+    )
+
+    # helper to decide JSON vs redirect response
+    def respond_success(msg, visitor_id=None):
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest" or "application/json" in request.headers.get("Accept", ""):
+            payload = {"success": True, "message": msg}
+            if visitor_id:
+                payload["visitor_id"] = visitor_id
+            return jsonify(payload), 200
+        # non-AJAX: original behaviour
+        if visitor_only:
+            return redirect(url_for("visitor_qr", alert=msg, alert_cat="success"))
+        return redirect(url_for("vms", alert=msg, alert_cat="success"))
+
+    def respond_error(msg, status=500):
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest" or "application/json" in request.headers.get("Accept", ""):
+            return jsonify({"success": False, "message": msg}), status
+        if visitor_only:
+            return redirect(url_for("visitor_qr", alert=msg, alert_cat="danger"))
+        return redirect(url_for("vms", alert=msg, alert_cat="danger"))
+
+    # --- save to MySQL using SQLAlchemy (safe commit with rollback) ---
+    try:
+        db.session.add(visitor)
+        db.session.commit()
+        new_id = visitor.id
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        app.logger.exception("Failed to save visitor to DB")
+        return respond_error(f"Failed saving visitor (DB error): {e.__class__.__name__}", 500)
+
+    # if saved — attempt email but never rollback on email failure
     try:
         if selected_contact_person:
-            send_email_to_contact(visitor)
-            flash_msg = "Visitor saved and email sent successfully!"
+            v = Visitor.query.get(new_id)
+            send_email_to_contact(v, visitor_id=new_id)
         else:
-            # send to all matching users for dept+location
             users = db.session.execute(
                 text("SELECT username, email FROM contact_person WHERE dept = :dept AND location = :location"),
                 {"dept": dept, "location": location}
             ).mappings().all()
-
+            v = Visitor.query.get(new_id)
             for user in users:
-                visitor["contact_person"] = user["username"]
-                visitor["contact_email"] = user["email"]
-                send_email_to_contact(visitor)
-
-            flash_msg = "Visitor saved and email(s) sent successfully!"
+                v.contact_person = user["username"]
+                v.contact_email = user["email"]
+                send_email_to_contact(v, visitor_id=new_id)
     except Exception as e:
-        # keep visitor saved but report email failure
-        flash_msg = f"Visitor saved but email failed: {str(e)}"
-        flash_cat = "warning"
+        app.logger.exception("Email sending failed after saving visitor")
+        # still return success to user (visitor saved), but include warning in message
+        return respond_success(f"Visitor saved but email failed: {str(e)}", visitor_id=new_id)
 
-    # redirect back to visitor page when form came from the public/QR page
-    if visitor_only:
-        flash("Thank you — your visit has been recorded.", "success")
-        return redirect(url_for("visitor_qr"))   # change name if your visitor route is different
-    flash(flash_msg, flash_cat)
-    # default staff flow
-    return redirect(url_for("vms"))
+    # all good
+    return respond_success("Visitor saved and email(s) sent successfully!", visitor_id=new_id)
 
+def send_email_to_contact(visitor_obj_or_dict, visitor_id=None):
+    # Accept either: SQLAlchemy Visitor instance OR dict (for compatibility)
+    if hasattr(visitor_obj_or_dict, "__table__"):  # SQLAlchemy model
+        v = visitor_obj_or_dict
+        vid = visitor_id or v.id
+        contact_email = v.contact_email
+        contact_name = v.contact_person
+        name = v.name
+        company = v.company
+        phone = v.phone
+        purpose = v.purpose
+    else:
+        v = visitor_obj_or_dict
+        vid = visitor_id or v.get("id") or v.get("_id")
+        contact_email = v.get("contact_email")
+        contact_name = v.get("contact_person")
+        name = v.get("name")
+        company = v.get("company")
+        phone = v.get("phone")
+        purpose = v.get("purpose")
 
+    # decide base URL for links: prefer config, otherwise use current request host
+    try:
+        base = VISITOR_BASE_URL or request.url_root.rstrip('/')
+    except Exception:
+        # if called outside request context, fall back to localhost or config
+        base = VISITOR_BASE_URL or "http://localhost:5001"
+    base = base.rstrip('/')
 
-def send_email_to_contact(visitor):
-    contact_email = visitor.get("contact_email")
-    contact_name = visitor.get("contact_person")
-    visitor_id = str(visitor["_id"])
+    approve_link = f"{base}/approve_visitor/{vid}"
+    decline_link = f"{base}/decline_visitor/{vid}"
 
-    approve_link = f"http://myvvms.duckdns.org:5000/approve_visitor/{visitor_id}"
-    decline_link = f"http://myvvms.duckdns.org:5000/decline_visitor/{visitor_id}"
+    # guard: if no email, nothing to send
+    if not contact_email:
+        return False
 
     subject = "New Visitor Approval Required"
     body = f"""
-    <html>
-    <body>
-        <p>Hello {contact_name},</p>
-
-        <p>A new visitor has registered to meet you:</p>
-
-        <ul>
-            <li><strong>Name:</strong> {visitor.get('name')}</li>
-            <li><strong>Company:</strong> {visitor.get('company')}</li>
-            <li><strong>Phone:</strong> {visitor.get('phone')}</li>
-            <li><strong>Purpose:</strong> {visitor.get('purpose')}</li>
-        </ul>
-
-        <p>Please choose an option below:</p>
-        <a href="{approve_link}" style="display: inline-block; padding: 10px 20px; margin-right: 10px; background-color: #28a745; color: white; text-decoration: none; border-radius: 5px;">✅ Approve</a>
-        <a href="{decline_link}" style="display: inline-block; padding: 10px 20px; background-color: #dc3545; color: white; text-decoration: none; border-radius: 5px;">❌ Decline</a>
-
-        <p>Regards,<br>VMS System</p>
-    </body>
-    </html>
+    <html><body>
+      <p>Hello {contact_name},</p>
+      <p>A new visitor has registered to meet you:</p>
+      <ul>
+        <li><strong>Name:</strong> {name}</li>
+        <li><strong>Company:</strong> {company}</li>
+        <li><strong>Phone:</strong> {phone}</li>
+        <li><strong>Purpose:</strong> {purpose}</li>
+      </ul>
+      <p>Please choose an option below:</p>
+      <p>
+        <a href="{approve_link}">✅ Approve</a>&nbsp;&nbsp;
+        <a href="{decline_link}">❌ Decline</a>
+      </p>
+      <p>Regards,<br>VMS System</p>
+    </body></html>
     """
 
     message = MIMEMultipart()
@@ -601,23 +717,26 @@ def send_email_to_contact(visitor):
         server.login(SMTP_USERNAME, SMTP_PASSWORD)
         server.sendmail(message["From"], contact_email, message.as_string())
 
+    return True
 
-@app.route("/approve_visitor/<visitor_id>")
+@app.route("/approve_visitor/<int:visitor_id>")
 def approve_visitor(visitor_id):
-    mongo.db.visitors.update_one(
-        {"_id": ObjectId(visitor_id)},
-        {"$set": {"approved": True}}
-    )
-    return "Visitor approved ✅. Security can now check-in the visitor."
+    v = Visitor.query.get(visitor_id)
+    if not v:
+        return "Visitor not found", 404
+    v.approved = True
+    db.session.commit()
+    return "Visitor approved ✅."
 
-
-@app.route("/decline_visitor/<visitor_id>")
+@app.route("/decline_visitor/<int:visitor_id>")
 def decline_visitor(visitor_id):
-    mongo.db.visitors.update_one(
-        {"_id": ObjectId(visitor_id)},
-        {"$set": {"approved": False}}
-    )
-    return "Visitor declined ❌. They will not be allowed to check-in."
+    v = Visitor.query.get(visitor_id)
+    if not v:
+        return "Visitor not found", 404
+    v.approved = False
+    db.session.commit()
+    return "Visitor declined ❌."
+
 
 
 @app.route("/get_users")
@@ -638,63 +757,131 @@ def get_users():
 
 @app.route("/visitors")
 def visitors_list():
-    all_visitors = list(mongo.db.visitors.find())
-    user_role = session.get('role')
+    all_visitors = Visitor.query.order_by(Visitor.created_at.desc()).all()
+    user_role = (session.get('role') or "").strip().lower()
 
-    # 🟢 Convert datetime → string (safe for template)
+    out = []
     for v in all_visitors:
-        for field in ["check_in", "check_out"]:
-            if isinstance(v.get(field), datetime):
-                v[field] = v[field].strftime("%Y-%m-%d %H:%M:%S")
-            elif v.get(field) is None:
-                v[field] = ""  # empty if no value
+        # normalize items to a Python list
+        items_list = []
+        try:
+            if isinstance(v.items, str):
+                items_list = json.loads(v.items) if v.items else []
+            elif isinstance(v.items, (list, tuple, set)):
+                items_list = list(v.items)
+            else:
+                items_list = []
+        except Exception:
+            items_list = []
 
-    return render_template("visitors_list.html", visitors=all_visitors, user_role=user_role)
+        out.append({
+            "_id": v.id,
+            "id": v.id,
+            "name": v.name,
+            "company": v.company,
+            "phone": v.phone,
+            "email": v.email,
+            "location": v.location,
+            "badge_number": v.badge_number or "",   # <- ADD this line
+            "idNumber": v.idNumber,
+            "contact_person": v.contact_person,
+            "contact_email": v.contact_email,
+            "purpose": v.purpose,
+            "items": items_list,
+            "check_in": v.check_in.strftime("%Y-%m-%d %H:%M:%S") if v.check_in else None,
+            "check_out": v.check_out.strftime("%Y-%m-%d %H:%M:%S") if v.check_out else None,
+            "verified": bool(v.verified),
+            "approved": v.approved,
+            "remarks": v.remarks or ""
+        })
 
+
+    return render_template("visitors_list.html", visitors=out, user_role=user_role)
 
 
 @app.route("/api/visitors")
 def visitors_api():
-    visitors = list(mongo.db.visitors.find())
+    visitors = Visitor.query.order_by(Visitor.created_at.desc()).all()
+    out = []
     for v in visitors:
-        v["_id"] = str(v["_id"])
-    return jsonify(visitors)
+        # normalize items to a Python list (same logic as visitors_list)
+        items_list = []
+        try:
+            if isinstance(v.items, str):
+                items_list = json.loads(v.items) if v.items else []
+            elif isinstance(v.items, (list, tuple, set)):
+                items_list = list(v.items)
+            else:
+                items_list = []
+        except Exception:
+            items_list = []
+
+        out.append({
+            "_id": v.id,
+            "id": v.id,
+            "name": v.name,
+            "company": v.company,
+            "phone": v.phone,
+            "email": v.email,
+            "location": v.location,
+            "idNumber": v.idNumber,
+            "contact_person": v.contact_person,
+            "contact_email": v.contact_email,
+            "purpose": v.purpose,
+            "items": items_list,
+            "check_in": v.check_in.strftime("%Y-%m-%d %H:%M:%S") if v.check_in else "",
+            "check_out": v.check_out.strftime("%Y-%m-%d %H:%M:%S") if v.check_out else "",
+            "verified": bool(v.verified),
+            "approved": v.approved
+        })
+    return jsonify(out)
 
 
-@app.route("/checkin/<visitor_id>", methods=["POST"])
+
+@app.route('/checkin/<int:visitor_id>', methods=['POST'])
 def checkin(visitor_id):
-    data = request.get_json()
-    badge = data.get("badge")
+    try:
+        data = request.get_json(silent=True) or {}
+        badge = (data.get('badge') or "").strip()
+        if not badge:
+            return jsonify(success=False, message="Missing badge"), 400
 
-    if not badge:
-        return jsonify({"success": False, "message": "Badge number required"}), 400
+        v = Visitor.query.get(visitor_id)
+        if not v:
+            return jsonify(success=False, message="Visitor not found"), 404
 
-    mongo.db.visitors.update_one(
-        {"_id": ObjectId(visitor_id)},
-        {"$set": {
-            "check_in": datetime.now(),
-            "badge_number": badge,
-            "verified": True
-        }}
-    )
+        # store badge and mark check-in time
+        v.badge_number = badge
+        v.check_in = datetime.utcnow()
 
-    return jsonify({"success": True, "message": "Visitor checked in successfully"})
+        db.session.commit()
+        return jsonify(success=True, message="Checked in", badge=badge, check_in=v.check_in.isoformat()), 200
+
+    except Exception:
+        app.logger.exception("Checkin error")
+        return jsonify(success=False, message="Server error"), 500
 
 
-@app.route("/checkout/<visitor_id>", methods=["POST"])
+
+    
+@app.route("/checkout/<int:visitor_id>", methods=["POST"])
 def checkout(visitor_id):
+
+    if session.get("role") != "security":
+        return jsonify({"success": False, "message": "Forbidden: insufficient permissions"}), 403
+    
     data = request.get_json()
     remarks = data.get("remarks", "")
 
-    mongo.db.visitors.update_one(
-        {"_id": ObjectId(visitor_id)},
-        {"$set": {
-            "check_out": datetime.now(),
-            "remarks": remarks
-        }}
-    )
+    v = Visitor.query.get(visitor_id)
+    if not v:
+        return jsonify({"success": False, "message": "Visitor not found"}), 404
 
+    v.check_out = datetime.now()
+    v.remarks = (v.remarks or "") + ("\n" + remarks if remarks else "")
+    db.session.commit()
     return jsonify({"success": True, "message": "Visitor checked out successfully"})
+
 
 
 if __name__ == "__main__":

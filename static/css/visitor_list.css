@@ -1,0 +1,333 @@
+body {
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    background: #f4f6f9;
+    margin: 0;
+    padding: 20px;
+    color: #333;
+}
+
+h2 {
+    text-align: center;
+    color: #007bff;
+    margin: 100px 0 20px 0;
+    font-size: 28px;
+    font-weight: 600;
+}
+
+/* Navbar */
+.navbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 1000;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: linear-gradient(90deg, #007bff, #0056b3);
+    padding: 12px 20px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.navbar .logo img {
+    height: 42px;
+    transition: transform 0.3s;
+}
+
+.navbar .logo img:hover {
+    transform: scale(1.05);
+}
+
+.nav-links {
+    list-style: none;
+    display: flex;
+    gap: 15px;
+    margin: 0;
+    padding-right: 30px;
+}
+
+.nav-links li a {
+    color: #fff;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 15px;
+    padding: 8px 14px;
+    border-radius: 6px;
+    transition: all 0.3s ease;
+}
+
+.nav-links li a:hover,
+.nav-links li a.active {
+    background: rgba(255, 255, 255, 0.25);
+    backdrop-filter: blur(4px);
+}
+
+/* Table container */
+.table-container {
+    background: #fff;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 1000px;
+}
+
+th,
+td {
+    padding: 14px 16px;
+    text-align: left;
+    font-size: 14px;
+}
+
+th {
+    background: #007bff;
+    color: #fff;
+    text-transform: uppercase;
+    font-size: 12px;
+    letter-spacing: 0.05em;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+tr:hover {
+    background-color: #eef5ff;
+    transition: 0.3s;
+}
+
+td {
+    border-bottom: 1px solid #eee;
+    vertical-align: middle;
+}
+
+.empty-row td {
+    text-align: center;
+    font-style: italic;
+    color: #666;
+}
+
+/* Buttons */
+button {
+    background: #007bff;
+    color: #fff;
+    border: none;
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+button:hover {
+    background: #0056b3;
+}
+
+button:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+/* Inputs inside table */
+input[type="text"],
+textarea {
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    padding: 6px 8px;
+    font-size: 13px;
+    width: auto;
+    min-width: 80px;
+}
+
+input:focus,
+textarea:focus {
+    border-color: #007bff;
+    outline: none;
+    box-shadow: 0 0 4px rgba(0, 123, 255, 0.3);
+}
+
+textarea {
+    width: 100%;
+    resize: vertical;
+    min-height: 50px;
+}
+
+label {
+    font-size: 13px;
+    margin-right: 8px;
+}
+
+/* Narrow stacked columns for Check-in / Check-out */
+.checkin-cell.narrow,
+.checkout-cell.narrow {
+    width: 150px;
+    /* target narrow width */
+    max-width: 180px;
+    vertical-align: top;
+    padding: 8px 10px;
+    white-space: normal;
+}
+
+/* Re-usable stacked layout */
+.stacked {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: stretch;
+}
+
+.stack-row {
+    display: block;
+}
+
+/* Inputs & small controls - take full available narrow width */
+.badge-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 8px;
+    border-radius: 6px;
+    border: 1px solid #e6e9ef;
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.badge-input:focus {
+    outline: none;
+    border-color: #6b8cff;
+    box-shadow: 0 6px 14px rgba(107, 140, 255, 0.06);
+}
+
+/* verify */
+.verify-label {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    font-size: 13px;
+    color: #222;
+}
+
+.verify-label input {
+    width: 16px;
+    height: 16px;
+}
+
+/* Checkout items list - compact */
+.items-wrap {
+    max-height: 120px;
+    overflow: auto;
+    padding-right: 4px;
+}
+
+.checkout-item-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    font-size: 13px;
+    margin-bottom: 6px;
+}
+
+.checkout-item-row input {
+    width: 14px;
+    height: 14px;
+}
+
+/* remarks textarea compact */
+.checkout-remarks {
+    width: 100%;
+    min-height: 56px;
+    max-height: 90px;
+    resize: vertical;
+    padding: 8px;
+    border: 1px solid #e6e9ef;
+    border-radius: 6px;
+    font-size: 13px;
+}
+
+/* Buttons - small variant used inside narrow column */
+.btn.small {
+    display: inline-block;
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: none;
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    /* clickable by default */
+}
+
+/* primary (enabled) */
+.btn.small.primary {
+    background: linear-gradient(90deg, #2e8bff, #20d0c6);
+    color: #fff;
+    box-shadow: 0 6px 16px rgba(46, 139, 255, 0.10);
+    cursor: pointer;
+}
+
+/* explicit disabled styles keep not-allowed */
+.btn.small.disabled,
+.btn.small[disabled] {
+    background: #f2f4f7;
+    color: #9aa1aa;
+    box-shadow: none;
+    cursor: not-allowed;
+}
+
+/* small compact checked state */
+.checked-compact {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.checked-top {
+    font-size: 13px;
+    font-weight: 700;
+    color: #0b6b3a;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.checked-bottom {
+    font-size: 12px;
+    color: #666;
+}
+
+
+/* pill styles (small meta) */
+.pill {
+    font-size: 11px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    display: inline-block;
+    font-weight: 700;
+}
+
+.pill.approved {
+    background: #e6f7ee;
+    color: #06754b;
+}
+
+.pill.pending {
+    background: #fff7e6;
+    color: #7a5a00;
+}
+
+
+/* responsive tweak - if space is larger, keep items stacked but centered */
+@media (min-width:900px) {
+
+    .checkin-cell.narrow,
+    .checkout-cell.narrow {
+        width: 150px;
+    }
+}

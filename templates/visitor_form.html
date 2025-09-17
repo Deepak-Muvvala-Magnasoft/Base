@@ -3,281 +3,51 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <img>
   <title>Visitor Registration</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-  <style>
-/* ===== Global & Reset ===== */
-* { box-sizing: border-box; }
-html, body { height: 100%; margin: 0; padding: 0; }
-body {
-  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-  background: #f4f6f9;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  color: #111827;
-}
-
-/* ---------- Navbar (fixed) ---------- */
-/* main bar */
-.navbar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  z-index: 1000;
-  background: linear-gradient(90deg, #007bff, #0056b3);
-  /* subtle bottom border so navbar visually separates from page */
-  box-shadow: 0 4px 10px rgba(14,30,37,0.06);
-  padding: 8px 0;
-  -webkit-font-smoothing: antialiased;
-}
-
-/* container inside navbar aligned with form container width */
-.nav-inner {
-  max-width: 1000px;               /* same as .container */
-  width: calc(100% - 40px);        /* same horizontal margins as .container */
-  margin: 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-/* logo */
-.nav-inner .logo img {
-  height: 46px;
-  display: block;
-  transition: transform .18s ease;
-  margin-left: 4px;
-}
-.nav-inner .logo img:hover { transform: scale(1.03); }
-
-/* nav links list */
-.nav-links {
-  list-style: none;
-  display: flex;
-  gap: 14px;
-  align-items: center;
-  margin: 0;
-  padding: 0;
-}
-
-/* primary nav link look (override any bootstrap defaults inside the navbar) */
-.nav-link,
-.nav-btn-outline,
-.navbar .btn,
-.navbar .btn-outline-primary,
-.navbar a.btn {
-  color: #ffffff !important;
-  text-decoration: none;
-  font-weight: 600;
-  font-size: 14px;
-  padding: 8px 12px;
-  border-radius: 10px;
-  transition: background .18s ease, transform .12s;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid rgba(255,255,255,0.08);
-  background: rgba(255,255,255,0.06); /* subtle translucent pill */
-}
-
-/* keep the Home button slightly more prominent (outline-style pill) */
-.nav-btn-outline {
-  border-radius: 999px;
-  background: rgba(255,255,255,0.12);
-  padding: 8px 14px;
-  font-weight: 700;
-}
-
-/* Hover / active */
-.nav-link:hover,
-.nav-btn-outline:hover,
-.navbar .btn:hover,
-.navbar .btn-outline-primary:hover {
-  background: rgba(255,255,255,0.18);
-  transform: translateY(-2px);
-}
-
-/* If you have classes like .active from Jinja, style them here */
-.nav-link.active,
-.nav-links li a.active {
-  background: rgba(255,255,255,0.18);
-}
-
-/* Remove any inherited Bootstrap backgrounds/green look inside navbar specifically */
-.navbar .btn-outline-primary,
-.navbar .btn {
-  background-image: none !important;
-  background-color: transparent !important;
-  color: #fff !important;
-  border-color: rgba(255,255,255,0.12) !important;
-  box-shadow: none !important;
-}
-
-/* If some links still use .btn class with background-color, force transparent */
-.navbar .btn[style],
-.navbar a[style] {
-  background: transparent !important;
-}
-
-/* mobile: keep layout tidy */
-@media (max-width: 780px) {
-  .nav-inner { width: calc(100% - 28px); gap: 8px; }
-  .nav-inner .logo img { height: 40px; }
-  .nav-links { gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
-  .nav-btn-outline, .nav-link { padding: 6px 10px; font-size: 13px; }
-}
-
-/* ---------- Container / Card (form area) ---------- */
-.container {
-  background: linear-gradient(180deg, #ffffff 0%, #fbfbfd 100%);
-  padding: 30px 40px;
-  border-radius: 12px;
-  box-shadow: 0 10px 30px rgba(14, 30, 37, 0.06);
-  max-width: 1000px;
-  width: calc(100% - 40px);
-  margin: 92px auto 40px;
-}
-
-/* center heading inside the .container card */
-.container h2 {
-  text-align: center;
-  width: 100%;
-  margin: 0 0 18px;   /* keep spacing under the title */
-  color: #007bff;
-  font-weight: 700;
-  line-height: 1.15;
-}
-
-/* keep the rest of your form styles (labels, grid, fields, buttons) -- paste or keep existing below */
-/* ---------- Form grid: labels | fields ---------- */
-.form-grid {
-  display: grid;
-  grid-template-columns: 220px 1fr;
-  column-gap: 28px;
-  row-gap: 14px;
-  align-items: start;
-}
-.col-label {
-  text-align: left;
-  padding-top: 10px;
-  color: #2f3b46;
-  font-weight: 600;
-  font-size: 14px;
-}
-.col-label .required::after {
-  content: " *";
-  color: #e11d48;
-  margin-left: 4px;
-  font-weight: 700;
-}
-.form-grid .col-field input,
-.form-grid .col-field select,
-.form-grid .col-field textarea,
-.form-grid .col-field .btn-submit {
-  box-sizing: border-box;
-}
-.col-field input[type="text"],
-.col-field input[type="email"],
-.col-field input[type="tel"],
-.col-field select,
-.col-field textarea {
-  width: 100%;
-  padding: 12px 14px;
-  border-radius: 8px;
-  border: 1px solid #e6edf3;
-  background: #fbfcfd;
-  font-size: 14px;
-  color: #111827;
-  transition: box-shadow .18s, border-color .18s;
-  min-height: 44px;
-}
-.col-field input::placeholder,
-.col-field textarea::placeholder { color: #9aa4b2; }
-.col-field input:focus,
-.col-field select:focus,
-.col-field textarea:focus {
-  outline: none;
-  border-color: #5b8cff;
-  box-shadow: 0 6px 18px rgba(91,140,255,0.12);
-}
-.col-field textarea { min-height: 120px; resize: vertical; padding-top: 12px; }
-
-/* inline rows */
-.inline-row { display: flex; gap: 12px; align-items: center; }
-.inline-row select { flex: 0 0 34%; min-width: 150px; height: 44px; }
-.inline-row input  { flex: 1; height: 44px; }
-.inline-row select, .inline-row input {
-  border-radius: 8px; border: 1px solid #e6edf3; background: #fbfcfd; padding: 10px 12px;
-}
-.checkbox-inline, .checkbox-group {
-  display: flex; gap: 16px; align-items: center; margin-top: 6px; flex-wrap: wrap;
-}
-.checkbox-inline label, .checkbox-group label {
-  display: inline-flex; gap: 8px; align-items: center; font-weight: 500; color: #374151; cursor: pointer;
-}
-.checkbox-inline input[type="checkbox"], .checkbox-group input[type="checkbox"] { width: 16px; height: 16px; }
-.helper { font-size:13px; color:#6b7280; margin-top:6px; }
-
-.form-actions {
-  display: flex;
-  justify-content: center; /* horizontally center inside the right column */
-  align-items: center;
-  padding-top: 12px;
-}
-
-.btn-submit {
-  display: inline-block;
-  margin: 0;
-  padding: 10px 26px;
-  border-radius: 999px;
-  border: none;
-  cursor: pointer;
-  background: linear-gradient(90deg, #6b8cff, #20d0c6);
-  color: #fff;
-  font-weight: 700;
-  font-size: 15px;
-  box-shadow: 0 8px 24px rgba(50,130,255,0.12);
-  transition: transform .14s ease, box-shadow .14s ease;
-  min-width: 160px;
-}
-
-.submit-wrap {
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  margin-top: 16px;
-}
-.btn-submit:hover { display:inline-block;transform: translateY(-2px); box-shadow: 0 12px 30px rgba(50,130,255,0.14); }
-
-/* keep flash/list styles */
-ul { list-style: none; padding: 0; margin-bottom: 15px; }
-li { background: #539de2; border: 1px solid #b2e6b2; color: #2d7a2d; border-radius: 6px; margin-bottom: 8px; }
-
-.error { color: #c33; font-size: 0.85rem; display: block; margin-top: 4px; min-height: 1em; }
-input:invalid { outline: 1px solid rgba(200,0,0,0.15); }
-/* responsive */
-@media (max-width: 880px) {
-  .form-grid { grid-template-columns: 1fr; }
-  .col-label { text-align: left; padding-top: 0; margin-bottom: 6px; }
-  .container { padding: 22px; margin: 80px 12px 24px; }
-  .inline-row { flex-direction: column; gap: 8px; }
-  .inline-row select { width: 100%; min-width: auto; flex: none; }
-  .inline-row input { width: 100%; }
-  .btn-submit { width: 100%; min-width: 0; }
-}
-@media (max-width: 420px) {
-  .container { padding: 18px; }
-  .col-field input, .col-field select, .col-field textarea { padding: 10px; font-size: 13px; }
-  .col-label { font-size: 13px; }
-}
-</style>
-
-
-
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/visitor_form.css') }}">
 </head>
+
+<div id="modalBackdrop"></div>
+<div id="submitModal" role="dialog" aria-modal="true" aria-hidden="true">
+  <div class="msg" id="submitModalMsg">Saved successfully</div>
+  <!-- <button type="button" class="closeBtn" id="submitModalClose">Close</button> -->
+</div>
+
+<script>
+(function(){
+  const modal = document.getElementById('submitModal');
+  const modalMsg = document.getElementById('submitModalMsg');
+  // const modalClose = document.getElementById('submitModalClose');
+  const backdrop = document.getElementById('modalBackdrop');
+
+  window.showModal = function(text, type='success', autoHide=true, timeout=3500) {
+    modalMsg.textContent = text || '';
+    modal.className = ''; // reset classes
+    modal.classList.add(type);
+    modal.style.display = 'block';
+    backdrop.style.display = 'block';
+    modal.setAttribute('aria-hidden', 'false');
+    if (autoHide) {
+      clearTimeout(modal._timer);
+      modal._timer = setTimeout(window.hideModal, timeout);
+    }
+  };
+
+  window.hideModal = function() {
+    modal.style.display = 'none';
+    backdrop.style.display = 'none';
+    modal.setAttribute('aria-hidden', 'true');
+    clearTimeout(modal._timer);
+  };
+
+  modalClose.addEventListener('click', window.hideModal);
+  backdrop.addEventListener('click', window.hideModal);
+})();
+</script>
+
 <body>
+
   {% if not visitor_only %}
 <nav class="navbar" role="navigation" aria-label="Main navigation">
   <div class="nav-inner">
@@ -300,18 +70,17 @@ input:invalid { outline: 1px solid rgba(200,0,0,0.15); }
   </div>
 </nav>
 {% endif %}
-  <div class="container">
-    <h2>Visitor Registration</h2>
+  <div class="container visitor-center">
 
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        <ul>
-          {% for category, message in messages %}
-            <li>{{ message }}</li>
-          {% endfor %}
-        </ul>
-      {% endif %}
-    {% endwith %}
+    <img
+      src="{{ url_for('static', filename='images/Mpass.png') }}"
+      alt="Magnasoft logo"
+      class="logo-height"
+      loading="lazy"
+      width="200" height="60"
+    >
+    <h2>Visitor Registration</h2>
+  
 
     <form id="visitorForm" method="POST" action="{{ url_for('add_visitor') }}">
       <!-- mark this POST as coming from the public/QR visitor page -->
@@ -339,7 +108,7 @@ input:invalid { outline: 1px solid rgba(200,0,0,0.15); }
     <div class="col-field">
       <select name="location" required>
         <option value="">Select Location</option>
-        <option value="BLG">Bangalore</option>
+        <option value="BLR">Bangalore</option>
         <option value="HYD">Hyderabad</option>
         <option value="HSN">Hassan</option>
       </select>
@@ -406,14 +175,10 @@ input:invalid { outline: 1px solid rgba(200,0,0,0.15); }
 <div class="col-label"><label class="required">Items Carried</label></div>
 <div class="col-field">
   <div class="checkbox-inline">
-    <label><input type="checkbox" name="items" value="Laptop"> Laptop</label>
-    <label><input type="checkbox" name="items" value="Pendrive"> Pendrive</label>
-    <label><input type="checkbox" name="items" value="Ipad"> Ipad</label>
-
-    <!-- 'Others' checkbox with id so we can toggle the textbox -->
-    <label>
-      <input id="itemsOtherCheckbox" type="checkbox" name="items" value="Other"> Others
-    </label>
+    <label><input type="checkbox" name="items[]" value="Laptop"> Laptop</label>
+    <label><input type="checkbox" name="items[]" value="Pendrive"> Pendrive</label>
+    <label><input type="checkbox" name="items[]" value="Ipad"> Ipad</label>
+    <label><input id="itemsOtherCheckbox" type="checkbox" name="items[]" value="Other"> Others</label>
   </div>
 
   <!-- Other items text (hidden by default) -->
@@ -437,12 +202,13 @@ input:invalid { outline: 1px solid rgba(200,0,0,0.15); }
       <option value="Other">Other</option>
     </select>
 </div>
+</div>
 
     <!-- Notes -->
-    <div class="col-label"><label>Additional Notes</label></div>
-    <div class="col-field">
-      <textarea name="notes" rows="3" placeholder="Optional notes..."></textarea>
-    </div>
+<div class="col-label"><label>Additional Notes</label></div>
+  <div class="col-field">
+    <textarea name="notes" rows="3" placeholder="Optional notes..."></textarea>
+</div>
 
   </div>
    <div class="submit-wrap">
@@ -454,7 +220,7 @@ input:invalid { outline: 1px solid rgba(200,0,0,0.15); }
     function fetchUsers() {
     const dept = document.getElementById('dept').value;
     const location = document.querySelector('select[name="location"]').value;
-    if (!dept || !location) return;  // both must be selected
+    if (!dept || !location) return;  
 
     fetch(`/get_users?dept=${encodeURIComponent(dept)}&location=${encodeURIComponent(location)}`)
         .then(res => res.json())
@@ -471,7 +237,6 @@ input:invalid { outline: 1px solid rgba(200,0,0,0.15); }
             });
             if (contactEmailEl) contactEmailEl.value = '';
           }
-
 
             const contactperson = document.getElementById('contact_person');
             if (contactperson) {
@@ -568,83 +333,194 @@ if (contactPersonEl) {
     }
   })();
 
-
 document.addEventListener('DOMContentLoaded', () => {
   const form = document.getElementById('visitorForm');
-  if (!form) return; // nothing to do if form id missing
-  const phone = document.getElementById('phone');
+  if (!form) return;
+
   const idType = document.getElementById('idType');
   const idNumber = document.getElementById('idNumber');
   const email = document.getElementById('email');
-  const phoneError = document.getElementById('phoneError');
+
   const idError = document.getElementById('idError');
   const emailError = document.getElementById('emailError');
+
   const ID_PATTERNS = {
-    Aadhaar: { pattern: '^\\d{12}$', placeholder: '12 digits (e.g. 123412341234)', title: '12 digit Aadhaar number' },
-    PAN: { pattern: '^[A-Z]{5}[0-9]{4}[A-Z]{1}$', placeholder: 'PAN (e.g. ABCDE1234F)', title: 'PAN: 5 letters, 4 digits, 1 letter' },
-    DrivingLicense: { pattern: '^[A-Za-z0-9\\-\\/\\s]{6,16}$', placeholder: 'Driving license (6-16 chars)', title: 'Driving license number (6–16 chars)' },
-    Passport: { pattern: '^[A-PR-WY][0-9]{7}$', placeholder: 'Passport (e.g. A1234567)', title: 'Passport: 1 letter + 7 digits' }
+    Aadhaar: {
+      regex: /^\d{12}$/,
+      placeholder: '12 digits (e.g. 123412341234)',
+      title: '12 digit Aadhaar number'
+    },
+    PAN: {
+      regex: /^[A-Z]{5}[0-9]{4}[A-Z]$/,
+      placeholder: 'PAN (e.g. ABCDE1234F)',
+      title: 'PAN: 5 letters, 4 digits, 1 letter'
+    },
+    DrivingLicense: {
+      regex: /^[A-Za-z0-9\-\/\s]{6,16}$/,
+      placeholder: 'Driving license (6-16 chars)',
+      title: 'Driving license number (6–16 chars)'
+    },
+    Passport: {
+      regex: /^[A-PR-WY][0-9]{7}$/,
+      placeholder: 'Passport (e.g. A1234567)',
+      title: 'Passport: 1 letter + 7 digits'
+    }
   };
-  function showError(el, msg) {
-    if (!el) return;
-    el.textContent = msg || '';
+
+  function showError(el, msg) { if (el) el.textContent = msg || ''; }
+
+  function sanitizeForType(raw, type) {
+    if (!raw) return '';
+    let s = raw.trim();
+    if (type === 'Aadhaar') s = s.replace(/[\s-]/g, '');
+    if (type === 'PAN' || type === 'Passport') s = s.toUpperCase().replace(/\s/g, '');
+    return s;
   }
+
+  function markValid(el) {
+    el.classList.remove('invalid');
+    el.classList.add('valid');
+  }
+  function markInvalid(el) {
+    el.classList.remove('valid');
+    el.classList.add('invalid');
+  }
+  function clearMarks(el) {
+    el.classList.remove('valid', 'invalid');
+  }
+
   function updateIdValidation() {
     const val = idType.value;
     if (ID_PATTERNS[val]) {
-      idNumber.setAttribute('pattern', ID_PATTERNS[val].pattern);
-      idNumber.setAttribute('title', ID_PATTERNS[val].title);
-      idNumber.placeholder = ID_PATTERNS[val].placeholder;
       idNumber.required = true;
+      idNumber.placeholder = ID_PATTERNS[val].placeholder;
+      idNumber.title = ID_PATTERNS[val].title;
+      // set HTML pattern too (optional)
+      idNumber.setAttribute('pattern', ID_PATTERNS[val].regex.source);
     } else {
-      idNumber.removeAttribute('pattern');
-      idNumber.removeAttribute('title');
-      idNumber.placeholder = 'Enter ID Number';
       idNumber.required = false;
+      idNumber.removeAttribute('pattern');
+      idNumber.placeholder = 'Enter ID Number';
+      idNumber.title = '';
       showError(idError, '');
+      clearMarks(idNumber);
     }
-    idNumber.value = idNumber.value.trim();
+    // Always clear custom validity initially
     idNumber.setCustomValidity('');
   }
-  phone.addEventListener('input', () => {
-    const ok = phone.checkValidity();
-    if (!ok) {
-      showError(phoneError, 'Enter valid mobile number (10 digits, start 6-9). Optional +91 prefix allowed.');
-    } else {
-      showError(phoneError, '');
-    }
-    phone.setCustomValidity(ok ? '' : 'invalid');
-  });
-  email.addEventListener('input', () => {
-    const ok = email.checkValidity();
-    showError(emailError, ok ? '' : 'Enter a valid email address.');
-    email.setCustomValidity(ok ? '' : 'invalid');
-  });
-  idType.addEventListener('change', updateIdValidation);
+
+  // ID number live validation (sanitizes and tests with regex)
   idNumber.addEventListener('input', () => {
-    if (idNumber.hasAttribute('pattern')) {
-      const ok = idNumber.checkValidity();
-      showError(idError, ok ? '' : 'ID number does not match expected format for selected ID type.');
-      idNumber.setCustomValidity(ok ? '' : 'invalid');
+    const type = idType.value;
+    const raw = idNumber.value;
+    const sanitized = sanitizeForType(raw, type);
+
+    // update the visible value for PAN/passport/Aadhaar (helps users)
+    if (type === 'PAN' || type === 'Passport' || type === 'Aadhaar') {
+      if (idNumber.value !== sanitized) idNumber.value = sanitized;
+    }
+
+    if (ID_PATTERNS[type]) {
+      const ok = ID_PATTERNS[type].regex.test(sanitized);
+      if (ok) {
+        showError(idError, '');
+        idNumber.setCustomValidity('');       // ✅ clear browser invalid state
+        markValid(idNumber);
+      } else {
+        showError(idError, 'ID number does not match expected format for selected ID type.');
+        // set a friendly custom validity message (so browser treats it invalid)
+        idNumber.setCustomValidity('ID number invalid for selected type');
+        markInvalid(idNumber);
+      }
     } else {
       showError(idError, '');
       idNumber.setCustomValidity('');
+      clearMarks(idNumber);
     }
   });
-  form.addEventListener('submit', (ev) => {
-    updateIdValidation();
-    if (!form.checkValidity()) {
-      ev.preventDefault();
-      if (!phone.checkValidity()) showError(phoneError, 'Enter valid mobile number (10 digits, start 6-9).');
-      if (!email.checkValidity()) showError(emailError, 'Enter a valid email address.');
-      if (idNumber.required && !idNumber.checkValidity()) showError(idError, 'ID number invalid for selected ID type.');
-      const firstInvalid = form.querySelector(':invalid');
-      if (firstInvalid) firstInvalid.focus();
-      return false;
+
+  // Email live validation
+  // Email live validation
+email.addEventListener('input', () => {
+  const value = email.value.trim();
+  email.value = value; // remove accidental spaces
+
+  if (value === "") {
+    showError(emailError, 'Email is required.');
+    email.setCustomValidity('Email is required.');
+    email.classList.add('invalid');
+    email.classList.remove('valid');
+    return;
+  }
+
+  // simple regex for email check (more reliable than only checkValidity)
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  if (emailRegex.test(value)) {
+    showError(emailError, '');
+    email.setCustomValidity('');   // ✅ clears stuck invalid state
+    email.classList.add('valid');
+    email.classList.remove('invalid');
+  } else {
+    showError(emailError, 'Enter a valid email address.');
+    email.setCustomValidity('Enter a valid email address.'); // mark invalid
+    email.classList.add('invalid');
+    email.classList.remove('valid');
+  }
+});
+
+  // Final form submission check
+  // Final form submission check -> AJAX submit + popup
+form.addEventListener('submit', async (ev) => {
+  ev.preventDefault();              
+  updateIdValidation();                
+  idNumber.dispatchEvent(new Event('input'));
+  email.dispatchEvent(new Event('input'));
+
+  // stop if invalid
+  if (!form.checkValidity()) {
+    const firstInvalid = form.querySelector(':invalid');
+    if (firstInvalid) firstInvalid.focus();
+    return;
+  }
+
+  const submitBtn = form.querySelector('button[type="submit"]');
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Submitting...'; }
+
+  try {
+    const resp = await fetch(form.action, {
+      method: 'POST',
+      body: new FormData(form),
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json'
+      },
+      credentials: 'same-origin'
+    });
+
+    let data = null;
+    try { data = await resp.json(); } catch (e) { /* invalid JSON */ }
+
+    if (resp.ok && data && data.success) {
+      // success popup and reset form (optional)
+      if (window.showModal) window.showModal(data.message || 'Saved successfully', 'success', true, 3000);
+      form.reset();
+    } else {
+      const msg = (data && data.message) ? data.message : (resp.statusText || 'Save failed');
+      if (window.showModal) window.showModal(msg, 'error', true, 5000);
     }
-  });
+  } catch (err) {
+    console.error(err);
+    if (window.showModal) window.showModal('Network / server error. Try again.', 'error', true, 5000);
+  } finally {
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Submit'; }
+  }
+});
+
+  // init
   updateIdValidation();
 });
+</script>
 </script>
 
 </body>

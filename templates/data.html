@@ -22,14 +22,14 @@
 
       <div class="d-flex justify-content-end align-items-center gap-2 mb-3">
         {% if session.get("role") == "Super Admin" %}
-          <a href="{{ url_for('superadmin') }}" class="btn btn-primary" title="Go to Admin">
-            <i class="bi bi-person-gear"></i>
-          </a>
+        <a href="{{ url_for('superadmin') }}" class="btn btn-primary" title="Go to Admin">
+          <i class="bi bi-person-gear"></i>
+        </a>
         {% endif %}
-<a href="/" class="btn btn-outline-primary">Home</a>
+        <a href="/" class="btn btn-outline-primary">Home</a>
         <div class="dropdown">
           <button class="btn bg-light border rounded px-3 py-2 d-flex align-items-center shadow-sm dropdown-toggle"
-                  type="button" id="userMenuButton" data-bs-toggle="dropdown" aria-expanded="false">
+            type="button" id="userMenuButton" data-bs-toggle="dropdown" aria-expanded="false">
             <i class="bi bi-person-circle me-2 text-primary user-icon"></i>
             <strong>{{ session["username"] }}</strong>
           </button>
@@ -47,12 +47,14 @@
           </ul>
         </div>
 
-        <div class="modal fade" id="editModal{{ session['username'] }}" tabindex="-1" aria-labelledby="editModalLabel{{ session['username'] }}" aria-hidden="true">
+        <div class="modal fade" id="editModal{{ session['username'] }}" tabindex="-1"
+          aria-labelledby="editModalLabel{{ session['username'] }}" aria-hidden="true">
           <div class="modal-dialog">
             <div class="modal-content">
               <form method="POST" action="{{ url_for('edit_user_password') }}">
                 <div class="modal-header">
-                  <h5 class="modal-title" id="editModalLabel{{ session['username'] }}">Edit Password: {{ session['username'] }}</h5>
+                  <h5 class="modal-title" id="editModalLabel{{ session['username'] }}">Edit Password: {{
+                    session['username'] }}</h5>
                   <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
 
@@ -60,7 +62,8 @@
                   <input type="hidden" name="username" value="{{ session['username'] }}">
                   <div class="mb-3">
                     <label for="new_password_{{ session['username'] }}" class="form-label">New Password</label>
-                    <input type="password" class="form-control" name="new_password" id="new_password_{{ session['username'] }}" required>
+                    <input type="password" class="form-control" name="new_password"
+                      id="new_password_{{ session['username'] }}" required>
                   </div>
                 </div>
 
@@ -86,7 +89,8 @@
                 <select name="project_name" id="projectDropdown" class="form-select" required>
                   <option value="">-- Select Project --</option>
                   {% for p in projects %}
-                    <option value="{{ p }}" {% if (request.args.get('project_name') or selected_project) == p %}selected{% endif %}>{{ p }}</option>
+                  <option value="{{ p }}" {% if (request.args.get('project_name') or selected_project)==p %}selected{%
+                    endif %}>{{ p }}</option>
                   {% endfor %}
                 </select>
               </div>
@@ -121,12 +125,12 @@
 
                 <tbody>
                   {% for entry in grouped_data %}
-                    <tr>
-                      <td>{{ entry.project_name }}</td>
-                      <td>{{ entry.file_name }}</td>
-                      <td>{{ entry.upload_time }}</td>
-                      <td>{{ entry.count }}</td>
-                    </tr>
+                  <tr>
+                    <td>{{ entry.project_name }}</td>
+                    <td>{{ entry.file_name }}</td>
+                    <td>{{ entry.upload_time }}</td>
+                    <td>{{ entry.count }}</td>
+                  </tr>
                   {% endfor %}
                 </tbody>
               </table>
@@ -142,18 +146,18 @@
           <thead>
             <tr>
               {% for col in columns %}
-                <th>{{ col }}</th>
+              <th>{{ col }}</th>
               {% endfor %}
             </tr>
           </thead>
 
           <tbody>
             {% for doc in uploaded_data %}
-              <tr>
-                {% for col in columns %}
-                  <td>{{ doc[col] if col in doc else '' }}</td>
-                {% endfor %}
-              </tr>
+            <tr>
+              {% for col in columns %}
+              <td>{{ doc[col] if col in doc else '' }}</td>
+              {% endfor %}
+            </tr>
             {% endfor %}
           </tbody>
         </table>
