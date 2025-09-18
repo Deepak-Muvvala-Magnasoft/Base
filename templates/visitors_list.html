@@ -31,6 +31,7 @@
           <!-- <th>Phone</th>
         <th>Email</th> -->
           <th>Location</th>
+          
           <th>Badge ID</th>
           <th>ID Proof</th>
           <!-- <th>Purpose</th> -->
@@ -39,6 +40,7 @@
         <th>Notes</th> -->
           <th>Check-in</th>
           <th>Check-out</th>
+          <th class="text-right">Photo</th>
           <th>Approval Status</th>
         </tr>
       </thead>
@@ -62,6 +64,7 @@
           <td>{{ v.name }}</td>
           <td>{{ v.company }}</td>
           <td>{{ v.location }}</td>
+          
           <td>{{ v.badge_number or v.get('badge_number', '—') }}</td>
           <td>{{ v.idNumber }}</td>
           <td>
@@ -144,6 +147,13 @@
 
             {% else %}
             —
+            {% endif %}
+          </td>
+          <td style="text-align:center;">
+            {% if v.photo_url %}
+              <img src="{{ v.photo_url }}" alt="photo" style="width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid #e6e6e6;">
+            {% else %}
+              <span class="placeholder">—</span>
             {% endif %}
           </td>
 

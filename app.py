@@ -1,31 +1,32 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
+import os
+import pandas as pd
+import json
+import smtplib
+
+
+from flask import Flask, render_template,request, redirect, url_for, flash, session, jsonify
 from flask_sqlalchemy import SQLAlchemy
-from flask_pymongo import PyMongo
-from bson.objectid import ObjectId
+# from flask_pymongo import PyMongo
+# from bson.objectid import ObjectId
 from datetime import datetime
-from authlib.integrations.flask_client import OAuth
+# from authlib.integrations.flask_client import OAuth
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import text
-from flask import redirect, url_for
-from sqlalchemy import func, inspect, text, Boolean, DateTime, Text
-import pandas as pd
+# from flask import redirect, url_for
+from sqlalchemy import func, inspect
 from werkzeug.security import generate_password_hash, check_password_hash
 from config import MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DB, MYSQL_PORT, SMTP_SERVER, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_MAIL, VISITOR_BASE_URL, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET 
-from datetime import datetime
+# from datetime import datetime
 from flask_dance.contrib.google import make_google_blueprint, google
-import os
-import requests
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-import smtplib
-import json
-from urllib.parse import quote_plus
-from flask import render_template, request, redirect, url_for, flash
+# from urllib.parse import quote_plus
+from werkzeug.utils import secure_filename
+from flask import make_response
 
 app = Flask(__name__)
 app.secret_key = "super_secret_key"
 app.config["TEMPLATES_AUTO_RELOAD"] = True
-
 app.config['PREFERRED_URL_SCHEME'] = 'https'
 
 
@@ -50,8 +51,8 @@ def inject_user_role():
 # Add Google OAuth config
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'  # For HTTP (development only)
 google_bp = make_google_blueprint(
-    client_id= GOOGLE_CLIENT_ID,
-    client_secret= GOOGLE_CLIENT_SECRET,
+    client_id=GOOGLE_CLIENT_ID,
+    client_secret=GOOGLE_CLIENT_SECRET,
     scope=[
         "openid",
         "https://www.googleapis.com/auth/userinfo.email",
@@ -69,17 +70,18 @@ app.config["SQLALCHEMY_DATABASE_URI"] = (
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 
+
 @app.route('/visitor', methods=['GET', 'POST'])
 def visitor_qr():
-    # if POST, you can reuse your existing add_visitor logic or call the same handler
+    # if POST, you can reuse your existing add_visitor logic
     if request.method == 'POST':
         # quick reuse: delegate to same function that handles add_visitor
         return add_visitor()   # only if add_visitor() returns a response
     # GET: render the same template but hide navbar
     return render_template('visitor_form.html', visitor_only=True)
 
-# --- Models ---
 
+# --- Models ---
 class Visitor(db.Model):
     __tablename__ = "visitors"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -104,6 +106,10 @@ class Visitor(db.Model):
     verified = db.Column(db.Boolean, default=False)
     approved = db.Column(db.Boolean, nullable=True)
     created_at = db.Column(db.DateTime, default=func.now())
+    photo_filename = db.Column(db.String(255), nullable=True)
+    photo_mime = db.Column(db.String(100), nullable=True)
+    photo_data = db.Column(db.LargeBinary, nullable=True) 
+
 
 class User(db.Model):
     __tablename__ = "users"
@@ -112,10 +118,12 @@ class User(db.Model):
     password = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), nullable=False)
 
+
 class Project(db.Model):
     __tablename__ = "projects"
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     name = db.Column(db.String(255), nullable=False)
+
 
 # --- Utilities ---
 def safe_colname(col: str) -> str:
@@ -134,6 +142,7 @@ def safe_colname(col: str) -> str:
         name = f"c_{name}"
     return name
 
+
 def safe_table_name(name: str) -> str:
     """Sanitize project name for a MySQL table name."""
     import re
@@ -143,9 +152,10 @@ def safe_table_name(name: str) -> str:
         tbl = f"t_{tbl}"
     return tbl.lower()
 
+
 def ensure_columns_exist(new_columns):
     """
-    ALTER TABLE excel_data ADD COLUMN `<col>` TEXT for any missing Excel columns.
+    ALTER TABLE excel_data ADD COLUMN `<col>` TEXT for any missing  columns.
     """
     inspector = inspect(db.engine)
     existing = {c["name"] for c in inspector.get_columns("excel_data")}
@@ -174,12 +184,12 @@ def google_login():
     if resp.ok:
         user_info = resp.json()
         email = user_info["email"]
-        name = user_info.get("name", email.split("@")[0])
+        # name = user_info.get("name", email.split("@")[0])
 
         # ✅ Check if user exists in DB, else create
         user = User.query.filter_by(username=email).first()
         if not user:
-            user = User(username=email, password="", role="User")  # No password for SSO users
+            user = User(username=email, password="", role="User")  
             db.session.add(user)
             db.session.commit()
 
@@ -191,7 +201,6 @@ def google_login():
 
         first_project = Project.query.order_by(Project.name).first()
         project_name = first_project.name if first_project else ""
-
 
         return render_template("landing.html")
         # ✅ Redirect to data page
@@ -221,7 +230,7 @@ def login():
 
             return render_template("landing.html")
             # ✅ Redirect to /data?project_name=<first_project>
-            #return redirect(url_for("upload_file", project_name=project_name))
+            # return redirect(url_for("upload_file", project_name=project_name))
 
         else:
             flash("❌ Invalid username or password!", "danger")
@@ -434,8 +443,6 @@ def edit_user_role():
     flash(f"Role updated to {display_role} for {username}", "success")
     return redirect(request.referrer or url_for("superadmin"))
 
-
-
 @app.route("/edit_user_password", methods=["POST"])
 def edit_user_password():
     username = request.form.get("username")
@@ -546,6 +553,7 @@ def vms():
 
     return render_template("visitor_form.html", user=session["username"])
 
+
 @app.route("/add_visitor", methods=["POST"])
 def add_visitor():
     form = request.form
@@ -554,7 +562,7 @@ def add_visitor():
     location = form.get('location')
     selected_contact_person = form.get('contact_person')
 
-        # --- normalize items submitted from the form ---
+    # --- normalize items submitted from the form ---
     # support both `items` and `items[]` usage on the client
     items_raw = request.form.getlist("items") or request.form.getlist("items[]") or []
     other_text = (form.get("otherItems") or "").strip()
@@ -616,6 +624,17 @@ def add_visitor():
         if visitor_only:
             return redirect(url_for("visitor_qr", alert=msg, alert_cat="danger"))
         return redirect(url_for("vms", alert=msg, alert_cat="danger"))
+    
+        # handle uploaded photo (optional)
+    photo_file = request.files.get('photo')
+    if photo_file and photo_file.filename:
+        # sanitize filename
+        safe_name = secure_filename(photo_file.filename)
+        visitor.photo_filename = safe_name
+        visitor.photo_mime = photo_file.mimetype or 'image/jpeg'
+        # read bytes
+        visitor.photo_data = photo_file.read()
+
 
     # --- save to MySQL using SQLAlchemy (safe commit with rollback) ---
     try:
@@ -649,6 +668,18 @@ def add_visitor():
 
     # all good
     return respond_success("Visitor saved and email(s) sent successfully!", visitor_id=new_id)
+
+@app.route('/visitor_photo/<int:visitor_id>')
+def visitor_photo(visitor_id):
+    v = Visitor.query.get(visitor_id)
+    if not v or not v.photo_data:
+        return '', 404
+    resp = make_response(v.photo_data)
+    resp.headers.set('Content-Type', v.photo_mime or 'image/jpeg')
+    # inline display
+    resp.headers.set('Content-Disposition', 'inline', filename=v.photo_filename or f'photo_{visitor_id}.jpg')
+    return resp
+
 
 def send_email_to_contact(visitor_obj_or_dict, visitor_id=None):
     # Accept either: SQLAlchemy Visitor instance OR dict (for compatibility)
@@ -738,7 +769,6 @@ def decline_visitor(visitor_id):
     return "Visitor declined ❌."
 
 
-
 @app.route("/get_users")
 def get_users():
     dept = request.args.get("dept")
@@ -792,7 +822,8 @@ def visitors_list():
             "check_out": v.check_out.strftime("%Y-%m-%d %H:%M:%S") if v.check_out else None,
             "verified": bool(v.verified),
             "approved": v.approved,
-            "remarks": v.remarks or ""
+            "remarks": v.remarks or "",
+            "photo_url": url_for('visitor_photo', visitor_id=v.id) if v.photo_data else None,
         })
 
 
@@ -837,7 +868,6 @@ def visitors_api():
     return jsonify(out)
 
 
-
 @app.route('/checkin/<int:visitor_id>', methods=['POST'])
 def checkin(visitor_id):
     try:
@@ -862,8 +892,6 @@ def checkin(visitor_id):
         return jsonify(success=False, message="Server error"), 500
 
 
-
-    
 @app.route("/checkout/<int:visitor_id>", methods=["POST"])
 def checkout(visitor_id):
 
@@ -881,8 +909,6 @@ def checkout(visitor_id):
     v.remarks = (v.remarks or "") + ("\n" + remarks if remarks else "")
     db.session.commit()
     return jsonify({"success": True, "message": "Visitor checked out successfully"})
-
-
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)

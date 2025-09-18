@@ -18,7 +18,7 @@
 (function(){
   const modal = document.getElementById('submitModal');
   const modalMsg = document.getElementById('submitModalMsg');
-  // const modalClose = document.getElementById('submitModalClose');
+  const modalClose = document.getElementById('submitModalClose');
   const backdrop = document.getElementById('modalBackdrop');
 
   window.showModal = function(text, type='success', autoHide=true, timeout=3500) {
@@ -82,7 +82,9 @@
     <h2>Visitor Registration</h2>
   
 
-    <form id="visitorForm" method="POST" action="{{ url_for('add_visitor') }}">
+   <!-- change the form tag to include enctype -->
+  <form id="visitorForm" method="POST" action="{{ url_for('add_visitor') }}" enctype="multipart/form-data">
+
       <!-- mark this POST as coming from the public/QR visitor page -->
   <input type="hidden" name="visitor_only" value="{{ '1' if visitor_only else '' }}">
 
@@ -145,6 +147,23 @@
   </div>
   <small id="idError" class="error" aria-live="polite"></small>
 </div>
+
+<!-- Photo / Selfie (mobile camera friendly) -->
+<div class="col-label"><label>Photo (Selfie)</label></div>
+<div class="col-field">
+  <input
+    type="file"
+    id="photo"
+    name="photo"
+    accept="image/*"
+    capture="environment"   <!-- opens back camera on mobile; use "user" for front camera -->
+    aria-label="Take or choose photo"
+  >
+  <div id="photoPreviewWrap" style="margin-top:8px;">
+    <img id="photoPreview" alt="photo preview" style="max-width:160px; max-height:160px; display:none; border-radius:6px; border:1px solid #eee;">
+  </div>
+</div>
+
 
 <!-- Email -->
 <div class="col-label"><label for="email">Email</label></div>
@@ -519,6 +538,21 @@ form.addEventListener('submit', async (ev) => {
 
   // init
   updateIdValidation();
+});
+
+document.getElementById('photo')?.addEventListener('change', function(e){
+  const f = this.files && this.files[0];
+  const img = document.getElementById('photoPreview');
+  if (!f) {
+    img.style.display = 'none';
+    img.src = '';
+    return;
+  }
+  const url = URL.createObjectURL(f);
+  img.src = url;
+  img.style.display = 'block';
+  // release the object URL when image loads
+  img.onload = () => { URL.revokeObjectURL(url); };
 });
 </script>
 </script>
