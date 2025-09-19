@@ -105,6 +105,7 @@ class Visitor(db.Model):
     remarks = db.Column(db.Text)
     verified = db.Column(db.Boolean, default=False)
     approved = db.Column(db.Boolean, nullable=True)
+    electronics_approved = db.Column(db.Boolean, nullable=True)  
     created_at = db.Column(db.DateTime, default=func.now())
     photo_filename = db.Column(db.String(255), nullable=True)
     photo_mime = db.Column(db.String(100), nullable=True)
@@ -563,7 +564,6 @@ def add_visitor():
     selected_contact_person = form.get('contact_person')
 
     # --- normalize items submitted from the form ---
-    # support both `items` and `items[]` usage on the client
     items_raw = request.form.getlist("items") or request.form.getlist("items[]") or []
     other_text = (form.get("otherItems") or "").strip()
 
@@ -603,7 +603,8 @@ def add_visitor():
         check_out=None,
         remarks=None,
         verified=False,
-        approved=None
+        approved=None,
+        electronics_approved=None   # new field to be set by IT approve/decline
     )
 
     # helper to decide JSON vs redirect response
@@ -624,8 +625,8 @@ def add_visitor():
         if visitor_only:
             return redirect(url_for("visitor_qr", alert=msg, alert_cat="danger"))
         return redirect(url_for("vms", alert=msg, alert_cat="danger"))
-    
-        # handle uploaded photo (optional)
+
+    # handle uploaded photo (optional)
     photo_file = request.files.get('photo')
     if photo_file and photo_file.filename:
         # sanitize filename
@@ -634,7 +635,6 @@ def add_visitor():
         visitor.photo_mime = photo_file.mimetype or 'image/jpeg'
         # read bytes
         visitor.photo_data = photo_file.read()
-
 
     # --- save to MySQL using SQLAlchemy (safe commit with rollback) ---
     try:
@@ -646,7 +646,7 @@ def add_visitor():
         app.logger.exception("Failed to save visitor to DB")
         return respond_error(f"Failed saving visitor (DB error): {e.__class__.__name__}", 500)
 
-    # if saved — attempt email but never rollback on email failure
+    # if saved — attempt department emails but never rollback on email failure
     try:
         if selected_contact_person:
             v = Visitor.query.get(new_id)
@@ -666,6 +666,39 @@ def add_visitor():
         # still return success to user (visitor saved), but include warning in message
         return respond_success(f"Visitor saved but email failed: {str(e)}", visitor_id=new_id)
 
+    # --- send separate IT approval email if visitor carried electronics ---
+    try:
+        # electronics keywords (extend if needed)
+        electronics_keywords = {"laptop", "pendrive", "usb", "usb-drive", "usb drive", "ipad", "tablet", "mobile", "phone", "charger", "powerbank"}
+        # normalized_items is available above
+        items_lower = [str(it).lower() for it in (normalized_items or []) if it and str(it).strip()]
+
+        has_electronics = False
+        for item in items_lower:
+            if any(k in item for k in electronics_keywords):
+                has_electronics = True
+                break
+
+        if has_electronics:
+            # fetch IT contacts for same location
+            it_users = db.session.execute(
+                text("SELECT username, email FROM contact_person WHERE dept = :dept AND location = :location"),
+                {"dept": "IT", "location": location}
+            ).mappings().all()
+
+            v = Visitor.query.get(new_id)
+
+            for it_user in it_users:
+                try:
+                    # optionally set which IT contact you expect to be the contact_person fields
+                    # do not persist these to v if you don't want to overwrite department contact fields
+                    send_email_to_it(v, it_user["username"], it_user["email"], visitor_id=new_id)
+                except Exception:
+                    app.logger.exception("Failed sending IT email for visitor %s", new_id)
+    except Exception:
+        app.logger.exception("Error while processing IT approval flow")
+    # --- end IT approval block ---
+
     # all good
     return respond_success("Visitor saved and email(s) sent successfully!", visitor_id=new_id)
 
@@ -679,6 +712,71 @@ def visitor_photo(visitor_id):
     # inline display
     resp.headers.set('Content-Disposition', 'inline', filename=v.photo_filename or f'photo_{visitor_id}.jpg')
     return resp
+
+def send_email_to_it(visitor_obj_or_dict, contact_name, contact_email, visitor_id=None):
+    """
+    Send a separate approval email to IT contacts when visitor carries electronics.
+    """
+    # same visitor/dict handling like send_email_to_contact
+    if hasattr(visitor_obj_or_dict, "__table__"):
+        v = visitor_obj_or_dict
+        vid = visitor_id or v.id
+        name = v.name
+        company = v.company
+        phone = v.phone
+        purpose = v.purpose
+        location = v.location
+    else:
+        v = visitor_obj_or_dict
+        vid = visitor_id or v.get("id")
+        name = v.get("name")
+        company = v.get("company")
+        phone = v.get("phone")
+        purpose = v.get("purpose")
+        location = v.get("location")
+
+    try:
+        base = VISITOR_BASE_URL or request.url_root.rstrip('/')
+    except Exception:
+        base = VISITOR_BASE_URL or "http://localhost:5001"
+    base = base.rstrip('/')
+
+    approve_link = f"{base}/approve_electronics/{vid}"
+    decline_link = f"{base}/decline_electronics/{vid}"
+
+    subject = "IT Approval Required — Visitor carrying electronic item(s)"
+    body = f"""
+    <html><body>
+      <p>Hello {contact_name},</p>
+      <p>A visitor has registered and marked that they are carrying electronic item(s):</p>
+      <ul>
+        <li><strong>Name:</strong> {name}</li>
+        <li><strong>Company:</strong> {company}</li>
+        <li><strong>Phone:</strong> {phone}</li>
+        <li><strong>Purpose:</strong> {purpose}</li>
+        <li><strong>Location:</strong> {location}</li>
+      </ul>
+      <p>Please approve/decline the electronics request:</p>
+      <p>
+        <a href="{approve_link}">✅ Approve electronics</a>&nbsp;&nbsp;
+        <a href="{decline_link}">❌ Decline</a>
+      </p>
+      <p>Regards,<br>VMS System</p>
+    </body></html>
+    """
+
+    message = MIMEMultipart()
+    message["From"] = SMTP_MAIL
+    message["To"] = contact_email
+    message["Subject"] = subject
+    message.attach(MIMEText(body, "html"))
+
+    with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+        server.starttls()
+        server.login(SMTP_USERNAME, SMTP_PASSWORD)
+        server.sendmail(message["From"], contact_email, message.as_string())
+
+    return True
 
 
 def send_email_to_contact(visitor_obj_or_dict, visitor_id=None):
@@ -768,6 +866,26 @@ def decline_visitor(visitor_id):
     db.session.commit()
     return "Visitor declined ❌."
 
+@app.route("/approve_electronics/<int:visitor_id>")
+def approve_electronics(visitor_id):
+    v = Visitor.query.get(visitor_id)
+    if not v:
+        return "Visitor not found", 404
+    v.electronics_approved = True
+    db.session.commit()
+    app.logger.info("Electronics approved via link for id=%s", visitor_id)
+    return "<html><body>Electronics approved. You can close this window.</body></html>"
+
+@app.route("/decline_electronics/<int:visitor_id>")
+def decline_electronics(visitor_id):
+    v = Visitor.query.get(visitor_id)
+    if not v:
+        return "Visitor not found", 404
+    v.electronics_approved = False
+    db.session.commit()
+    app.logger.info("Electronics declined via link for id=%s", visitor_id)
+    return "<html><body>Electronics declined. You can close this window.</body></html>"
+
 
 @app.route("/get_users")
 def get_users():
@@ -787,22 +905,74 @@ def get_users():
 
 @app.route("/visitors")
 def visitors_list():
+    import json
     all_visitors = Visitor.query.order_by(Visitor.created_at.desc()).all()
     user_role = (session.get('role') or "").strip().lower()
 
     out = []
+    # keywords used server-side to detect electronics
+    keywords = ['laptop','pendrive','usb','notebook','macbook','ipad','tablet','mobile','phone','charger','powerbank']
+
     for v in all_visitors:
-        # normalize items to a Python list
+        # --- normalize items (robust) ---
+        items_value = getattr(v, "items", None)
         items_list = []
         try:
-            if isinstance(v.items, str):
-                items_list = json.loads(v.items) if v.items else []
-            elif isinstance(v.items, (list, tuple, set)):
-                items_list = list(v.items)
-            else:
+            if isinstance(items_value, str):
+                # try JSON first (handles '["Laptop","Pendrive"]')
+                try:
+                    parsed = json.loads(items_value)
+                    if isinstance(parsed, (list, tuple, set)):
+                        items_list = [str(x).strip() for x in parsed if str(x).strip()]
+                    else:
+                        items_list = [str(parsed).strip()] if str(parsed).strip() else []
+                except Exception:
+                    # fallback: comma separated or bracketed string
+                    cleaned = items_value.strip().strip("[]").replace('"', "").replace("'", "")
+                    items_list = [s.strip() for s in cleaned.split(",") if s.strip()]
+            elif isinstance(items_value, (list, tuple, set)):
+                items_list = [str(x).strip() for x in items_value if str(x).strip()]
+            elif items_value is None:
                 items_list = []
+            else:
+                items_list = [str(items_value).strip()]
         except Exception:
+            app.logger.exception("Failed to parse items for visitor id %s", getattr(v, "id", None))
             items_list = []
+
+        # typed "Other" text (if any)
+        other_text = getattr(v, "otherItems", "") or ""
+        other_text = other_text.strip() if isinstance(other_text, str) else ""
+
+        # canonical items_with_other: drop literal "Other" and append typed other text if any
+        items_clean = [it for it in items_list if str(it).strip().lower() != "other"]
+        if other_text and other_text not in items_clean:
+            items_with_other_for_pass = items_clean + [other_text]
+        else:
+            items_with_other_for_pass = items_clean
+
+        # --- compute has_electronics server-side (reliable) ---
+        has_electronics_flag = False
+        for itm in items_with_other_for_pass:
+            itm_low = str(itm).strip().lower()
+            for kw in keywords:
+                if kw in itm_low:
+                    has_electronics_flag = True
+                    break
+            if has_electronics_flag:
+                break
+
+        # Prepare other fields expected by the template
+        checked_items = getattr(v, "checked_items", []) or []
+        badge_number = getattr(v, "badge_number", "") or ""
+        idNumber = getattr(v, "idNumber", "") or ""
+        photo_url = url_for('visitor_photo', visitor_id=v.id) if getattr(v, "photo_data", None) else None
+
+        # helpful logging to debug what server passes to template
+        app.logger.info(
+            "VISITOR_OUT id=%s items=%s other=%s items_with_other=%s e_approved=%s has_elec=%s",
+            v.id, items_list, other_text, items_with_other_for_pass, getattr(v, "electronics_approved", None), has_electronics_flag
+        )
 
         out.append({
             "_id": v.id,
@@ -812,23 +982,26 @@ def visitors_list():
             "phone": v.phone,
             "email": v.email,
             "location": v.location,
-            "badge_number": v.badge_number or "",   # <- ADD this line
-            "idNumber": v.idNumber,
+            "badge_number": badge_number,
+            "idNumber": idNumber,
             "contact_person": v.contact_person,
             "contact_email": v.contact_email,
             "purpose": v.purpose,
-            "items": items_list,
+            "items": items_list,                           # raw list
+            "otherItems": other_text,                      # typed other text
+            "items_with_other": items_with_other_for_pass, # canonical cleaned list for template
+            "checked_items": checked_items,
             "check_in": v.check_in.strftime("%Y-%m-%d %H:%M:%S") if v.check_in else None,
             "check_out": v.check_out.strftime("%Y-%m-%d %H:%M:%S") if v.check_out else None,
             "verified": bool(v.verified),
             "approved": v.approved,
+            "electronics_approved": getattr(v, "electronics_approved", None),
+            "has_electronics": has_electronics_flag,       # <-- NEW boolean flag
             "remarks": v.remarks or "",
-            "photo_url": url_for('visitor_photo', visitor_id=v.id) if v.photo_data else None,
+            "photo_url": photo_url,
         })
 
-
     return render_template("visitors_list.html", visitors=out, user_role=user_role)
-
 
 @app.route("/api/visitors")
 def visitors_api():

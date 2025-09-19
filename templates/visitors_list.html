@@ -41,7 +41,8 @@
           <th>Check-in</th>
           <th>Check-out</th>
           <th class="text-right">Photo</th>
-          <th>Approval Status</th>
+          <th>IT Approval</th>
+          <th>Department</th>
         </tr>
       </thead>
       <tbody>
@@ -70,7 +71,7 @@
           <td>
             {{ items_with_other | join(', ') if items_with_other else '—' }}
           </td>
-          <td class="checkin-cell narrow">
+            <td class="checkin-cell narrow">
             {% if v.check_in %}
             <!-- Already checked-in: show badge (if any) and check-in time -->
             <div class="checked-compact">
@@ -156,16 +157,44 @@
               <span class="placeholder">—</span>
             {% endif %}
           </td>
+           {# ---------- IT Approval (use server-computed boolean) ---------- #}
+            {% set has_electronics = v.get('has_electronics') if v.get('has_electronics') is not none else False %}
+            {% set e_approved = (v.get('electronics_approved') if v.get('electronics_approved') is not none else (v.electronics_approved if v.electronics_approved is defined else None)) %}
+
+            <td>
+              {% if has_electronics %}
+                {% if e_approved == True %}
+                  <span style="color: green; font-weight: bold;">✅ Approved</span>
+                {% elif e_approved == False %}
+                  <span style="color: red; font-weight: bold;">❌ Declined</span>
+                {% else %}
+                  <span style="color: orange; font-weight: bold;">⏳ Pending</span>
+                {% endif %}
+              {% else %}
+                <span style="color:#6b7280;font-weight:600;">— N/A</span>
+              {% endif %}
+            </td>
+
+          {# ---------- Department Approval column (unchanged behaviour) ---------- #}
+          {% if v.get('approved') is not none %}
+            {% set d_approved = v.get('approved') %}
+          {% elif v.approved is defined %}
+            {% set d_approved = v.approved %}
+          {% else %}
+            {% set d_approved = None %}
+          {% endif %}
 
           <td>
-            {% if v.approved == True %}
-            <span style="color: green; font-weight: bold;">✅ Approved</span>
-            {% elif v.approved == False %}
-            <span style="color: red; font-weight: bold;">❌ Declined</span>
+            {% if d_approved == True %}
+              <span style="color: green; font-weight: bold;">✅ Approved</span>
+            {% elif d_approved == False %}
+              <span style="color: red; font-weight: bold;">❌ Declined</span>
             {% else %}
-            <span style="color: orange; font-weight: bold;">⏳ Pending</span>
+              <span style="color: orange; font-weight: bold;">⏳ Pending</span>
             {% endif %}
           </td>
+
+
         </tr>
         {% else %}
         <tr class="empty-row">
