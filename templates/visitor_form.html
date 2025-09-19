@@ -148,18 +148,19 @@
   <small id="idError" class="error" aria-live="polite"></small>
 </div>
 
-<!-- Photo / Selfie (mobile camera friendly) -->
-<div class="col-label"><label>Photo (Selfie)</label></div>
+<div class="col-label"><label for="photo">Photo (Selfie)</label></div>
 <div class="col-field">
   <input
     type="file"
     id="photo"
     name="photo"
     accept="image/*"
-    capture="environment"   
+    capture="user"
+    aria-label="Take or choose a selfie"
   >
   <div id="photoPreviewWrap" style="margin-top:8px;">
-    <img id="photoPreview" alt="photo preview" style="max-width:160px; max-height:160px; display:none; border-radius:6px; border:1px solid #eee;">
+    <img id="photoPreview" alt="photo preview"
+         style="max-width:160px; max-height:160px; display:none; border-radius:6px; border:1px solid #eee;">
   </div>
 </div>
 
@@ -387,28 +388,136 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function showError(el, msg) { if (el) el.textContent = msg || ''; }
 
-    // helper: reset photo input + preview
-  function resetPhotoPreview() {
-    const photoInput = document.getElementById('photo');
-    const photoPreview = document.getElementById('photoPreview');
+
+(function () {
+  const input = document.getElementById('photo');
+  const preview = document.getElementById('photoPreview');
+  const previewWrap = document.getElementById('photoPreviewWrap');
+  // adjust max dimension (px) for resizing before upload
+  const MAX_DIM = 1280;
+
+  // helper to create File from Blob (preserve original name if possible)
+  function blobToFile(blob, fileName, mimeType) {
     try {
-      if (photoInput) {
-        // clearing .value works for file inputs in modern browsers
-        photoInput.value = '';
-        // also try the FileList API fallback
-        if (photoInput.files && photoInput.files.length) {
-          photoInput.files = null;
-        }
-      }
+      return new File([blob], fileName, { type: mimeType, lastModified: Date.now() });
     } catch (e) {
-      // ignore read-only failures
-      console.warn("Could not clear photo input value:", e);
-    }
-    if (photoPreview) {
-      photoPreview.src = '';
-      photoPreview.style.display = 'none';
+      // IE fallback (older): blob.name isn't supported; return blob as-is
+      blob.name = fileName;
+      return blob;
     }
   }
+
+  // resize image if larger than MAX_DIM, returns Promise<File>
+  function resizeImageFile(file) {
+    return new Promise((resolve) => {
+      if (!file || !file.type.startsWith('image/')) return resolve(file);
+
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        let { width, height } = img;
+        let scale = 1;
+        if (width > MAX_DIM || height > MAX_DIM) {
+          scale = Math.min(MAX_DIM / width, MAX_DIM / height);
+        }
+        if (scale >= 1) {
+          URL.revokeObjectURL(url);
+          return resolve(file); // already small enough
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(width * scale);
+        canvas.height = Math.round(height * scale);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        // convert to JPEG to reduce size (adjust quality if you want)
+        canvas.toBlob((blob) => {
+          URL.revokeObjectURL(url);
+          const newFile = blobToFile(blob, (file.name || 'photo') + '.jpg', 'image/jpeg');
+          resolve(newFile);
+        }, 'image/jpeg', 0.85);
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(file);
+      };
+      img.src = url;
+    });
+  }
+
+  // Put a File into input.files (supports modern browsers)
+  function setInputFile(file) {
+    try {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      input.files = dt.files;
+    } catch (e) {
+      // If DataTransfer not supported, we can't programmatically set input.files —
+      // user will upload original file (still fine).
+      console.warn('Could not replace input.files programmatically:', e);
+    }
+  }
+
+  // show preview (object URL)
+  function showPreview(file) {
+    if (!file) {
+      preview.style.display = 'none';
+      preview.src = '';
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    preview.onload = () => URL.revokeObjectURL(url);
+    preview.src = url;
+    preview.style.display = 'block';
+  }
+
+  // handle file selection
+  input.addEventListener('change', async (ev) => {
+    const file = ev.target.files && ev.target.files[0];
+    if (!file) {
+      showPreview(null);
+      return;
+    }
+
+    // quick preview immediately (original file)
+    showPreview(file);
+
+    // resize if necessary and replace the input file with resized file (so server receives smaller image)
+    try {
+      const resized = await resizeImageFile(file);
+      // only replace if resized is different (size or name)
+      if (resized && (resized.size !== file.size || resized.name !== file.name)) {
+        setInputFile(resized);
+        showPreview(resized);
+      }
+    } catch (err) {
+      console.warn('Image resize failed, uploading original:', err);
+    }
+  });
+
+  // If you have a form element, clear preview on reset & after submit
+  // try to guess containing form
+  const form = input.closest('form');
+  if (form) {
+    form.addEventListener('reset', () => {
+      preview.src = '';
+      preview.style.display = 'none';
+    });
+
+    // Clear preview after successful submit (if you submit via JS, call this manually)
+    form.addEventListener('submit', () => {
+      // optionally: keep preview if you want; here we clear it to allow next visitor to add photo
+      // If you do server-side redirect back to form, server should return blank value; this just helps SPA flows.
+      setTimeout(() => {
+        preview.src = '';
+        preview.style.display = 'none';
+        input.value = ''; // reset file input
+      }, 500);
+    });
+  }
+})();
+
 
   // ensure resetPhotoPreview runs on native form reset event too
   if (form) {
