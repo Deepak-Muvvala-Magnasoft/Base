@@ -583,6 +583,21 @@ def add_visitor():
     if other_text and other_text not in normalized_items:
         normalized_items.append(other_text)
 
+    # ------------------ NEW: DEDUPE normalized_items (preserve order, case-insensitive) ------------------
+    seen = set()
+    normalized_items_unique = []
+    for it in normalized_items:
+        if not it:
+            continue
+        val = str(it).strip()
+        key = val.lower()
+        if key not in seen:
+            normalized_items_unique.append(val)
+            seen.add(key)
+    # use the deduped list from here on
+    normalized_items = normalized_items_unique
+    # -----------------------------------------------------------------------------------------------------
+
     # Finally create visitor record (store items as JSON string; keep otherItems too)
     visitor = Visitor(
         name=form.get("name"),
@@ -648,59 +663,101 @@ def add_visitor():
 
     # if saved — attempt department emails but never rollback on email failure
     try:
+        v = Visitor.query.get(new_id)  # fresh instance from DB
+
         if selected_contact_person:
-            v = Visitor.query.get(new_id)
-            send_email_to_contact(v, visitor_id=new_id)
+            # single selected contact (assumes contact_person/contact_email already set on form)
+            try:
+                send_email_to_contact(v, visitor_id=new_id)
+            except Exception:
+                app.logger.exception("Failed to send contact-person email for visitor %s", new_id)
         else:
+            # find all contacts for the requested dept/location and email them
             users = db.session.execute(
                 text("SELECT username, email FROM contact_person WHERE dept = :dept AND location = :location"),
                 {"dept": dept, "location": location}
             ).mappings().all()
-            v = Visitor.query.get(new_id)
+
             for user in users:
-                v.contact_person = user["username"]
-                v.contact_email = user["email"]
-                send_email_to_contact(v, visitor_id=new_id)
+                # DO NOT persist these changes to DB; just set on the `v` object for email context
+                orig_contact_person = v.contact_person
+                orig_contact_email = v.contact_email
+                try:
+                    v.contact_person = user["username"]
+                    v.contact_email = user["email"]
+                    send_email_to_contact(v, visitor_id=new_id)
+                except Exception:
+                    app.logger.exception("Failed to send contact-person email to %s for visitor %s", user.get("email"), new_id)
+                finally:
+                    # restore original contact fields on `v` object (avoid accidental overwrites)
+                    v.contact_person = orig_contact_person
+                    v.contact_email = orig_contact_email
+
     except Exception as e:
-        app.logger.exception("Email sending failed after saving visitor")
+        app.logger.exception("Email sending failed after saving visitor (department emails)")
         # still return success to user (visitor saved), but include warning in message
-        return respond_success(f"Visitor saved but email failed: {str(e)}", visitor_id=new_id)
+        return respond_success(f"Visitor saved but department email failed: {str(e)}", visitor_id=new_id)
 
     # --- send separate IT approval email if visitor carried electronics ---
     try:
         # electronics keywords (extend if needed)
-        electronics_keywords = {"laptop", "pendrive", "usb", "usb-drive", "usb drive", "ipad", "tablet", "mobile", "phone", "charger", "powerbank"}
-        # normalized_items is available above
-        items_lower = [str(it).lower() for it in (normalized_items or []) if it and str(it).strip()]
+        electronics_keywords = {
+            "laptop", "pendrive", "usb", "usb-drive", "usb drive",
+            "ipad", "tablet", "mobile", "phone", "charger", "powerbank", "notebook", "macbook"
+        }
 
-        has_electronics = False
-        for item in items_lower:
-            if any(k in item for k in electronics_keywords):
-                has_electronics = True
-                break
+        # we already built normalized_items above; fall back to parsing DB value if not available
+        items_to_check = normalized_items
+        if not items_to_check:
+            # robust fallback: try parse from DB row
+            try:
+                if isinstance(v.items, str):
+                    items_to_check = json.loads(v.items)
+                elif isinstance(v.items, (list, tuple, set)):
+                    items_to_check = list(v.items)
+            except Exception:
+                s = (v.items or "")
+                s = s.strip().strip("[]").replace('"', "").replace("'", "")
+                items_to_check = [x.strip() for x in s.split(",") if x.strip()]
+
+        items_lower = [str(it).strip().lower() for it in (items_to_check or []) if it and str(it).strip()]
+        has_electronics = any(any(k in it for k in electronics_keywords) for it in items_lower)
 
         if has_electronics:
-            # fetch IT contacts for same location
+            # query IT contacts for the same location
             it_users = db.session.execute(
                 text("SELECT username, email FROM contact_person WHERE dept = :dept AND location = :location"),
                 {"dept": "IT", "location": location}
             ).mappings().all()
 
-            v = Visitor.query.get(new_id)
-
+            # send IT email(s) — do not persist contact_person on v (we only set temporarily)
             for it_user in it_users:
+                orig_contact_person = v.contact_person
+                orig_contact_email = v.contact_email
                 try:
-                    # optionally set which IT contact you expect to be the contact_person fields
-                    # do not persist these to v if you don't want to overwrite department contact fields
-                    send_email_to_it(v, it_user["username"], it_user["email"], visitor_id=new_id)
+                    # temporarily set contact fields so your existing email helper can reuse templates
+                    v.contact_person = it_user["username"]
+                    v.contact_email = it_user["email"]
+                    # send_email_to_it signature: (visitor, contact_name, contact_email, visitor_id)
+                    # If your implementation differs, adapt this call accordingly.
+                    try:
+                        send_email_to_it(v, it_user["username"], it_user["email"], visitor_id=new_id)
+                    except TypeError:
+                        # fallback: some setups expect (v, visitor_id=.., to_email=..)
+                        send_email_to_it(v, visitor_id=new_id, to_email=it_user["email"])
                 except Exception:
-                    app.logger.exception("Failed sending IT email for visitor %s", new_id)
+                    app.logger.exception("Failed sending IT email for visitor %s to %s", new_id, it_user.get("email"))
+                finally:
+                    # always restore original values
+                    v.contact_person = orig_contact_person
+                    v.contact_email = orig_contact_email
+
     except Exception:
         app.logger.exception("Error while processing IT approval flow")
-    # --- end IT approval block ---
 
     # all good
     return respond_success("Visitor saved and email(s) sent successfully!", visitor_id=new_id)
+
 
 @app.route('/visitor_photo/<int:visitor_id>')
 def visitor_photo(visitor_id):
@@ -716,25 +773,94 @@ def visitor_photo(visitor_id):
 def send_email_to_it(visitor_obj_or_dict, contact_name, contact_email, visitor_id=None):
     """
     Send a separate approval email to IT contacts when visitor carries electronics.
+    Adds only electronic item names into the email (other items are omitted).
     """
+    import json
+    import html
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+    import smtplib
+
     # same visitor/dict handling like send_email_to_contact
     if hasattr(visitor_obj_or_dict, "__table__"):
         v = visitor_obj_or_dict
         vid = visitor_id or v.id
-        name = v.name
-        company = v.company
-        phone = v.phone
-        purpose = v.purpose
-        location = v.location
+        name = getattr(v, "name", "") or ""
+        company = getattr(v, "company", "") or ""
+        phone = getattr(v, "phone", "") or ""
+        purpose = getattr(v, "purpose", "") or ""
+        location = getattr(v, "location", "") or ""
+        items_field = getattr(v, "items_with_other", None) or getattr(v, "items", None)
+        other_text_field = getattr(v, "otherItems", None)
     else:
         v = visitor_obj_or_dict
         vid = visitor_id or v.get("id")
-        name = v.get("name")
-        company = v.get("company")
-        phone = v.get("phone")
-        purpose = v.get("purpose")
-        location = v.get("location")
+        name = v.get("name") or ""
+        company = v.get("company") or ""
+        phone = v.get("phone") or ""
+        purpose = v.get("purpose") or ""
+        location = v.get("location") or ""
+        items_field = v.get("items_with_other") or v.get("items")
+        other_text_field = v.get("otherItems")
 
+    # Build items list robustly (preserve order, dedupe case-insensitively)
+    items_list = []
+
+    def extend_from(src):
+        if not src:
+            return
+        # list/tuple/set
+        if isinstance(src, (list, tuple, set)):
+            for x in src:
+                if x is not None:
+                    items_list.append(str(x).strip())
+            return
+        # try JSON parse if string
+        if isinstance(src, str):
+            s = src.strip()
+            try:
+                parsed = json.loads(s)
+                if isinstance(parsed, (list, tuple, set)):
+                    for x in parsed:
+                        if x is not None:
+                            items_list.append(str(x).strip())
+                    return
+            except Exception:
+                # fallback: treat as comma-separated string
+                cleaned = s.strip("[]").replace('"', "").replace("'", "")
+                for part in (p.strip() for p in cleaned.split(",") if p.strip()):
+                    items_list.append(part)
+                return
+        # otherwise coerce to string
+        items_list.append(str(src).strip())
+
+    # preferred: server-provided cleaned list, else raw items, then otherItems
+    extend_from(items_field)
+    if other_text_field:
+        extend_from(other_text_field)
+
+    # dedupe case-insensitively while preserving order
+    seen = set()
+    items_clean = []
+    for it in items_list:
+        if not it:
+            continue
+        key = it.lower()
+        if key not in seen:
+            items_clean.append(it)
+            seen.add(key)
+
+    # --- FILTER: keep only electronic items for IT email ---
+    electronics_keywords = {
+        "laptop", "pendrive", "usb", "usb-drive", "usb drive",
+        "ipad", "tablet", "mobile", "phone", "charger", "powerbank",
+        "notebook", "macbook"
+    }
+    items_electronic = [it for it in items_clean if any(k in it.lower() for k in electronics_keywords)]
+    items_line = ", ".join(items_electronic) if items_electronic else "—"
+    # ----------------------------------------------------------------
+
+    # build approve/decline links
     try:
         base = VISITOR_BASE_URL or request.url_root.rstrip('/')
     except Exception:
@@ -747,16 +873,21 @@ def send_email_to_it(visitor_obj_or_dict, contact_name, contact_email, visitor_i
     subject = "IT Approval Required — Visitor carrying electronic item(s)"
     body = f"""
     <html><body>
-      <p>Hello {contact_name},</p>
+      <p>Hello {html.escape(str(contact_name or ''))},</p>
       <p>A visitor has registered and marked that they are carrying electronic item(s):</p>
+
       <ul>
-        <li><strong>Name:</strong> {name}</li>
-        <li><strong>Company:</strong> {company}</li>
-        <li><strong>Phone:</strong> {phone}</li>
-        <li><strong>Purpose:</strong> {purpose}</li>
-        <li><strong>Location:</strong> {location}</li>
+        <li><strong>Name:</strong> {html.escape(str(name))}</li>
+        <li><strong>Company:</strong> {html.escape(str(company))}</li>
+        <li><strong>Phone:</strong> {html.escape(str(phone))}</li>
+        <li><strong>Purpose:</strong> {html.escape(str(purpose))}</li>
+        <li><strong>Location:</strong> {html.escape(str(location))}</li>
       </ul>
+
       <p>Please approve/decline the electronics request:</p>
+      <ul>
+        <li><strong>Items:</strong> {html.escape(items_line)}</li>
+      </ul> 
       <p>
         <a href="{approve_link}">✅ Approve electronics</a>&nbsp;&nbsp;
         <a href="{decline_link}">❌ Decline</a>
@@ -771,10 +902,15 @@ def send_email_to_it(visitor_obj_or_dict, contact_name, contact_email, visitor_i
     message["Subject"] = subject
     message.attach(MIMEText(body, "html"))
 
-    with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-        server.starttls()
-        server.login(SMTP_USERNAME, SMTP_PASSWORD)
-        server.sendmail(message["From"], contact_email, message.as_string())
+    try:
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+            server.starttls()
+            server.login(SMTP_USERNAME, SMTP_PASSWORD)
+            server.sendmail(message["From"], contact_email, message.as_string())
+    except Exception:
+        app.logger.exception("Failed to send IT approval email to %s for visitor %s", contact_email, vid)
+        # keep behavior consistent: swallow exception (caller handles logging/flow)
+        return False
 
     return True
 
@@ -940,16 +1076,30 @@ def visitors_list():
             app.logger.exception("Failed to parse items for visitor id %s", getattr(v, "id", None))
             items_list = []
 
-        # typed "Other" text (if any)
+                # typed "Other" text (if any)
         other_text = getattr(v, "otherItems", "") or ""
         other_text = other_text.strip() if isinstance(other_text, str) else ""
 
         # canonical items_with_other: drop literal "Other" and append typed other text if any
-        items_clean = [it for it in items_list if str(it).strip().lower() != "other"]
-        if other_text and other_text not in items_clean:
-            items_with_other_for_pass = items_clean + [other_text]
-        else:
-            items_with_other_for_pass = items_clean
+        items_clean = [str(it).strip() for it in items_list if str(it).strip().lower() != "other"]
+
+        # combine and dedupe case-insensitively while preserving original order
+        combined = items_clean[:]  # copy
+        if other_text:
+            low_set = {x.lower() for x in combined}
+            if other_text.strip().lower() not in low_set:
+                combined.append(other_text.strip())
+
+        seen = set()
+        items_with_other_for_pass = []
+        for it in combined:
+            if not it:
+                continue
+            key = it.strip().lower()
+            if key not in seen:
+                items_with_other_for_pass.append(it.strip())
+                seen.add(key)
+
 
         # --- compute has_electronics server-side (reliable) ---
         has_electronics_flag = False
@@ -961,6 +1111,12 @@ def visitors_list():
                     break
             if has_electronics_flag:
                 break
+
+        # visitor is allowed to be checked-in only if department approved AND
+        # (no electronics OR electronics approved)
+        dept_ok = bool(v.approved)   # True only if department approved (v.approved is True)
+        it_ok = (v.electronics_approved is True) if has_electronics_flag else True
+        allowed_to_checkin = dept_ok and it_ok
 
         # Prepare other fields expected by the template
         checked_items = getattr(v, "checked_items", []) or []

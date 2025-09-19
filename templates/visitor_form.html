@@ -156,8 +156,7 @@
     id="photo"
     name="photo"
     accept="image/*"
-    capture="environment"   <!-- opens back camera on mobile; use "user" for front camera -->
-    aria-label="Take or choose photo"
+    capture="environment"   
   >
   <div id="photoPreviewWrap" style="margin-top:8px;">
     <img id="photoPreview" alt="photo preview" style="max-width:160px; max-height:160px; display:none; border-radius:6px; border:1px solid #eee;">
@@ -388,6 +387,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function showError(el, msg) { if (el) el.textContent = msg || ''; }
 
+    // helper: reset photo input + preview
+  function resetPhotoPreview() {
+    const photoInput = document.getElementById('photo');
+    const photoPreview = document.getElementById('photoPreview');
+    try {
+      if (photoInput) {
+        // clearing .value works for file inputs in modern browsers
+        photoInput.value = '';
+        // also try the FileList API fallback
+        if (photoInput.files && photoInput.files.length) {
+          photoInput.files = null;
+        }
+      }
+    } catch (e) {
+      // ignore read-only failures
+      console.warn("Could not clear photo input value:", e);
+    }
+    if (photoPreview) {
+      photoPreview.src = '';
+      photoPreview.style.display = 'none';
+    }
+  }
+
+  // ensure resetPhotoPreview runs on native form reset event too
+  if (form) {
+    form.addEventListener('reset', resetPhotoPreview);
+  }
+
+
   function sanitizeForType(raw, type) {
     if (!raw) return '';
     let s = raw.trim();
@@ -523,7 +551,22 @@ form.addEventListener('submit', async (ev) => {
     if (resp.ok && data && data.success) {
       // success popup and reset form (optional)
       if (window.showModal) window.showModal(data.message || 'Saved successfully', 'success', true, 3000);
+
+      // reset the form fields
       form.reset();
+
+      // explicitly clear photo input + preview so next visitor can add a new photo
+      resetPhotoPreview();
+
+      // also clear any dynamic UI that depends on state (optional)
+      // hide items-other text if present
+      const itemsOtherWrap = document.getElementById('itemsOtherWrap');
+      const itemsOtherCheckbox = document.getElementById('itemsOtherCheckbox');
+      const itemsOtherText = document.getElementById('itemsOtherText');
+      if (itemsOtherWrap && itemsOtherCheckbox && itemsOtherText) {
+        itemsOtherWrap.style.display = itemsOtherCheckbox.checked ? 'block' : 'none';
+        if (!itemsOtherCheckbox.checked) itemsOtherText.value = '';
+      }
     } else {
       const msg = (data && data.message) ? data.message : (resp.statusText || 'Save failed');
       if (window.showModal) window.showModal(msg, 'error', true, 5000);

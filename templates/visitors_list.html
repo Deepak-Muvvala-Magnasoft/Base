@@ -46,118 +46,126 @@
         </tr>
       </thead>
       <tbody>
+      {% if visitors %}
         {% for v in visitors %}
-        {# normalize items: support list OR comma-string, remove literal "Other" and append typed otherItems #}
-        {% set raw_items = v.get('items', []) %}
-        {% if raw_items is string %}
-          {% set items_list = (raw_items|split(',') | map('trim')) | list %}
-        {% else %}
-          {% set items_list = raw_items %}
-        {% endif %}
-        {% set other = (v.get('otherItems') or '') | trim %}
-        {% set items_base = (items_list | reject('equalto','Other') | list) %}
-        {% if other %}
-          {% set items_with_other = items_base + [other] %}
-        {% else %}
-          {% set items_with_other = items_base %}
-        {% endif %}
-        <tr>
-          <td>{{ v.name }}</td>
-          <td>{{ v.company }}</td>
-          <td>{{ v.location }}</td>
-          
-          <td>{{ v.badge_number or v.get('badge_number', '—') }}</td>
-          <td>{{ v.idNumber }}</td>
-          <td>
-            {{ items_with_other | join(', ') if items_with_other else '—' }}
-          </td>
+
+          {# Prefer server-provided cleaned list; fallback to v.items if missing. #}
+          {% set items_with_other = v.get('items_with_other') if v.get('items_with_other') is not none else (v.get('items') if v.get('items') is not none else []) %}
+
+          {# If fallback produced a string, try to split it into a list and trim entries #}
+          {% if items_with_other is string %}
+            {% set items_with_other = (items_with_other
+              | replace('[','') | replace(']','') | replace('"','') | replace("'",'')
+              | split(',') | map('trim') | list) %}
+          {% endif %}
+
+          <tr>
+            <td>{{ v.name }}</td>
+            <td>{{ v.company }}</td>
+            <td>{{ v.location }}</td>
+
+            <td>{{ v.badge_number or v.get('badge_number', '—') }}</td>
+            <td>{{ v.idNumber }}</td>
+            <td>
+              {{ items_with_other | join(', ') if items_with_other else '—' }}
+            </td>
+
             <td class="checkin-cell narrow">
-            {% if v.check_in %}
-            <!-- Already checked-in: show badge (if any) and check-in time -->
-            <div class="checked-compact">
-              <div class="checked-top">✅ Checked In</div>
-              <div class="checked-bottom">{{ v.check_in }}</div>
-            </div>
-            {% else %}
-            <!-- Not checked-in yet: show input + verify + checkin button (security only) -->
-            <div class="stacked">
-              <div class="stack-row">
-                <label class="sr-only" for="badge-{{ v._id }}">Badge</label>
-                <input type="text" id="badge-{{ v._id }}" name="badge_number" class="badge-input" placeholder="Badge #"
-                  maxlength="20" oninput="toggleCheckIn('{{ v._id }}')" {% if user_role !='security' %}disabled
-                  readonly{% endif %}>
+              {% if v.check_in %}
+              <!-- Already checked-in: show badge (if any) and check-in time -->
+              <div class="checked-compact">
+                <div class="checked-top">✅ Checked In</div>
+                <div class="checked-bottom">{{ v.check_in }}</div>
               </div>
-              <div class="stack-row">
-                <label class="verify-label">
-                  <input type="checkbox" id="verify-{{ v._id }}" onchange="toggleCheckIn('{{ v._id }}')" {% if user_role
-                    !='security' %}disabled{% endif %} {{ 'checked' if v.get('verified') else '' }}>
-                  <span>Verified</span>
-                </label>
-              </div>
-              <div class="stack-row">
-                {% if user_role == 'security' and v.approved == True %}
-                <button id="checkin-btn-{{ v._id }}" class="btn small primary" disabled
-                  onclick="checkInVisitor('{{ v._id }}')" {% if user_role !='security' %}disabled{% endif %}>
-                  Check In
-                </button>
-                {% else %}
-                <button class="btn small disabled" disabled title="Only approved security can check in">Check
-                  In</button>
-                {% endif %}
-              </div>
-            </div>
-            {% endif %}
-          </td>
-
-          <td class="checkout-cell narrow">
-            {% if v.check_out %}
-            <!-- Already checked out: show check-out time only -->
-            <div class="checked-compact">
-              <div class="checked-top">✅ Checked Out</div>
-              <div class="checked-bottom">{{ v.check_out }}</div>
-            </div>
-
-            {% elif v.check_in and not v.check_out %}
-            <!-- Visitor present and not yet checked out: show item checkboxes, remarks, checkout button (security only) -->
-            <div class="stacked checkout-stacked">
-              <div class="stack-row items-wrap">
-                <strong style="font-size:13px;display:block;margin-bottom:6px;">Return Items</strong>
-                {% for item in items_with_other %}
-                  <label class="checkout-item-row">
-                    <input type="checkbox"
-                          class="checkout-item-{{ v._id }}"
-                          {% if user_role != 'security' %} disabled{% endif %}
-                          {{ 'checked' if item in v.get('checked_items', []) else '' }}
-                          onchange="toggleCheckout('{{ v._id }}')">
-                    <span class="item-text">{{ item }}</span>
+              {% else %}
+              <!-- Not checked-in yet: show input + verify + checkin button (security only) -->
+              <div class="stacked">
+                <div class="stack-row">
+                  <label class="sr-only" for="badge-{{ v._id }}">Badge</label>
+                  <input type="text" id="badge-{{ v._id }}" name="badge_number" class="badge-input" placeholder="Badge #"
+                    maxlength="20" oninput="toggleCheckIn('{{ v._id }}')" {% if user_role !='security' %}disabled readonly{% endif %}>
+                </div>
+                <div class="stack-row">
+                  <label class="verify-label">
+                    <input type="checkbox" id="verify-{{ v._id }}" onchange="toggleCheckIn('{{ v._id }}')" {% if user_role !='security' %}disabled{% endif %} {{ 'checked' if v.get('verified') else '' }}>
+                    <span>Verified</span>
                   </label>
-                {% endfor %}
+                </div>
+
+                {# check-in button logic: requires both approvals when electronics present #}
+                <div class="stack-row">
+                  {% set dept_ok = (v.get('approved') == True) %}
+                  {% set it_ok = (v.get('electronics_approved') == True) if v.get('has_electronics') else True %}
+                  {% set allowed = v.get('allowed_to_checkin') if v.get('allowed_to_checkin') is not none else (dept_ok and it_ok) %}
+                  {% set explicitly_denied = (v.get('approved') == False) or (v.get('electronics_approved') == False) %}
+
+                  {% if user_role == 'security' %}
+                    {% if allowed %}
+                      <button id="checkin-btn-{{ v._id }}" class="btn small primary" onclick="checkInVisitor('{{ v._id }}')">Check In</button>
+
+                    {% elif explicitly_denied %}
+                      <button class="btn small disabled" disabled title="Visitor not allowed (approval declined)">Not Allowed</button>
+
+                    {% else %}
+                      <button class="btn small disabled" disabled title="Awaiting approvals">Check In</button>
+                    {% endif %}
+                  {% else %}
+                    <button class="btn small disabled" disabled title="Only security can check in">Check In</button>
+                  {% endif %}
+                </div>
+
+              </div>
+              {% endif %}
+            </td>
+
+            <td class="checkout-cell narrow">
+              {% if v.check_out %}
+              <!-- Already checked out: show check-out time only -->
+              <div class="checked-compact">
+                <div class="checked-top">✅ Checked Out</div>
+                <div class="checked-bottom">{{ v.check_out }}</div>
               </div>
 
-              <div class="stack-row">
-                <textarea id="remarks-{{ v._id }}" class="checkout-remarks" placeholder="Remarks (optional)"></textarea>
+              {% elif v.check_in and not v.check_out %}
+              <!-- Visitor present and not yet checked out: show item checkboxes, remarks, checkout button (security only) -->
+              <div class="stacked checkout-stacked">
+                <div class="stack-row items-wrap">
+                  <strong style="font-size:13px;display:block;margin-bottom:6px;">Return Items</strong>
+                  {% for item in items_with_other %}
+                    <label class="checkout-item-row">
+                      <input type="checkbox"
+                            class="checkout-item-{{ v._id }}"
+                            {% if user_role != 'security' %} disabled{% endif %}
+                            {{ 'checked' if item in v.get('checked_items', []) else '' }}
+                            onchange="toggleCheckout('{{ v._id }}')">
+                      <span class="item-text">{{ item }}</span>
+                    </label>
+                  {% endfor %}
+                </div>
+
+                <div class="stack-row">
+                  <textarea id="remarks-{{ v._id }}" class="checkout-remarks" placeholder="Remarks (optional)"></textarea>
+                </div>
+
+                <div class="stack-row">
+                  <button id="checkout-btn-{{ v._id }}" class="btn small primary" onclick="checkOutVisitor('{{ v._id }}')" {% if user_role !='security' %} disabled {% endif %}>Check Out</button>
+                </div>
               </div>
 
-              <div class="stack-row">
-                <button id="checkout-btn-{{ v._id }}" class="btn small primary" onclick="checkOutVisitor('{{ v._id }}')"
-                  {% if user_role !='security' %} disabled {% endif %}>
-                  Check Out
-                </button>
-              </div>
-            </div>
+              {% else %}
+              —
+              {% endif %}
+            </td>
 
-            {% else %}
-            —
-            {% endif %}
-          </td>
-          <td style="text-align:center;">
-            {% if v.photo_url %}
-              <img src="{{ v.photo_url }}" alt="photo" style="width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid #e6e6e6;">
-            {% else %}
-              <span class="placeholder">—</span>
-            {% endif %}
-          </td>
-           {# ---------- IT Approval (use server-computed boolean) ---------- #}
+            <td style="text-align:center;">
+              {% if v.photo_url %}
+                <img src="{{ v.photo_url }}" alt="photo" style="width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid #e6e6e6;">
+              {% else %}
+                <span class="placeholder">—</span>
+              {% endif %}
+            </td>
+
+            {# ---------- IT Approval (use server-computed boolean) ---------- #}
             {% set has_electronics = v.get('has_electronics') if v.get('has_electronics') is not none else False %}
             {% set e_approved = (v.get('electronics_approved') if v.get('electronics_approved') is not none else (v.electronics_approved if v.electronics_approved is defined else None)) %}
 
@@ -171,37 +179,38 @@
                   <span style="color: orange; font-weight: bold;">⏳ Pending</span>
                 {% endif %}
               {% else %}
-                <span style="color:#6b7280;font-weight:600;">— N/A</span>
+                <span style="color:#6b7280;font-weight:600;">N/A</span>
               {% endif %}
             </td>
 
-          {# ---------- Department Approval column (unchanged behaviour) ---------- #}
-          {% if v.get('approved') is not none %}
-            {% set d_approved = v.get('approved') %}
-          {% elif v.approved is defined %}
-            {% set d_approved = v.approved %}
-          {% else %}
-            {% set d_approved = None %}
-          {% endif %}
-
-          <td>
-            {% if d_approved == True %}
-              <span style="color: green; font-weight: bold;">✅ Approved</span>
-            {% elif d_approved == False %}
-              <span style="color: red; font-weight: bold;">❌ Declined</span>
+            {# ---------- Department Approval column (unchanged behaviour) ---------- #}
+            {% if v.get('approved') is not none %}
+              {% set d_approved = v.get('approved') %}
+            {% elif v.approved is defined %}
+              {% set d_approved = v.approved %}
             {% else %}
-              <span style="color: orange; font-weight: bold;">⏳ Pending</span>
+              {% set d_approved = None %}
             {% endif %}
-          </td>
 
+            <td>
+              {% if d_approved == True %}
+                <span style="color: green; font-weight: bold;">✅ Approved</span>
+              {% elif d_approved == False %}
+                <span style="color: red; font-weight: bold;">❌ Declined</span>
+              {% else %}
+                <span style="color: orange; font-weight: bold;">⏳ Pending</span>
+              {% endif %}
+            </td>
+          </tr>
 
-        </tr>
-        {% else %}
+        {% endfor %}
+      {% else %}
         <tr class="empty-row">
           <td colspan="11">No visitors found.</td>
         </tr>
-        {% endfor %}
-      </tbody>
+      {% endif %}
+    </tbody>
+
     </table>
   </div>
 
