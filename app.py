@@ -23,33 +23,37 @@ from email.mime.text import MIMEText
 # from urllib.parse import quote_plus
 from werkzeug.utils import secure_filename
 from flask import make_response
+from datetime import datetime, timedelta
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 app = Flask(__name__)
-app.secret_key = "super_secret_key"
+
+# Use an env secret in production; keep a dev fallback
+app.secret_key = os.environ.get("SECRET_KEY") or "dev_secret_change_me"
+
+# Basic app config
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.config['PREFERRED_URL_SCHEME'] = 'https'
 
+# Session cookie settings — choose secure policy in production
+if os.environ.get("FLASK_ENV") == "production":
+    app.config['SESSION_COOKIE_SAMESITE'] = 'None'   # browsers expect the literal string "None"
+    app.config['SESSION_COOKIE_SECURE'] = True
+else:
+    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+    app.config['SESSION_COOKIE_SECURE'] = False
 
-@app.context_processor
-def inject_user_role():
-    """
-    Normalise role for templates:
-      - user_role: lowercase role (e.g. "super admin")
-      - role_display: original / title cased role for UI
-      - is_superadmin: boolean
-    """
-    role_raw = (session.get("role") or "").strip()
-    role_norm = role_raw.lower()
-    role_display = session.get("role_display") or (role_raw.title() if role_raw else "")
-    return {
-        "user_role": role_norm,
-        "role_display": role_display,
-        "is_superadmin": role_norm == "super admin"
-    }
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
 
+# If you are behind a reverse-proxy (nginx / ELB), make Flask respect X-Forwarded-* headers
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
-# Add Google OAuth config
-os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'  # For HTTP (development only)
+# --- Register Google OAuth blueprint AFTER app configuration ---
+# Only allow insecure transport for local development (do NOT set in production)
+if os.environ.get("FLASK_ENV") != "production":
+    os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+
 google_bp = make_google_blueprint(
     client_id=GOOGLE_CLIENT_ID,
     client_secret=GOOGLE_CLIENT_SECRET,
@@ -168,10 +172,12 @@ def ensure_columns_exist(new_columns):
             existing.add(c)
 
 
+# --- Routes ---
 @app.route('/')
 def home():
-    app.logger.info("✔ / route HIT — remote=%s, args=%s", request.remote_addr, request.args)
-    return render_template('landing.html', user=session.get('username'))
+    if "username" not in session:
+        return redirect(url_for("login"))
+    return render_template('landing.html')
 
 
 @app.route("/google")
@@ -246,169 +252,24 @@ def logout():
     return redirect(url_for("login"))
 
 
-# @app.route("/data", methods=["GET", "POST"])
-# def upload_file():
-#     if "username" not in session:
-#         return redirect(url_for("login"))
-
-#     error_msg = None
-#     uploaded_data = []
-#     columns = []
-#     grouped_data = []
-
-#     # ✅ Capture project_name from URL, form, or session
-#     project_name = request.args.get("project_name") or request.form.get("project_name") or session.get("selected_project")
-#     if project_name:
-#         session["selected_project"] = project_name
-#     else:
-#         project_name = ""
-#     selected_project = session.get('selected_project')
-#     # ✅ Handle file upload if POST request
-#     if request.method == "POST" and request.files.get("file"):
-#         file = request.files.get("file")
-#         email = session["username"]
-#         table_name = safe_table_name(project_name)
-
-#         try:
-#             # Read Excel
-#             df = pd.read_excel(file)
-#             df.columns = df.columns.str.strip()
-#             col_map = {col: safe_colname(col) for col in df.columns}
-#             df.rename(columns=col_map, inplace=True)
-#             df = df.where(pd.notnull(df), None)
-#             df.dropna(how="all", inplace=True)
-#             df.dropna(axis=1, how="all", inplace=True)
-#             upload_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-#             file_name = file.filename
-
-#             # Ensure table exists
-#             base_cols = ["id INT AUTO_INCREMENT PRIMARY KEY",
-#                          "uploaded_by VARCHAR(100)",
-#                          "upload_time VARCHAR(20)",
-#                          "file_name VARCHAR(255)"]
-#             db.session.execute(text(f"CREATE TABLE IF NOT EXISTS `{table_name}` ({', '.join(base_cols)})"))
-#             db.session.commit()
-
-#             # Ensure columns exist
-#             insp = inspect(db.engine)
-#             existing = {c["name"] for c in insp.get_columns(table_name)}
-#             for col in df.columns:
-#                 if col not in existing and col not in {"id", "uploaded_by", "upload_time", "file_name"}:
-#                     db.session.execute(text(f"ALTER TABLE `{table_name}` ADD COLUMN `{col}` TEXT"))
-#                     db.session.commit()
-
-#             # Insert rows
-#             for row_dict in df.to_dict(orient="records"):
-#                 row_dict.update({
-#                     "uploaded_by": email,
-#                     "upload_time": upload_time,
-#                     "file_name": file_name
-#                 })
-#                 cols = ", ".join(f"`{c}`" for c in row_dict.keys())
-#                 placeholders = ", ".join(f":{c}" for c in row_dict.keys())
-#                 stmt = text(f"INSERT INTO `{table_name}` ({cols}) VALUES ({placeholders})")
-#                 db.session.execute(stmt, row_dict)
-
-#             db.session.commit()
-#             flash(f"File '{file_name}' uploaded successfully into '{project_name}'!", "success")
-
-#         except Exception as e:
-#             db.session.rollback()
-#             error_msg = str(e)
-
-#     # ✅ Always fetch data if project_name is set
-#     if project_name:
-#         try:
-#             table_name = safe_table_name(project_name)
-#             insp = inspect(db.engine)
-#             # ✅ Check if the table exists first
-#             if table_name in insp.get_table_names():
-#                 table_cols = [c["name"] for c in insp.get_columns(table_name)]
-
-#                 if table_cols:
-#                     rows = db.session.execute(
-#                         text(f"SELECT * FROM `{table_name}` WHERE uploaded_by = :user"),
-#                         {"user": session["username"]}
-#                     ).mappings().all()
-#                 else:
-#                     # Table exists but no columns yet (new empty table)
-#                     table_cols = ["upload_time", "file_name"]
-#                     rows = []
-#             else:
-#                 table_cols = []
-#                 rows = []
-
-#             uploaded_data = [dict(r) for r in rows]
-#             meta_cols = ["upload_time", "file_name"]
-#             data_cols = sorted([c for c in table_cols if c not in {"id", "uploaded_by", *meta_cols}])
-#             columns = meta_cols + data_cols
-
-#             grouped_rows = db.session.execute(text(f"""
-#                 SELECT uploaded_by, upload_time, file_name, COUNT(id) AS count
-#                 FROM `{table_name}`
-#                 WHERE uploaded_by = :user
-#                 GROUP BY uploaded_by, upload_time, file_name
-#                 ORDER BY upload_time DESC
-#             """), {"user": session["username"]}).mappings().all()
-
-#             grouped_data = []
-#             for row in grouped_rows:
-#                 row_dict = dict(row)
-#                 row_dict["project_name"] = project_name
-#                 row_dict["table_name"] = table_name
-#                 grouped_data.append(row_dict)
-#         except Exception:
-#             pass
-
-#     # ✅ List all projects
-#     projects_list = [p.name for p in Project.query.order_by(Project.name).all()]
-#     selected_project = session.get("selected_project")  # removes it from session
-#     return render_template(
-#         "data.html",
-#         email=session["username"],
-#         uploaded_data=uploaded_data,
-#         columns=columns,
-#         grouped_data=grouped_data,
-#         projects=projects_list,
-#         error_msg=error_msg,
-#         selected_project=selected_project
-#     )
-
-
 @app.route("/data", methods=["GET", "POST"])
 def upload_file():
-    # --- require login but preserve 'next' so user returns after login ---
-    if not session.get("username"):
-        # If this was an AJAX / API call, return JSON 401 (caller expects JSON)
-        accept = request.headers.get("Accept", "")
-        if request.headers.get("X-Requested-With") == "XMLHttpRequest" or "application/json" in accept:
-            return jsonify({"success": False, "error": "login_required"}), 401
+    if "username" not in session:
+        return redirect(url_for("login"))
 
-        # Build a safe 'next' path including query string if present
-        next_path = request.path
-        if request.query_string:
-            try:
-                next_path += "?" + request.query_string.decode()
-            except Exception:
-                # fallback: use full_path (may include trailing '?')
-                next_path = request.full_path
-
-        return redirect(url_for("login", next=next_path))
-
-    # --- existing logic continues unchanged ---
     error_msg = None
     uploaded_data = []
     columns = []
     grouped_data = []
 
-    # Capture project_name from URL, form, or session
+    # ✅ Capture project_name from URL, form, or session
     project_name = request.args.get("project_name") or request.form.get("project_name") or session.get("selected_project")
     if project_name:
         session["selected_project"] = project_name
     else:
         project_name = ""
     selected_project = session.get('selected_project')
-    # Handle file upload if POST request
+    # ✅ Handle file upload if POST request
     if request.method == "POST" and request.files.get("file"):
         file = request.files.get("file")
         email = session["username"]
@@ -461,12 +322,12 @@ def upload_file():
             db.session.rollback()
             error_msg = str(e)
 
-    # Always fetch data if project_name is set
+    # ✅ Always fetch data if project_name is set
     if project_name:
         try:
             table_name = safe_table_name(project_name)
             insp = inspect(db.engine)
-            # Check if the table exists first
+            # ✅ Check if the table exists first
             if table_name in insp.get_table_names():
                 table_cols = [c["name"] for c in insp.get_columns(table_name)]
 
@@ -505,9 +366,9 @@ def upload_file():
         except Exception:
             pass
 
-    # List all projects
+    # ✅ List all projects
     projects_list = [p.name for p in Project.query.order_by(Project.name).all()]
-    selected_project = session.get("selected_project")
+    selected_project = session.get("selected_project")  # removes it from session
     return render_template(
         "data.html",
         email=session["username"],
@@ -692,8 +553,10 @@ def delete_project():
 
 @app.route("/vms")
 def vms():
-    app.logger.info("✔ /vms route HIT — remote=%s, args=%s", request.remote_addr, request.args)
-    return render_template('visitor_form.html', user=session.get('username'))
+    if "username" not in session:
+        return redirect(url_for("login"))  # force login first 
+
+    return render_template("visitor_form.html", user=session["username"])
 
 
 @app.route("/add_visitor", methods=["POST"])
