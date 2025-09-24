@@ -167,12 +167,18 @@ def ensure_columns_exist(new_columns):
             db.session.commit()
             existing.add(c)
 
-
-
 @app.route('/')
 def home():
-    app.logger.info("✔ / route HIT — remote=%s, args=%s", request.remote_addr, request.args)
-    return render_template('landing.html', user=session.get('username'))
+    user = session.get('username')
+    app.logger.info("✔ / route HIT — remote=%s, username=%s", request.remote_addr, user)
+    if not user:
+        return redirect(url_for("login"))
+    return render_template('landing.html', user=user)
+
+# @app.route('/')
+# def home():
+#     app.logger.info("✔ / route HIT — remote=%s, args=%s", request.remote_addr, request.args)
+#     return render_template('landing.html', user=session.get('username'))
 
 
 @app.route("/google")
@@ -249,6 +255,8 @@ def logout():
 
 @app.route("/data", methods=["GET", "POST"])
 def upload_file():
+    if "username" not in session:
+        return redirect(url_for("login"))
 
     error_msg = None
     uploaded_data = []
@@ -544,10 +552,18 @@ def delete_project():
     return redirect(url_for("superadmin"))
 
 
-@app.route("/vms")
+@app.route('/vms')
 def vms():
-    app.logger.info("✔ /vms route HIT — remote=%s, args=%s", request.remote_addr, request.args)
-    return render_template('visitor_form.html', user=session.get('username'))
+    user = session.get('username')
+    app.logger.info("✔ /vms HIT — remote=%s, username=%s", request.remote_addr, user)
+    if not user:
+        return redirect(url_for("login"))
+    return render_template('visitor_form.html', user=user)
+
+# @app.route("/vms")
+# def vms():
+#     app.logger.info("✔ /vms route HIT — remote=%s, args=%s", request.remote_addr, request.args)
+#     return render_template('visitor_form.html', user=session.get('username'))
 
 
 @app.route("/add_visitor", methods=["POST"])
