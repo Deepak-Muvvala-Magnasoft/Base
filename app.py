@@ -169,11 +169,16 @@ def ensure_columns_exist(new_columns):
 
 
 # --- Routes ---
+# @app.route('/')
+# def home():
+#     if "username" not in session:
+#         return redirect(url_for("login"))
+#     return render_template('landing.html')
+
 @app.route('/')
 def home():
-    if "username" not in session:
-        return redirect(url_for("login"))
-    return render_template('landing.html')
+    app.logger.info("✔ / route HIT — remote=%s, args=%s", request.remote_addr, request.args)
+    return render_template('landing.html', user=session.get('username'))
 
 
 @app.route("/google")
@@ -250,8 +255,8 @@ def logout():
 
 @app.route("/data", methods=["GET", "POST"])
 def upload_file():
-    # if "username" not in session:
-    #     return redirect(url_for("login"))
+    if "username" not in session:
+        return redirect(url_for("login"))
 
     error_msg = None
     uploaded_data = []
