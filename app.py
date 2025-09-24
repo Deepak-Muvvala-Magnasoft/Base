@@ -250,8 +250,8 @@ def logout():
 
 @app.route("/data", methods=["GET", "POST"])
 def upload_file():
-    # if "username" not in session:
-    #     return redirect(url_for("login"))
+    if "username" not in session:
+        return redirect(url_for("login"))
 
     error_msg = None
     uploaded_data = []
@@ -553,6 +553,12 @@ def delete_project():
 #         return redirect(url_for("login"))  # force login first
 
 #     return render_template("visitor_form.html", user=session["username"])
+
+@app.route("/vms")
+def vms():
+    # allow anonymous access — do NOT redirect to login
+    username = session.get("username")
+    return render_template("visitor_form.html", user=username)
 
 
 @app.route("/add_visitor", methods=["POST"])
