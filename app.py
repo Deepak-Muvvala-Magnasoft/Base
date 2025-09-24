@@ -550,7 +550,7 @@ def delete_project():
 @app.route("/vms")
 def vms():
     if "username" not in session:
-        return redirect(url_for("login"))  # force login first
+        return redirect(url_for("visitor_form.html"))  # force login first
 
     return render_template("visitor_form.html", user=session["username"])
 
