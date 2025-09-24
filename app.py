@@ -168,24 +168,12 @@ def ensure_columns_exist(new_columns):
             existing.add(c)
 
 
-# --- Routes ---
-# @app.route('/')
-# def home():
-#     if "username" not in session:
-#         return redirect(url_for("login"))
-#     return render_template('landing.html')
-
-# @app.route('/')
-# def home():
-#     app.logger.info("✔ / route HIT — remote=%s, args=%s", request.remote_addr, request.args)
-#     return render_template('landing.html', user=session.get('username'))
 
 @app.route('/')
 def home():
-    app.logger.info("✔ / route HIT — remote=%s, args=%s, username=%s", request.remote_addr, request.args, session.get('username'))
-    if "username" not in session:
-        return redirect(url_for("login"))
+    app.logger.info("✔ / route HIT — remote=%s, args=%s", request.remote_addr, request.args)
     return render_template('landing.html', user=session.get('username'))
+
 
 @app.route("/google")
 def google_login():
@@ -261,7 +249,9 @@ def logout():
 
 @app.route("/data", methods=["GET", "POST"])
 def upload_file():
-    if "username" not in session:
+    # Read user once
+    user = session.get("username")
+    if not user:
         return redirect(url_for("login"))
 
     error_msg = None
@@ -269,54 +259,71 @@ def upload_file():
     columns = []
     grouped_data = []
 
-    # ✅ Capture project_name from URL, form, or session
+    # Capture project_name from URL, form, or session (and persist to session)
     project_name = request.args.get("project_name") or request.form.get("project_name") or session.get("selected_project")
     if project_name:
         session["selected_project"] = project_name
     else:
         project_name = ""
-    selected_project = session.get('selected_project')
-    # ✅ Handle file upload if POST request
+
+    selected_project = session.get("selected_project")  # keep in session (use .pop() if you prefer one-shot)
+
+    # Handle file upload if POST request
     if request.method == "POST" and request.files.get("file"):
         file = request.files.get("file")
-        email = session["username"]
-        table_name = safe_table_name(project_name)
+        email = user
+        table_name = safe_table_name(project_name) if project_name else None
 
         try:
-            # Read Excel
+            # Read Excel into DataFrame
             df = pd.read_excel(file)
+            # sanitize column names
             df.columns = df.columns.str.strip()
             col_map = {col: safe_colname(col) for col in df.columns}
             df.rename(columns=col_map, inplace=True)
+
+            # Normalize missing values
             df = df.where(pd.notnull(df), None)
             df.dropna(how="all", inplace=True)
             df.dropna(axis=1, how="all", inplace=True)
+
             upload_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             file_name = file.filename
 
-            # Ensure table exists
-            base_cols = ["id INT AUTO_INCREMENT PRIMARY KEY",
-                         "uploaded_by VARCHAR(100)",
-                         "upload_time VARCHAR(20)",
-                         "file_name VARCHAR(255)"]
+            if not table_name:
+                raise ValueError("Project name is required for upload.")
+
+            # Ensure table exists with base columns
+            base_cols = [
+                "id INT AUTO_INCREMENT PRIMARY KEY",
+                "uploaded_by VARCHAR(100)",
+                "upload_time VARCHAR(20)",
+                "file_name VARCHAR(255)"
+            ]
             db.session.execute(text(f"CREATE TABLE IF NOT EXISTS `{table_name}` ({', '.join(base_cols)})"))
             db.session.commit()
 
-            # Ensure columns exist
-            insp = inspect(db.engine)
-            existing = {c["name"] for c in insp.get_columns(table_name)}
+            # Ensure columns exist (introspect)
+            insp = sqlalchemy_inspect(db.engine)
+            existing_cols = {c["name"] for c in insp.get_columns(table_name)}
             for col in df.columns:
-                if col not in existing and col not in {"id", "uploaded_by", "upload_time", "file_name"}:
+                if col not in existing_cols and col not in {"id", "uploaded_by", "upload_time", "file_name"}:
                     db.session.execute(text(f"ALTER TABLE `{table_name}` ADD COLUMN `{col}` TEXT"))
                     db.session.commit()
+                    existing_cols.add(col)
 
-            # Insert rows
+            # Insert rows (use single transaction)
+            rows_to_insert = []
             for row_dict in df.to_dict(orient="records"):
                 row_dict.update({
                     "uploaded_by": email,
                     "upload_time": upload_time,
                     "file_name": file_name
                 })
+                rows_to_insert.append(row_dict)
+
+            # Use parameterized INSERT for each row
+            for row_dict in rows_to_insert:
                 cols = ", ".join(f"`{c}`" for c in row_dict.keys())
                 placeholders = ", ".join(f":{c}" for c in row_dict.keys())
                 stmt = text(f"INSERT INTO `{table_name}` ({cols}) VALUES ({placeholders})")
@@ -328,30 +335,30 @@ def upload_file():
         except Exception as e:
             db.session.rollback()
             error_msg = str(e)
+            app.logger.exception("Upload failed for project '%s' by user '%s'", project_name, user)
 
-    # ✅ Always fetch data if project_name is set
+    # Always fetch data if project_name is set
     if project_name:
         try:
             table_name = safe_table_name(project_name)
-            insp = inspect(db.engine)
-            # ✅ Check if the table exists first
+            insp = sqlalchemy_inspect(db.engine)
             if table_name in insp.get_table_names():
                 table_cols = [c["name"] for c in insp.get_columns(table_name)]
-
                 if table_cols:
                     rows = db.session.execute(
                         text(f"SELECT * FROM `{table_name}` WHERE uploaded_by = :user"),
-                        {"user": session["username"]}
+                        {"user": user}
                     ).mappings().all()
                 else:
-                    # Table exists but no columns yet (new empty table)
-                    table_cols = ["upload_time", "file_name"]
+                    # Table exists but no columns (rare)
+                    table_cols = []
                     rows = []
             else:
                 table_cols = []
                 rows = []
 
             uploaded_data = [dict(r) for r in rows]
+
             meta_cols = ["upload_time", "file_name"]
             data_cols = sorted([c for c in table_cols if c not in {"id", "uploaded_by", *meta_cols}])
             columns = meta_cols + data_cols
@@ -362,7 +369,7 @@ def upload_file():
                 WHERE uploaded_by = :user
                 GROUP BY uploaded_by, upload_time, file_name
                 ORDER BY upload_time DESC
-            """), {"user": session["username"]}).mappings().all()
+            """), {"user": user}).mappings().all()
 
             grouped_data = []
             for row in grouped_rows:
@@ -370,15 +377,27 @@ def upload_file():
                 row_dict["project_name"] = project_name
                 row_dict["table_name"] = table_name
                 grouped_data.append(row_dict)
-        except Exception:
-            pass
 
-    # ✅ List all projects
-    projects_list = [p.name for p in Project.query.order_by(Project.name).all()]
-    selected_project = session.get("selected_project")  # removes it from session
+        except Exception as e:
+            error_msg = error_msg or str(e)
+            app.logger.exception("Failed fetching data for project '%s'", project_name)
+            uploaded_data = []
+            columns = []
+            grouped_data = []
+
+    # List all projects
+    try:
+        projects_list = [p.name for p in Project.query.order_by(Project.name).all()]
+    except Exception as e:
+        projects_list = []
+        app.logger.exception("Failed to list projects: %s", e)
+        error_msg = error_msg or "Failed to load projects."
+
+    selected_project = session.get("selected_project")  # keep in session; use .pop(...) if you want to remove it
+
     return render_template(
         "data.html",
-        email=session["username"],
+        email=user,
         uploaded_data=uploaded_data,
         columns=columns,
         grouped_data=grouped_data,
@@ -386,6 +405,7 @@ def upload_file():
         error_msg=error_msg,
         selected_project=selected_project
     )
+
 
 
 @app.route('/vms_demo')
@@ -557,13 +577,6 @@ def delete_project():
     db.session.commit()
     return redirect(url_for("superadmin"))
 
-
-# @app.route("/vms")
-# def vms():
-#     if "username" not in session:
-#         return redirect(url_for("login"))  # force login first
-
-#     return render_template("visitor_form.html", user=session["username"])
 
 @app.route("/vms")
 def vms():
