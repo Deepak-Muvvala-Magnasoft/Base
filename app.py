@@ -175,11 +175,17 @@ def ensure_columns_exist(new_columns):
 #         return redirect(url_for("login"))
 #     return render_template('landing.html')
 
+# @app.route('/')
+# def home():
+#     app.logger.info("✔ / route HIT — remote=%s, args=%s", request.remote_addr, request.args)
+#     return render_template('landing.html', user=session.get('username'))
+
 @app.route('/')
 def home():
-    app.logger.info("✔ / route HIT — remote=%s, args=%s", request.remote_addr, request.args)
+    app.logger.info("✔ / route HIT — remote=%s, args=%s, username=%s", request.remote_addr, request.args, session.get('username'))
+    if "username" not in session:
+        return redirect(url_for("login"))
     return render_template('landing.html', user=session.get('username'))
-
 
 @app.route("/google")
 def google_login():
