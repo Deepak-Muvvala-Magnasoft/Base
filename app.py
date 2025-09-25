@@ -31,6 +31,13 @@ app.secret_key = os.environ.get("FLASK_SECRET", "super_secret_key")
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.config['PREFERRED_URL_SCHEME'] = 'https'
 
+# trust proxy headers so url_for(..., _external=True) produces https:// when behind TLS-terminating proxy
+from werkzeug.middleware.proxy_fix import ProxyFix
+# trust 1 proxy for X-Forwarded-Proto / X-Forwarded-For / X-Forwarded-Host
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+# ensure generated URLs prefer https
+app.config['PREFERRED_URL_SCHEME'] = 'https'
+
 # SQLAlchemy
 app.config["SQLALCHEMY_DATABASE_URI"] = (
     f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DB}"
