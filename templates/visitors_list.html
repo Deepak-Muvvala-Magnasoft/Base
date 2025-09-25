@@ -16,7 +16,7 @@
       </a>
     </div>
     <ul class="nav-links">
-      <li><a href="/" class="btn btn-outline-primary">Home</a></li>
+      <li><a href="{{ url_for('landing_page') }}" class="btn btn-outline-primary">Home</a></li>
       <li><a href="{{ url_for('vms') }}" class="{% if active_page=='form' %}active{% endif %}">Add Visitor</a></li>
       <li><a href="{{ url_for('logout') }}">Logout</a></li>
     </ul>
