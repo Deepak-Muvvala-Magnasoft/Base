@@ -39,11 +39,12 @@ db = SQLAlchemy(app)
 
 # Register Google OAuth blueprint (minimal)
 # The blueprint will handle the OAuth dance at /login/google and the callback at /login/google/authorized
+# --- register the blueprint (paste once after app/db creation) ---
 google_bp = make_google_blueprint(
     client_id=GOOGLE_CLIENT_ID,
     client_secret=GOOGLE_CLIENT_SECRET,
     scope=["openid", "email", "profile"],
-    redirect_to="google_login_complete"   # after OAuth success we'll land on this endpoint
+    redirect_to="google_login_complete"   # handled below
 )
 app.register_blueprint(google_bp, url_prefix="/login")
 # ---------------------------
@@ -123,11 +124,12 @@ def ensure_excel_columns_exist(new_columns):
             existing.add(c)
 
 
+# --- callback route after successful OAuth ---
 @app.route("/google_login_complete")
 def google_login_complete():
     """
-    Called after successful Google OAuth (redirect_to above).
-    Fetches userinfo, sets session username, and redirects to landing.
+    Runs after Google OAuth completes. Sets session['username'] (email)
+    and redirects to /landing.
     """
     if not google.authorized:
         flash("Google login failed or cancelled.", "danger")
@@ -140,22 +142,15 @@ def google_login_complete():
         return redirect(url_for("login"))
 
     info = resp.json()
-    # pick identifier you prefer (email is usually best)
     email = info.get("email")
     name = info.get("name") or email
 
-    # minimal: store username in session so other routes work
+    # minimal: save identity in session so other routes that check session work
     session["username"] = email or name
-
-    # OPTIONAL: create / lookup app user record here (if you have User model)
-    # e.g.
-    # user = User.query.filter_by(email=email).first()
-    # if not user:
-    #     user = User(email=email, name=name)
-    #     db.session.add(user); db.session.commit()
 
     flash(f"Logged in as {name}", "success")
     return redirect(url_for("landing"))
+
 
 @app.route("/")
 def index():
