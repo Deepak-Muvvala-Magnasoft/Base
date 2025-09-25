@@ -27,7 +27,6 @@ from config import (
 )
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET", "super_secret_key")
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev_change_this_in_prod")
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.config['PREFERRED_URL_SCHEME'] = 'https'
@@ -193,13 +192,13 @@ def login():
         if username == "admin" and password == "admin":
             session["username"] = "admin"
             flash("Logged in as test user: admin", "success")
-            return redirect(url_for("vms"))
+            return redirect(url_for("landing"))
 
         # fallback: any non-empty username allowed (keeps prior behaviour)
         if username:
             session["username"] = username
             flash(f"Logged in as {username}", "success")
-            return redirect(url_for("vms"))
+            return redirect(url_for("landing"))
 
         flash("Invalid username or password", "danger")
 
@@ -255,20 +254,29 @@ def vms_demo():
     except Exception:
         return redirect(url_for("vms"))
 
+
+@app.route("/superadmin")
+def superadmin():
+    # require login to access (keeps behaviour sensible)
+    if not session.get("username"):
+        return redirect(url_for("login"))
+    # You don't need a template — simply redirect to landing/home for now.
+    return redirect(url_for("landing"))
 # --- add this function (minimal landing route) ---
-# @app.route("/landing")
-# def landing():
-#     """
-#     Minimal landing route that renders landing.html.
-#     Login and Google OAuth redirect here, so keep it simple.
-#     """
-#     try:
-#         return render_template("landing.html")
-#     except Exception as e:
-#         app.logger.exception("Failed to render landing.html")
-#         # helpful dev output (remove in production)
-#         import traceback
-#         return f"<h3>Failed to render landing.html (dev):</h3><pre>{traceback.format_exc()}</pre>", 500
+@app.route("/landing")
+def landing():
+    """
+    Minimal landing route that renders landing.html.
+    Login and Google OAuth redirect here, so keep it simple.
+    """
+    try:
+        return render_template("landing.html")
+    except Exception as e:
+        app.logger.exception("Failed to render landing.html")
+        # helpful dev output (remove in production)
+        import traceback
+        return f"<h3>Failed to render landing.html (dev):</h3><pre>{traceback.format_exc()}</pre>", 500
+
 
 @app.route("/add_visitor", methods=["POST"])
 def add_visitor():
