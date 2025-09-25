@@ -241,13 +241,10 @@ def login():
 
 @app.route("/logout")
 def logout():
-    # clear session keys (or use session.clear() to remove everything)
     session.pop("username", None)
     session.pop("role", None)
     session.pop("role_display", None)
-    session.pop("selected_project", None)   # optional: remove selected project too
-
-    # redirect to the home endpoint (function name: home)
+    session.pop("selected_project", None)   # optional
     return redirect(url_for("home"))
 
 
