@@ -2,6 +2,7 @@ import os
 import pandas as pd
 import json
 import smtplib
+import logging
 
 
 from flask import Flask, render_template,request, redirect, url_for, flash, session, jsonify
@@ -26,6 +27,8 @@ from flask import make_response
 from datetime import datetime, timedelta
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+logging.basicConfig(level=logging.DEBUG)
+
 app = Flask(__name__)
 
 # Use an env secret in production; keep a dev fallback
@@ -35,9 +38,15 @@ app.secret_key = os.environ.get("SECRET_KEY") or "dev_secret_change_me"
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.config['PREFERRED_URL_SCHEME'] = 'https'
 
-# Session cookie settings — choose secure policy in production
+# ------------------------------------------------------------
+# IMPORTANT: For troubleshooting on EC2 Windows over HTTP:
+# keep SameSite=Lax and Secure=False so browser will accept cookies
+# during testing. When you deploy behind HTTPS in production, switch:
+#   SESSION_COOKIE_SAMESITE = 'None'
+#   SESSION_COOKIE_SECURE = True
+# ------------------------------------------------------------
 if os.environ.get("FLASK_ENV") == "production":
-    app.config['SESSION_COOKIE_SAMESITE'] = 'None'   # browsers expect the literal string "None"
+    app.config['SESSION_COOKIE_SAMESITE'] = 'None'
     app.config['SESSION_COOKIE_SECURE'] = True
 else:
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
@@ -46,7 +55,7 @@ else:
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
 
-# If you are behind a reverse-proxy (nginx / ELB), make Flask respect X-Forwarded-* headers
+# If you are behind a reverse-proxy (nginx / IIS / ELB), make Flask respect X-Forwarded-* headers
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 # --- Register Google OAuth blueprint AFTER app configuration ---
@@ -186,56 +195,82 @@ def google_login():
         return redirect(url_for("google.login"))  # Redirect to Google OAuth
 
     resp = google.get("/oauth2/v2/userinfo")
-    if resp.ok:
-        user_info = resp.json()
-        email = user_info["email"]
-        # name = user_info.get("name", email.split("@")[0])
+    if not resp.ok:
+        app.logger.warning("GOOGLE_LOGIN: userinfo fetch failed: status=%s", getattr(resp, "status_code", None))
+        return "Google login failed!", 400
 
-        # ✅ Check if user exists in DB, else create
-        user = User.query.filter_by(username=email).first()
-        if not user:
-            user = User(username=email, password="", role="User")  
+    user_info = resp.json()
+    email = user_info.get("email")
+    if not email:
+        app.logger.warning("GOOGLE_LOGIN: no email in userinfo: %s", user_info)
+        return "Google login failed (no email)!", 400
+
+    # Ensure user exists
+    user = User.query.filter_by(username=email).first()
+    if not user:
+        try:
+            user = User(username=email, password="", role="User")
             db.session.add(user)
             db.session.commit()
+        except Exception:
+            db.session.rollback()
+            app.logger.exception("GOOGLE_LOGIN: failed to create user for %s", email)
+            # continue — still try to create a session (or return error if you prefer)
+            return "Google login failed (DB error)", 500
 
-        # ✅ Create session
-        session["username"] = email
-        session["role"] = (user.role or "").strip().lower()
-        project_name = request.args.get('project_name') or session.get('selected_project') or ''
-        session["selected_project"] = project_name
+    # Create session (mark permanent so cookie persists per PERMANENT_SESSION_LIFETIME)
+    session["username"] = email
+    session["role"] = (user.role or "").strip().lower()
+    session["role_display"] = (user.role or "").strip()
+    session.permanent = True
 
+    # Determine project_name: prefer request param, then existing session, then first project
+    project_name = request.args.get('project_name') or session.get('selected_project')
+    if not project_name:
         first_project = Project.query.order_by(Project.name).first()
         project_name = first_project.name if first_project else ""
+    session["selected_project"] = project_name
 
-        return render_template("landing.html")
-        # ✅ Redirect to data page
-        # return redirect(url_for("upload_file", project_name=project_name))
+    # Helpful debug log to inspect cookie/session behaviour during OAuth redirect testing
+    app.logger.debug("GOOGLE_LOGIN: created session for %s; project=%s; request.cookies=%s; session=%s",
+                     email, project_name, dict(request.cookies), {k: session.get(k) for k in ("username", "role", "selected_project")})
 
-    return "Google login failed!", 400
+    # Redirect (preferred) so browser receives Set-Cookie and next request sends cookie back
+    return redirect(url_for("upload_file", project_name=project_name))
 
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        username = request.form["username"]
-        password = request.form["password"]
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
 
         user = User.query.filter_by(username=username).first()
         if user and check_password_hash(user.password, password):
+            # create session
             session["username"] = user.username
             session["role"] = (user.role or "").strip().lower()
             session["role_display"] = (user.role or "").strip()
+            session.permanent = True  # honour PERMANENT_SESSION_LIFETIME
 
-            # ✅ Find the first project name alphabetically
+            # Determine project_name (first project as fallback)
             first_project = Project.query.order_by(Project.name).first()
             project_name = first_project.name if first_project else ""
-
-            # ✅ Save in session
             session["selected_project"] = project_name
 
-            return render_template("landing.html")
-            # ✅ Redirect to /data?project_name=<first_project>
-            # return redirect(url_for("upload_file", project_name=project_name))
+            # Debug log to inspect cookie/session behaviour
+            app.logger.debug(
+                "LOGIN success: user=%s project=%s request.cookies=%s session_keys=%s host=%s scheme=%s",
+                user.username, project_name, dict(request.cookies), list(session.keys()), request.host, request.scheme
+            )
+
+            # Prefer a 'next' param if present (safe relative redirect)
+            next_url = request.args.get("next") or request.form.get("next")
+            if next_url:
+                # optional: you can validate next_url to avoid open redirects
+                return redirect(next_url)
+            # Redirect to data page so Set-Cookie is sent and used on the next request
+            return redirect(url_for("upload_file", project_name=project_name))
 
         else:
             flash("❌ Invalid username or password!", "danger")
@@ -250,6 +285,20 @@ def logout():
     session.pop("role_display", None)
 
     return redirect(url_for("login"))
+
+@app.route("/debug_session")
+def debug_session():
+    # Shows request cookies + session on the server side
+    info = {
+        "request_cookies": dict(request.cookies),
+        "session": dict(session),
+        "host": request.host,
+        "url": request.url,
+        "scheme": request.scheme,
+        "headers": {k: v for k, v in request.headers.items() if k.lower().startswith(("host", "cookie", "referer", "user-agent"))}
+    }
+    app.logger.debug("DEBUG_SESSION: %s", info)
+    return jsonify(info)
 
 
 @app.route("/data", methods=["GET", "POST"])
@@ -553,10 +602,12 @@ def delete_project():
 
 @app.route("/vms")
 def vms():
+    app.logger.debug("VMS: request.cookies=%s session=%s host=%s scheme=%s",
+                     dict(request.cookies), dict(session), request.host, request.scheme)
     if "username" not in session:
-        return redirect(url_for("login"))  # force login first 
-
+        return redirect(url_for("login"))  # force login first
     return render_template("visitor_form.html", user=session["username"])
+
 
 
 @app.route("/add_visitor", methods=["POST"])
