@@ -54,17 +54,18 @@ def get_current_role():
     """Normalized role (lowercase) from cookie."""
     return (_request.cookies.get("auth_role") or "").strip().lower()
 
+
 def current_role_authoritative():
     """
     Prefer DB-backed g.current_user.role (if loaded), otherwise fall back to auth_role cookie.
     Returns a lowercase string.
+
+    This is the authoritative check used by endpoints that require specific roles.
     """
     db_user = getattr(g, "current_user", None)
     if db_user and getattr(db_user, "role", None):
         return (db_user.role or "").strip().lower()
     return (_request.cookies.get("auth_role") or "").strip().lower()
-
-   
 
 
 def get_role_display():
@@ -178,17 +179,6 @@ app.config["SQLALCHEMY_DATABASE_URI"] = (
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 
-@app.route("/__debug_oauth")
-def debug_oauth():
-    return jsonify({
-        "url_for_google_authorized": url_for("google.authorized", _external=True),
-        "request_host": request.host,
-        "headers": {
-            "Host": request.headers.get("Host"),
-            "X-Forwarded-Proto": request.headers.get("X-Forwarded-Proto"),
-            "X-Forwarded-For": request.headers.get("X-Forwarded-For")
-        }
-    })
 
 @app.route('/visitor', methods=['GET', 'POST'])
 def visitor_qr():
@@ -757,7 +747,7 @@ def send_email_to_it(visitor_obj_or_dict, contact_name, contact_email, visitor_i
         name = getattr(v, "name", "") or ""
         company = getattr(v, "company", "") or ""
         phone = getattr(v, "phone", "") or ""
-        purpose = getattr(v, "purpose", "") or ""
+        purpose = getattr(v, "purpose") or ""
         location = getattr(v, "location") or ""
         items_field = getattr(v, "items_with_other", None) or getattr(v, "items", None)
         other_text_field = getattr(v, "otherItems", None)
@@ -1176,7 +1166,6 @@ def visitors_api():
 @app.route('/checkin/<int:visitor_id>', methods=['POST'])
 def checkin(visitor_id):
     # Authoritative server-side role check (prefer DB role then cookie)
-   # Authoritative server-side role check (prefer DB-loaded user then cookie)
     role = current_role_authoritative()
     app.logger.debug("Checkin attempt: visitor_id=%s, cookie_role=%s, cookie_user=%s, db_user=%s, authoritative=%s",
                     visitor_id, request.cookies.get("auth_role"), request.cookies.get("auth_user"),
@@ -1220,7 +1209,6 @@ def checkin(visitor_id):
 @app.route("/checkout/<int:visitor_id>", methods=["POST"])
 def checkout(visitor_id):
     # Authoritative server-side role check (prefer DB role then cookie)
-    # Authoritative server-side role check (prefer DB-loaded user then cookie)
     role = current_role_authoritative()
     app.logger.debug("Checkout attempt: visitor_id=%s, cookie_role=%s, cookie_user=%s, db_user=%s, authoritative=%s",
                     visitor_id, request.cookies.get("auth_role"), request.cookies.get("auth_user"),
@@ -1283,24 +1271,6 @@ def ensure_default_admin():
 # call it under app context so SQLAlchemy works
 with app.app_context():
     ensure_default_admin()
-
-@app.route("/auth_debug")
-def auth_debug():
-    """
-    Temporary debug endpoint — returns cookie values and DB user (if loaded).
-    Use it from the browser while logged in to confirm cookie vs DB role.
-    """
-   
-    db_user = getattr(g, "current_user", None)
-    db_username = getattr(db_user, "username", None) if db_user else None
-    db_role = getattr(db_user, "role", None) if db_user else None
-    return jsonify({
-  
-        "db_username": db_username,
-        "db_role": db_role,
-        "authoritative_role": current_role_authoritative()
-    })
-
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
