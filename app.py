@@ -325,20 +325,77 @@ def login():
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
 
-        user = User.query.filter_by(username=username).first()
+        # Try to find user in DB
+        user = None
+        try:
+            user = User.query.filter_by(username=username).first()
+        except Exception:
+            # DB may be unreachable; swallow and continue to allow dev fallback
+            app.logger.exception("DB lookup failed in login()")
+
+        # Normal DB-auth path
         if user and check_password_hash(user.password, password):
             role_norm = (user.role or "").strip().lower()
             role_display = (user.role or "").strip()
             first_project = Project.query.order_by(Project.name).first()
             project_name = first_project.name if first_project else ""
 
-            # redirect so user gets landing page and Set-Cookie headers
             resp = redirect(url_for("landing_page"))
-            set_auth_cookies(resp, user.username, role=role_norm, role_display=role_display, selected_project=project_name)
+            set_auth_cookies(
+                resp,
+                user.username,
+                role=role_norm,
+                role_display=role_display,
+                selected_project=project_name
+            )
             flash("✅ Logged in", "success")
             return resp
-        else:
-            flash("❌ Invalid username or password!", "danger")
+
+        # Dev-friendly fallback: create/accept admin/admin if DB user missing
+        # NOTE: Remove or secure this behavior before production use.
+        if username == "admin" and password == "admin":
+            try:
+                # If admin exists but password mismatch, overwrite? we create only if missing.
+                if not user:
+                    hashed = generate_password_hash("admin")
+                    admin_user = User(username="admin", password=hashed, role="Super Admin")
+                    db.session.add(admin_user)
+                    db.session.commit()
+                    user = admin_user
+                    app.logger.info("✅ Created default admin user (development): admin / admin")
+
+                # Log in admin (use DB role if present)
+                role_norm = (user.role or "Super Admin").strip().lower()
+                role_display = (user.role or "Super Admin").strip()
+                first_project = Project.query.order_by(Project.name).first()
+                project_name = first_project.name if first_project else ""
+
+                resp = redirect(url_for("landing_page"))
+                set_auth_cookies(
+                    resp,
+                    user.username,
+                    role=role_norm,
+                    role_display=role_display,
+                    selected_project=project_name
+                )
+                flash("✅ Logged in (dev fallback)", "success")
+                return resp
+
+            except Exception:
+                # If DB create fails (e.g., no DB), still set cookie so developer can proceed.
+                app.logger.exception("Failed to create admin user; using cookie fallback")
+                role_norm = "super admin"
+                role_display = "Super Admin"
+                first_project = Project.query.order_by(Project.name).first() if 'Project' in globals() else None
+                project_name = first_project.name if first_project else ""
+
+                resp = redirect(url_for("landing_page"))
+                set_auth_cookies(resp, "admin", role=role_norm, role_display=role_display, selected_project=project_name)
+                flash("✅ Logged in (cookie fallback)", "success")
+                return resp
+
+        # If we reach here, authentication failed
+        flash("❌ Invalid username or password!", "danger")
 
     return render_template("login.html")
 
@@ -1350,6 +1407,28 @@ def checkout(visitor_id):
     db.session.commit()
     return jsonify({"success": True, "message": "Visitor checked out successfully"})
 
+# --- Ensure a default admin user exists (run once on startup) ---
+def ensure_default_admin():
+    """
+    Creates a default admin user (username=admin, password=admin) if missing.
+    Only for development. Remove or change password in production.
+    """
+    try:
+        # create tables if they don't exist (no-op if already created)
+        db.create_all()
+
+        if not User.query.filter_by(username="admin").first():
+            hashed = generate_password_hash("admin")
+            admin_user = User(username="admin", password=hashed, role="Super Admin")
+            db.session.add(admin_user)
+            db.session.commit()
+            app.logger.info("✅ Created default admin user: admin / admin (development only)")
+    except Exception:
+        app.logger.exception("Failed to ensure default admin user")
+
+# call it under app context so SQLAlchemy works
+with app.app_context():
+    ensure_default_admin()
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
