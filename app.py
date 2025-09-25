@@ -193,13 +193,13 @@ def login():
         if username == "admin" and password == "admin":
             session["username"] = "admin"
             flash("Logged in as test user: admin", "success")
-            return redirect(url_for("landing"))
+            return redirect(url_for("vms"))
 
         # fallback: any non-empty username allowed (keeps prior behaviour)
         if username:
             session["username"] = username
             flash(f"Logged in as {username}", "success")
-            return redirect(url_for("landing"))
+            return redirect(url_for("vms"))
 
         flash("Invalid username or password", "danger")
 
@@ -256,19 +256,19 @@ def vms_demo():
         return redirect(url_for("vms"))
 
 # --- add this function (minimal landing route) ---
-@app.route("/landing")
-def landing():
-    """
-    Minimal landing route that renders landing.html.
-    Login and Google OAuth redirect here, so keep it simple.
-    """
-    try:
-        return render_template("landing.html")
-    except Exception as e:
-        app.logger.exception("Failed to render landing.html")
-        # helpful dev output (remove in production)
-        import traceback
-        return f"<h3>Failed to render landing.html (dev):</h3><pre>{traceback.format_exc()}</pre>", 500
+# @app.route("/landing")
+# def landing():
+#     """
+#     Minimal landing route that renders landing.html.
+#     Login and Google OAuth redirect here, so keep it simple.
+#     """
+#     try:
+#         return render_template("landing.html")
+#     except Exception as e:
+#         app.logger.exception("Failed to render landing.html")
+#         # helpful dev output (remove in production)
+#         import traceback
+#         return f"<h3>Failed to render landing.html (dev):</h3><pre>{traceback.format_exc()}</pre>", 500
 
 @app.route("/add_visitor", methods=["POST"])
 def add_visitor():
