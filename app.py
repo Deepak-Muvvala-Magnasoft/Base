@@ -54,16 +54,47 @@ else:
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
     app.config['SESSION_COOKIE_SECURE'] = False
 
-# IMPORTANT: set cookie domain & path to match your host (adjust as needed)
-# Use the exact hostname you access the app with in browser (no scheme)
-app.config['SESSION_COOKIE_DOMAIN'] = "myportal.magnasoft.com"
-app.config['SESSION_COOKIE_PATH'] = "/"
-
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
 
 # If you are behind a reverse-proxy (nginx / IIS / ALB), make Flask respect X-Forwarded-* headers
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
+# -------------------- defensive cookie config & sanitizer --------------------
+# Avoid forcing a domain (prevents collisions with other domain-wide cookies)
+# Keep a consistent cookie path and use a unique session cookie name.
+app.config.pop('SESSION_COOKIE_DOMAIN', None)   # remove any previously set domain
+app.config['SESSION_COOKIE_PATH'] = '/'
+app.config['SESSION_COOKIE_NAME'] = 'vms_session'  # avoid name collisions with other apps
+
+# Sanitize incoming Cookie header to drop suspiciously large cookie names.
+# Run this before Flask/Werkzeug parses cookies (early in request handling).
+@app.before_request
+def _sanitize_cookie_header():
+    cookie_hdr = request.environ.get('HTTP_COOKIE', '')
+    if not cookie_hdr:
+        return
+    parts = [p.strip() for p in cookie_hdr.split(';') if p.strip()]
+    keep = []
+    changed = False
+    # Threshold: drop cookie names longer than this value (adjustable)
+    MAX_NAME_LEN = 200
+    for p in parts:
+        if '=' in p:
+            name, val = p.split('=', 1)
+            if len(name.strip()) > MAX_NAME_LEN:
+                # log a truncated name for debugging and drop this cookie name
+                app.logger.warning("Dropping suspicious cookie (name len=%d): %.60s...", len(name.strip()), name.strip())
+                changed = True
+                continue
+        keep.append(p)
+    if changed:
+        new_cookie = '; '.join(keep)
+        # Replace incoming raw header so Flask parses the cleaned cookie set
+        request.environ['HTTP_COOKIE'] = new_cookie
+        app.logger.debug("Sanitized Cookie header -> %s", new_cookie)
+# ---------------------------------------------------------------------------
+
 
 # --- Register Google OAuth blueprint AFTER app configuration ---
 # Only allow insecure transport for local development (do NOT set in production)
