@@ -325,46 +325,26 @@ def login():
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
 
-        # debug logging (will show in your flask console)
-        app.logger.info("Login attempt: username=%s remote=%s", username, request.remote_addr)
-
         user = User.query.filter_by(username=username).first()
-
-        # allow standard hashed-password check, but provide a short-term plaintext fallback
-        pwd_ok = False
-        if user and user.password:
-            try:
-                pwd_ok = check_password_hash(user.password, password)
-            except Exception:
-                pwd_ok = False
-
-            # TEMPORARY: allow plaintext match if the stored password doesn't appear hashed
-            # Remove this fallback after you ensure all users have hashed passwords.
-            if not pwd_ok and user.password == password:
-                app.logger.warning("Plaintext password fallback used for user=%s — convert to hashed!", username)
-                pwd_ok = True
-
-        if user and pwd_ok:
+        if user and check_password_hash(user.password, password):
             role_norm = (user.role or "").strip().lower()
             role_display = (user.role or "").strip()
-
-            # Choose a redirect response so browser will update location (and honor Set-Cookie)
             first_project = Project.query.order_by(Project.name).first()
             project_name = first_project.name if first_project else ""
 
+            # redirect so user gets landing page and Set-Cookie headers
             resp = redirect(url_for("landing_page"))
             set_auth_cookies(resp, user.username, role=role_norm, role_display=role_display, selected_project=project_name)
             flash("✅ Logged in", "success")
             return resp
         else:
-            app.logger.info("Login failed for username=%s (user_found=%s)", username, bool(user))
             flash("❌ Invalid username or password!", "danger")
 
     return render_template("login.html")
 
 @app.route("/logout")
 def logout():
-    resp = redirect(url_for("home"))
+    resp = redirect(url_for("landing_page"))
     clear_auth_cookies(resp)
     return resp
 
