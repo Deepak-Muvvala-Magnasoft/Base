@@ -214,6 +214,50 @@
     </table>
   </div>
 
+  <script>
+function checkInVisitor(id) {
+  const badge = document.getElementById(`badge-${id}`).value.trim();
+  fetch(`/checkin/${id}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',   // <<< send cookies
+    body: JSON.stringify({ badge })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      location.reload(); // or update UI as you prefer
+    } else {
+      alert(data.message || "Check-in failed");
+    }
+  }).catch(err => {
+    console.error(err);
+    alert("Server error during check-in");
+  });
+}
+
+function checkOutVisitor(id) {
+  const remarks = document.getElementById(`remarks-${id}`)?.value || "";
+  fetch(`/checkout/${id}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',   // <<< send cookies
+    body: JSON.stringify({ remarks })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      location.reload();
+    } else {
+      alert(data.message || "Checkout failed");
+    }
+  }).catch(err => {
+    console.error(err);
+    alert("Server error during checkout");
+  });
+}
+</script>
+
 </body>
 
 </html>

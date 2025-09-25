@@ -54,6 +54,17 @@ def get_current_role():
     """Normalized role (lowercase) from cookie."""
     return (_request.cookies.get("auth_role") or "").strip().lower()
 
+def current_role_authoritative():
+    """
+    Return authoritative role (lowercase). Prefer DB-loaded g.current_user.role
+    when available; otherwise fall back to the auth_role cookie.
+    """
+    db_user = getattr(g, "current_user", None)
+    if db_user and getattr(db_user, "role", None):
+        return (db_user.role or "").strip().lower()
+    return ( _request.cookies.get("auth_role") or "" ).strip().lower()
+   
+
 
 def get_role_display():
     """Role display value (title-case) from cookie."""
@@ -1005,11 +1016,7 @@ def visitors_list():
     import json as _json
     all_visitors = Visitor.query.order_by(Visitor.created_at.desc()).all()
      # Prefer DB-backed role (g.current_user) when available; otherwise fallback to cookie
-    db_user = getattr(g, "current_user", None)
-    if db_user and getattr(db_user, "role", None):
-        user_role = (db_user.role or "").strip().lower()
-    else:
-        user_role = get_current_role()
+    user_role = current_role_authoritative()
 
     out = []
     # keywords used server-side to detect electronics
@@ -1167,13 +1174,18 @@ def visitors_api():
 
 @app.route('/checkin/<int:visitor_id>', methods=['POST'])
 def checkin(visitor_id):
-    # Enforce server-side role check (cookie-based)
-    if get_current_role() != "security":
+    # Authoritative server-side role check (prefer DB role then cookie)
+    role = current_role_authoritative()
+    app.logger.debug("Checkin attempt: visitor_id=%s, cookie_role=%s, authoritative_role=%s",
+                    visitor_id, request.cookies.get("auth_role"), role)
+    if role != "security":
         return jsonify(success=False, message="Forbidden: insufficient permissions"), 403
 
     try:
         data = request.get_json(silent=True) or {}
         badge = (data.get('badge') or "").strip()
+        override = data.get('override') in (True, 'true', '1', 'yes')
+
         if not badge:
             return jsonify(success=False, message="Missing badge"), 400
 
@@ -1185,9 +1197,9 @@ def checkin(visitor_id):
         if v.check_in:
             return jsonify(success=False, message="Visitor already checked in"), 400
 
-        # enforce approvals server-side
+        # enforce approvals server-side, but allow explicit security override
         allowed, reason = visitor_allowed_to_checkin(v)
-        if not allowed:
+        if not allowed and not override:
             return jsonify(success=False, message=f"Not allowed to check in: {reason}"), 403
 
         # all good — record badge and check-in time
@@ -1203,9 +1215,13 @@ def checkin(visitor_id):
 
 @app.route("/checkout/<int:visitor_id>", methods=["POST"])
 def checkout(visitor_id):
-    # Server-side role enforcement: only 'security' may checkout visitors
-    if get_current_role() != "security":
+    # Authoritative server-side role check (prefer DB role then cookie)
+    role = current_role_authoritative()
+    app.logger.debug("Checkout attempt: visitor_id=%s, cookie_role=%s, authoritative_role=%s",
+                    visitor_id, request.cookies.get("auth_role"), role)
+    if role != "security":
         return jsonify({"success": False, "message": "Forbidden: insufficient permissions"}), 403
+
 
     try:
         data = request.get_json(silent=True) or {}
