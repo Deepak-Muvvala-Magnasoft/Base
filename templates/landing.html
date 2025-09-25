@@ -27,19 +27,12 @@
                 <i class="bi bi-person-gear"></i>
             </a>
 
-            <a href="{{ url_for('home') }}" class="btn btn-outline-primary">Home</a>
+            <a href="{{ url_for('home') }}" class="btn btn-outline-primary">Exit</a>
 
             <!-- User label + Login/Logout -->
             <div class="d-flex align-items-center">
                 <i class="bi bi-person-circle me-2 text-primary user-icon"></i>
             </div>
-
-            <!-- Show login OR logout depending on current_user -->
-            {% if current_user %}
-                <a href="{{ url_for('logout') }}" class="btn btn-sm btn-outline-danger">Logout</a>
-            {% else %}
-                <a href="{{ url_for('login') }}" class="btn btn-sm btn-outline-success">Login</a>
-            {% endif %}
         </div>
     </header>
 
