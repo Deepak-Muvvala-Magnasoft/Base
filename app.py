@@ -31,8 +31,12 @@ from email.mime.text import MIMEText
 # from urllib.parse import quote_plus
 from werkzeug.utils import secure_filename
 from werkzeug.exceptions import BadRequest
-
+from werkzeug.middleware.proxy_fix import ProxyFix
 app = Flask(__name__)
+# add near top, right after app = Flask(__name__)
+
+# Trust first proxy's X-Forwarded-* headers (adjust counts if you have more hops)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 app.secret_key = os.environ.get("FLASK_SECRET", "super_secret_key")
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.config['PREFERRED_URL_SCHEME'] = 'https'
@@ -138,6 +142,7 @@ def inject_user_role():
 
 # Add Google OAuth config
 os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'  # For HTTP (development only)
+# existing imports include: from flask_dance.contrib.google import make_google_blueprint, google
 google_bp = make_google_blueprint(
     client_id=GOOGLE_CLIENT_ID,
     client_secret=GOOGLE_CLIENT_SECRET,
@@ -146,9 +151,12 @@ google_bp = make_google_blueprint(
         "https://www.googleapis.com/auth/userinfo.email",
         "https://www.googleapis.com/auth/userinfo.profile"
     ],
+    # <<< add this line to pin the exact redirect URI
+    redirect_url="https://myportal.magnasoft.com/login/google/authorized",
     redirect_to="google_login"
 )
 app.register_blueprint(google_bp, url_prefix="/login")
+
 
 
 # --- SQLAlchemy / MySQL ---
