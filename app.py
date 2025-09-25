@@ -31,10 +31,10 @@ from email.mime.text import MIMEText
 # from urllib.parse import quote_plus
 from werkzeug.utils import secure_filename
 from werkzeug.exceptions import BadRequest
-from werkzeug.middleware.proxy_fix import ProxyFix
-app = Flask(__name__)
-# add near top, right after app = Flask(__name__)
 
+app = Flask(__name__)
+
+from werkzeug.middleware.proxy_fix import ProxyFix
 # Trust first proxy's X-Forwarded-* headers (adjust counts if you have more hops)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 app.secret_key = os.environ.get("FLASK_SECRET", "super_secret_key")
@@ -151,11 +151,12 @@ google_bp = make_google_blueprint(
         "https://www.googleapis.com/auth/userinfo.email",
         "https://www.googleapis.com/auth/userinfo.profile"
     ],
-    # <<< add this line to pin the exact redirect URI
+    # force the exact HTTPS redirect that you have added to Google Console
     redirect_url="https://myportal.magnasoft.com/login/google/authorized",
     redirect_to="google_login"
 )
 app.register_blueprint(google_bp, url_prefix="/login")
+
 
 
 
@@ -166,6 +167,17 @@ app.config["SQLALCHEMY_DATABASE_URI"] = (
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 
+@app.route("/__debug_oauth")
+def debug_oauth():
+    return jsonify({
+        "url_for_google_authorized": url_for("google.authorized", _external=True),
+        "request_host": request.host,
+        "headers": {
+            "Host": request.headers.get("Host"),
+            "X-Forwarded-Proto": request.headers.get("X-Forwarded-Proto"),
+            "X-Forwarded-For": request.headers.get("X-Forwarded-For")
+        }
+    })
 
 @app.route('/visitor', methods=['GET', 'POST'])
 def visitor_qr():
