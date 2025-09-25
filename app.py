@@ -28,6 +28,7 @@ from config import (
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET", "super_secret_key")
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev_change_this_in_prod")
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.config['PREFERRED_URL_SCHEME'] = 'https'
 
