@@ -112,92 +112,42 @@ def ensure_excel_columns_exist(new_columns):
             db.session.commit()
             existing.add(c)
 
-
-# ---------------------------
-# Upload / Excel storage (single shared excel_data table)
-# ---------------------------
-@app.route("/data", methods=["GET", "POST"])
-def upload_file():
-    """
-    - POST: accept an Excel file, store rows into shared table `excel_data`.
-      Each column of the spreadsheet becomes a TEXT column (created if missing).
-      Returns JSON success/failure.
-    - GET: returns a JSON listing of grouped uploads and small preview of uploaded rows.
-    """
-    # Determine who uploaded (no user DB) — allow an optional uploaded_by form field, default 'anonymous'
-    uploaded_by = (request.form.get("uploaded_by") or "anonymous").strip()
-
+@app.route("/login", methods=["GET", "POST"])
+def login():
     if request.method == "POST":
-        if not request.files.get("file"):
-            return jsonify(success=False, message="No file provided"), 400
+        # no DB checks in this simplified app; just redirect to landing
+        flash("Logged in (no DB checks performed).", "info")
+        return redirect(url_for("landing_page"))
 
-        file = request.files.get("file")
-        file_name = secure_filename(file.filename or "upload.xlsx")
-        upload_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        try:
-            # read excel into pandas
-            df = pd.read_excel(file)
-            # clean headers
-            df.columns = [str(c).strip() for c in df.columns]
-            col_map = {col: safe_colname(col) for col in df.columns}
-            df.rename(columns=col_map, inplace=True)
-
-            # drop fully empty rows/cols
-            df = df.where(pd.notnull(df), None)
-            df.dropna(how="all", inplace=True)
-            df.dropna(axis=1, how="all", inplace=True)
-
-            # ensure columns exist
-            ensure_excel_columns_exist(df.columns.tolist())
-
-            # insert rows
-            table_name = "excel_data"
-            for row_dict in df.to_dict(orient="records"):
-                row_dict.update({
-                    "uploaded_by": uploaded_by,
-                    "upload_time": upload_time,
-                    "file_name": file_name
-                })
-                cols = ", ".join(f"`{c}`" for c in row_dict.keys())
-                placeholders = ", ".join(f":{c}" for c in row_dict.keys())
-                stmt = text(f"INSERT INTO `{table_name}` ({cols}) VALUES ({placeholders})")
-                db.session.execute(stmt, row_dict)
-
-            db.session.commit()
-            return jsonify(success=True, message=f"File '{file_name}' uploaded", uploaded_by=uploaded_by), 200
-        except Exception as e:
-            db.session.rollback()
-            app.logger.exception("Excel upload failed")
-            return jsonify(success=False, message=str(e)), 500
-
-    # GET: list grouped uploads + optional preview rows (no HTML template required)
+    # GET: render login template if present, otherwise show a fallback form
     try:
-        insp = inspect(db.engine)
-        table_name = "excel_data"
-        if table_name not in insp.get_table_names():
-            return jsonify(grouped_data=[], preview=[])
-
-        grouped_rows = db.session.execute(text(f"""
-            SELECT uploaded_by, upload_time, file_name, COUNT(id) AS count
-            FROM `{table_name}`
-            GROUP BY uploaded_by, upload_time, file_name
-            ORDER BY upload_time DESC
-            LIMIT 100
-        """)).mappings().all()
-
-        grouped_data = [dict(r) for r in grouped_rows]
-
-        # preview: last 30 rows
-        rows = db.session.execute(text(f"SELECT * FROM `{table_name}` ORDER BY id DESC LIMIT 30")).mappings().all()
-        preview = [dict(r) for r in rows]
-
-        return jsonify(grouped_data=grouped_data, preview=preview)
+        return render_template("login.html")
     except Exception:
-        app.logger.exception("Failed to fetch excel_data")
-        return jsonify(grouped_data=[], preview=[])
-
-
+        google_login_link = ""
+        try:
+            google_login_link = f'<p><a href="{url_for("google.login")}">Sign in with Google</a></p>'
+        except Exception:
+            google_login_link = ""
+        return f"""
+        <!doctype html>
+        <html>
+          <head><meta charset="utf-8"><title>Login</title></head>
+          <body>
+            <h2>Login (fallback)</h2>
+            <form method="post" action="{url_for('login')}">
+              <label>Username: <input name="username" /></label><br/>
+              <label>Password: <input name="password" type="password" /></label><br/>
+              <button type="submit">Login</button>
+            </form>
+            {google_login_link}
+          </body>
+        </html>
+        """
+@app.route("/logout")
+def logout():
+    resp = redirect(url_for("login"))   # or url_for("landing_page")
+    flash("You have been logged out.", "info")
+    return resp
 # ---------------------------
 # Visitor flows (unchanged logic, no auth)
 # ---------------------------
