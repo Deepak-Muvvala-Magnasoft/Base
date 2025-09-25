@@ -132,17 +132,25 @@ def index():
 def login():
     """
     Simple login handler: on POST redirect to /landing (or render on GET).
+    Also safely prepares a google login URL if the 'google.login' endpoint exists.
     """
     if request.method == "POST":
         username = (request.form.get("username") or "").strip()
         password = request.form.get("password") or ""
-        # Temporary: treat non-empty username as success; replace with DB check later.
+        # Temporary auth: treat non-empty username as success; replace with DB check later.
         if username:
-            # if other routes expect session, uncomment next line:
-            # session['username'] = username
+            # if other routes check session, enable next line
+            session['username'] = username
             return redirect(url_for("landing"))
         flash("Invalid username or password", "danger")
-    return render_template("login.html")
+
+    # Safely build google login URL (avoid BuildError if blueprint not registered)
+    try:
+        google_login_url = url_for('google.login', next=request.args.get('next', ''))
+    except Exception:
+        google_login_url = None
+
+    return render_template("login.html", google_login_url=google_login_url)
 
 @app.route("/logout")
 def logout():
