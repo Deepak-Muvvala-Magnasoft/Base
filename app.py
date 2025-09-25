@@ -278,8 +278,16 @@ def home():
 
 @app.route("/landing")
 def landing_page():
-    # show landing.html (does not force login). Still injects current_user via your context processor.
-    return render_template("landing.html", user=get_current_username())
+    """
+    Always render landing.html (no redirect). Add no-cache headers so browser shows
+    what server returns and doesn't reuse any cached redirect.
+    """
+    username = get_current_username()  # may be None
+    resp = make_response(render_template("landing.html", user=username))
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 @app.route("/google")
 def google_login():
