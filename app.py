@@ -255,26 +255,20 @@ def vms_demo():
     except Exception:
         return redirect(url_for("vms"))
 
-# @app.route("/landing")
-# def landing():
-#     """
-#     Render landing page. If rendering fails, return a helpful error message
-#     instead of redirecting to /vms (avoids hiding the real template error).
-#     """
-#     import traceback
-#     try:
-#         return render_template("landing.html")
-#     except Exception as e:
-#         # log full traceback
-#         tb = traceback.format_exc()
-#         app.logger.exception("Failed to render landing.html: %s", e)
-#         # Return a clear 500 with the traceback for dev debugging
-#         # REMOVE or tighten this in production
-#         return (
-#             "<h2>Landing page error</h2>"
-#             "<p>The landing template failed to render. See details below (dev only):</p>"
-#             f"<pre>{tb}</pre>"
-#         ), 500
+# --- add this function (minimal landing route) ---
+@app.route("/landing")
+def landing():
+    """
+    Minimal landing route that renders landing.html.
+    Login and Google OAuth redirect here, so keep it simple.
+    """
+    try:
+        return render_template("landing.html")
+    except Exception as e:
+        app.logger.exception("Failed to render landing.html")
+        # helpful dev output (remove in production)
+        import traceback
+        return f"<h3>Failed to render landing.html (dev):</h3><pre>{traceback.format_exc()}</pre>", 500
 
 @app.route("/add_visitor", methods=["POST"])
 def add_visitor():
