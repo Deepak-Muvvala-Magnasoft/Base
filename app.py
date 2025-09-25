@@ -4,7 +4,6 @@ import json
 import smtplib
 from flask import g
 
-
 from flask import (
     Flask, render_template, request, redirect, url_for, flash, jsonify,
     make_response
@@ -270,6 +269,37 @@ def ensure_columns_exist(new_columns):
             existing.add(c)
 
 
+# --- NEW HELPER: verify_password (supports hashed OR plaintext stored passwords) ---
+def verify_password(stored_password: str, provided_password: str) -> bool:
+    """
+    Return True if provided_password matches stored_password.
+    Supports:
+      1) werkzeug hashed passwords (check_password_hash)
+      2) legacy plaintext passwords (direct equality) — fallback
+    """
+    if not stored_password:
+        return False
+
+    # 1) Try hashed comparison (works for pbkdf2/sha/etc.)
+    try:
+        if check_password_hash(stored_password, provided_password):
+            return True
+    except Exception:
+        # If stored_password isn't a valid hash format, check_password_hash
+        # may raise; ignore and try plaintext fallback below.
+        pass
+
+    # 2) Fallback to plaintext match (handles legacy DB rows)
+    try:
+        if stored_password == provided_password:
+            return True
+    except Exception:
+        pass
+
+    return False
+# -------------------------------------------------------------------------------
+
+
 @app.route("/")
 def home():
     """
@@ -323,11 +353,10 @@ def google_login():
         # ✅ Create cookie-based session
         role_norm = (user.role or "").strip().lower()
         role_display = (user.role or "").strip()
-        first_project = Project.query.order_by(Project.name).first()
-        project_name = first_project.name if first_project else ""
+
 
         resp = make_response(render_template("landing.html"))
-        set_auth_cookies(resp, email, role=role_norm, role_display=role_display, selected_project=project_name)
+        set_auth_cookies(resp, email, role=role_norm, role_display=role_display)
         return resp
 
     return "Google login failed!", 400
@@ -347,12 +376,11 @@ def login():
             # DB may be unreachable; swallow and continue to allow dev fallback
             app.logger.exception("DB lookup failed in login()")
 
-        # Normal DB-auth path
-        if user and check_password_hash(user.password, password):
+        # Normal DB-auth path (supports hashed OR plaintext DB passwords)
+        if user and verify_password(user.password, password):
             role_norm = (user.role or "").strip().lower()
             role_display = (user.role or "").strip()
-            first_project = Project.query.order_by(Project.name).first()
-            project_name = first_project.name if first_project else ""
+        
 
             resp = redirect(url_for("landing_page"))
             set_auth_cookies(
@@ -360,7 +388,7 @@ def login():
                 user.username,
                 role=role_norm,
                 role_display=role_display,
-                selected_project=project_name
+    
             )
             flash("✅ Logged in", "success")
             return resp
@@ -381,8 +409,7 @@ def login():
                 # Log in admin (use DB role if present)
                 role_norm = (user.role or "Super Admin").strip().lower()
                 role_display = (user.role or "Super Admin").strip()
-                first_project = Project.query.order_by(Project.name).first()
-                project_name = first_project.name if first_project else ""
+        
 
                 resp = redirect(url_for("landing_page"))
                 set_auth_cookies(
@@ -390,7 +417,6 @@ def login():
                     user.username,
                     role=role_norm,
                     role_display=role_display,
-                    selected_project=project_name
                 )
                 flash("✅ Logged in (dev fallback)", "success")
                 return resp
@@ -400,11 +426,9 @@ def login():
                 app.logger.exception("Failed to create admin user; using cookie fallback")
                 role_norm = "super admin"
                 role_display = "Super Admin"
-                first_project = Project.query.order_by(Project.name).first() if 'Project' in globals() else None
-                project_name = first_project.name if first_project else ""
 
                 resp = redirect(url_for("landing_page"))
-                set_auth_cookies(resp, "admin", role=role_norm, role_display=role_display, selected_project=project_name)
+                set_auth_cookies(resp, "admin", role=role_norm, role_display=role_display)
                 flash("✅ Logged in (cookie fallback)", "success")
                 return resp
 
@@ -660,7 +684,7 @@ def send_email_to_it(visitor_obj_or_dict, contact_name, contact_email, visitor_i
         company = getattr(v, "company", "") or ""
         phone = getattr(v, "phone", "") or ""
         purpose = getattr(v, "purpose", "") or ""
-        location = getattr(v, "location", "") or ""
+        location = getattr(v, "location") or ""
         items_field = getattr(v, "items_with_other", None) or getattr(v, "items", None)
         other_text_field = getattr(v, "otherItems", None)
     else:
