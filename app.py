@@ -259,7 +259,7 @@ def ensure_columns_exist(new_columns):
 @app.route('/')
 def home():
     app.logger.info("✔ / route HIT — remote=%s, args=%s", request.remote_addr, request.args)
-    return render_template('login.html', user=get_current_username())
+    return render_template('landing.html', user=get_current_username())
 
 
 @app.route("/google")
