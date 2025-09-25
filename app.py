@@ -6,7 +6,7 @@ from flask import g
 
 from flask import (
     Flask, render_template, request, redirect, url_for, flash, jsonify,
-    make_response ,session
+    make_response
 )
 from flask_sqlalchemy import SQLAlchemy
 # from flask_pymongo import PyMongo
@@ -453,31 +453,26 @@ def login():
             # DB may be unreachable; log and continue (don't leak details to user)
             app.logger.exception("DB lookup failed in login()")
 
-            if user and verify_password(user.password, password):
-                role_norm = (user.role or "").strip().lower()
-                role_display = (user.role or "").strip()
-                # optional: choose first project (if you use selected_project cookie later)
-                first_project = Project.query.order_by(Project.name).first()
-                project_name = first_project.name if first_project else ""
+        # Normal DB-auth path (supports hashed OR plaintext DB passwords via verify_password)
+        if user and verify_password(user.password, password):
+            role_norm = (user.role or "").strip().lower()
+            role_display = (user.role or "").strip()
+      
 
-                resp = redirect(url_for("landing_page"))
-                # ensure we capture any changes the helper makes (it mutates resp but returning assigned resp is safer)
-                resp = set_auth_cookies(
-                    resp,
-                    user.username,
-                    role=role_norm,
-                    role_display=role_display,
-                    selected_project=project_name,
-                )
-                flash("✅ Logged in", "success")
-                # ensure session cookie is marked modified so Flask will emit it
-                session.modified = True
-                return resp
+            resp = redirect(url_for("landing_page"))
+            set_auth_cookies(
+                resp,
+                user.username,
+                role=role_norm,
+                role_display=role_display,
+    
+            )
+            flash("✅ Logged in", "success")
+            return resp
 
         # --- Removed dev fallback (admin/admin) as requested ---
         # Authentication failed -> PRG (flash then redirect) so message shows once and won't reappear on refresh
         flash("❌ Invalid username or password!", "danger")
-        session.modified = True
         return redirect(url_for("login"))
 
     # GET -> render login page (any flashed message will display once)
