@@ -2,9 +2,13 @@ import os
 import pandas as pd
 import json
 import smtplib
+from flask import g
 
 
-from flask import Flask, render_template,request, redirect, url_for, flash, session, jsonify
+from flask import (
+    Flask, render_template, request, redirect, url_for, flash, jsonify,
+    make_response
+)
 from flask_sqlalchemy import SQLAlchemy
 # from flask_pymongo import PyMongo
 # from bson.objectid import ObjectId
@@ -15,37 +19,121 @@ from sqlalchemy import text
 # from flask import redirect, url_for
 from sqlalchemy import func, inspect
 from werkzeug.security import generate_password_hash, check_password_hash
-from config import MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DB, MYSQL_PORT, SMTP_SERVER, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_MAIL, VISITOR_BASE_URL, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET 
+from config import (
+    MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DB, MYSQL_PORT,
+    SMTP_SERVER, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_MAIL,
+    VISITOR_BASE_URL, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+)
 # from datetime import datetime
 from flask_dance.contrib.google import make_google_blueprint, google
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 # from urllib.parse import quote_plus
 from werkzeug.utils import secure_filename
-from flask import make_response
+from werkzeug.exceptions import BadRequest
 
 app = Flask(__name__)
-app.secret_key = "super_secret_key"
+app.secret_key = os.environ.get("FLASK_SECRET", "super_secret_key")
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.config['PREFERRED_URL_SCHEME'] = 'https'
+
+
+# ----------------- Cookie-based auth helpers (paste after imports) -----------------
+from flask import request as _request
+
+
+def get_current_username():
+    """Return username from cookie or None."""
+    return _request.cookies.get("auth_user")
+
+
+def get_current_role():
+    """Normalized role (lowercase) from cookie."""
+    return (_request.cookies.get("auth_role") or "").strip().lower()
+
+
+def get_role_display():
+    """Role display value (title-case) from cookie."""
+    return _request.cookies.get("auth_role_display") or ""
+
+
+def get_selected_project():
+    return _request.cookies.get("selected_project") or ""
+
+
+def set_auth_cookies(response, username, role="", role_display="", selected_project=""):
+    """Set httponly cookies for auth state. Return the response object."""
+    # choose secure=True when using HTTPS/production and set appropriate samesite
+    response.set_cookie("auth_user", username or "", httponly=True, samesite="Lax")
+    response.set_cookie("auth_role", (role or "").strip().lower(), httponly=True, samesite="Lax")
+    response.set_cookie("auth_role_display", role_display or "", httponly=True, samesite="Lax")
+    response.set_cookie("selected_project", selected_project or "", httponly=True, samesite="Lax")
+    return response
+
+
+def clear_auth_cookies(response):
+    response.delete_cookie("auth_user")
+    response.delete_cookie("auth_role")
+    response.delete_cookie("auth_role_display")
+    response.delete_cookie("selected_project")
+    return response
+
+# -----------------------------------------------------------------------------------
+
+
+@app.before_request
+def load_current_user():
+    """
+    Optional: load a DB-backed User into `g.current_user` when a username cookie exists.
+    This lets templates / code use g.current_user safely (avoids trusting cookies only).
+    """
+    uname = get_current_username()  # returns None or the cookie value
+    g.current_user = None
+    if uname:
+        try:
+            g.current_user = User.query.filter_by(username=uname).first()
+        except Exception:
+            # swallow DB errors here — injector will still work using cookies
+            g.current_user = None
 
 
 @app.context_processor
 def inject_user_role():
     """
-    Normalise role for templates:
-      - user_role: lowercase role (e.g. "super admin")
-      - role_display: original / title cased role for UI
-      - is_superadmin: boolean
+    Provide role/user info to templates using cookies (and fallback to DB when necessary).
+    Returns:
+      - current_user: username or None
+      - is_authenticated: bool
+      - user_role: normalized role (lowercase)
+      - role_display: nice display string (title-case)
+      - is_superadmin: bool
+      - selected_project: project name (if present)
     """
-    role_raw = (session.get("role") or "").strip()
+    # prefer DB-loaded user (safer) but fall back to cookies
+    db_user = getattr(g, "current_user", None)
+    username = db_user.username if db_user else (get_current_username() or None)
+    is_authenticated = bool(username)
+
+    # Prefer authoritative DB role if available, otherwise use cookie
+    if db_user:
+        role_raw = (db_user.role or "").strip()
+    else:
+        role_raw = (get_current_role() or "").strip()
+
     role_norm = role_raw.lower()
-    role_display = session.get("role_display") or (role_raw.title() if role_raw else "")
+    role_display = get_role_display() or (role_raw.title() if role_raw else "")
+
+    selected_project = get_selected_project() or ""
+
     return {
+        "current_user": username,
+        "is_authenticated": is_authenticated,
         "user_role": role_norm,
         "role_display": role_display,
-        "is_superadmin": role_norm == "super admin"
+        "is_superadmin": role_norm == "super admin",
+        "selected_project": selected_project
     }
+
 
 
 # Add Google OAuth config
@@ -149,7 +237,7 @@ def safe_table_name(name: str) -> str:
     import re
     tbl = name.strip().replace(" ", "_").replace("-", "_")
     tbl = re.sub(r"[^0-9a-zA-Z_]", "", tbl)
-    if tbl[0].isdigit():
+    if tbl and tbl[0].isdigit():
         tbl = f"t_{tbl}"
     return tbl.lower()
 
@@ -168,13 +256,38 @@ def ensure_columns_exist(new_columns):
             existing.add(c)
 
 
-# --- Routes ---
-@app.route('/')
+@app.route("/")
 def home():
-    if "username" not in session:
-        return redirect(url_for("login"))
-    return render_template('landing.html')
+    """
+    Redirect anonymous users to login.
+    Authenticated users see the landing page.
+    """
+    username = get_current_username()
+    app.logger.info("✔ / route HIT — remote=%s, user=%s, args=%s",
+                    request.remote_addr, username, request.args)
 
+    if not username:
+        return redirect(url_for("login"))
+
+    # prevent caching so auth changes are reflected immediately in browser
+    resp = make_response(render_template("landing.html", user=username))
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
+
+@app.route("/landing")
+def landing_page():
+    """
+    Always render landing.html (no redirect). Add no-cache headers so browser shows
+    what server returns and doesn't reuse any cached redirect.
+    """
+    username = get_current_username()  # may be None
+    resp = make_response(render_template("landing.html", user=username))
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 @app.route("/google")
 def google_login():
@@ -185,7 +298,6 @@ def google_login():
     if resp.ok:
         user_info = resp.json()
         email = user_info["email"]
-        # name = user_info.get("name", email.split("@")[0])
 
         # ✅ Check if user exists in DB, else create
         user = User.query.filter_by(username=email).first()
@@ -194,18 +306,15 @@ def google_login():
             db.session.add(user)
             db.session.commit()
 
-        # ✅ Create session
-        session["username"] = email
-        session["role"] = (user.role or "").strip().lower()
-        project_name = request.args.get('project_name') or session.get('selected_project') or ''
-        session["selected_project"] = project_name
-
+        # ✅ Create cookie-based session
+        role_norm = (user.role or "").strip().lower()
+        role_display = (user.role or "").strip()
         first_project = Project.query.order_by(Project.name).first()
         project_name = first_project.name if first_project else ""
 
-        return render_template("landing.html")
-        # ✅ Redirect to data page
-        # return redirect(url_for("upload_file", project_name=project_name))
+        resp = make_response(render_template("landing.html"))
+        set_auth_cookies(resp, email, role=role_norm, role_display=role_display, selected_project=project_name)
+        return resp
 
     return "Google login failed!", 400
 
@@ -218,21 +327,19 @@ def login():
 
         user = User.query.filter_by(username=username).first()
         if user and check_password_hash(user.password, password):
-            session["username"] = user.username
-            session["role"] = (user.role or "").strip().lower()
-            session["role_display"] = (user.role or "").strip()
+            role_norm = (user.role or "").strip().lower()
+            role_display = (user.role or "").strip()
 
             # ✅ Find the first project name alphabetically
             first_project = Project.query.order_by(Project.name).first()
             project_name = first_project.name if first_project else ""
 
-            # ✅ Save in session
-            session["selected_project"] = project_name
+            # ✅ Build response and set cookies
+            resp = make_response(render_template("landing.html"))
+            set_auth_cookies(resp, user.username, role=role_norm, role_display=role_display, selected_project=project_name)
 
-            return render_template("landing.html")
-            # ✅ Redirect to /data?project_name=<first_project>
-            # return redirect(url_for("upload_file", project_name=project_name))
-
+            flash("✅ Logged in", "success")
+            return resp
         else:
             flash("❌ Invalid username or password!", "danger")
 
@@ -241,16 +348,14 @@ def login():
 
 @app.route("/logout")
 def logout():
-    session.pop("username", None)
-    session.pop("role", None)
-    session.pop("role_display", None)
-
-    return redirect(url_for("login"))
+    resp = redirect(url_for("home"))
+    clear_auth_cookies(resp)
+    return resp
 
 
 @app.route("/data", methods=["GET", "POST"])
 def upload_file():
-    if "username" not in session:
+    if not get_current_username():
         return redirect(url_for("login"))
 
     error_msg = None
@@ -258,17 +363,19 @@ def upload_file():
     columns = []
     grouped_data = []
 
-    # ✅ Capture project_name from URL, form, or session
-    project_name = request.args.get("project_name") or request.form.get("project_name") or session.get("selected_project")
+    # ✅ Capture project_name from URL, form, or cookies
+    project_name = request.args.get("project_name") or request.form.get("project_name") or get_selected_project()
     if project_name:
-        session["selected_project"] = project_name
+        # we'll set cookie on the response at the end
+        pass
     else:
         project_name = ""
-    selected_project = session.get('selected_project')
+    selected_project = get_selected_project()
+
     # ✅ Handle file upload if POST request
     if request.method == "POST" and request.files.get("file"):
         file = request.files.get("file")
-        email = session["username"]
+        email = get_current_username()
         table_name = safe_table_name(project_name)
 
         try:
@@ -330,7 +437,7 @@ def upload_file():
                 if table_cols:
                     rows = db.session.execute(
                         text(f"SELECT * FROM `{table_name}` WHERE uploaded_by = :user"),
-                        {"user": session["username"]}
+                        {"user": get_current_username()}
                     ).mappings().all()
                 else:
                     # Table exists but no columns yet (new empty table)
@@ -351,7 +458,7 @@ def upload_file():
                 WHERE uploaded_by = :user
                 GROUP BY uploaded_by, upload_time, file_name
                 ORDER BY upload_time DESC
-            """), {"user": session["username"]}).mappings().all()
+            """), {"user": get_current_username()}).mappings().all()
 
             grouped_data = []
             for row in grouped_rows:
@@ -364,17 +471,23 @@ def upload_file():
 
     # ✅ List all projects
     projects_list = [p.name for p in Project.query.order_by(Project.name).all()]
-    selected_project = session.get("selected_project")  # removes it from session
-    return render_template(
+    selected_project = get_selected_project()
+    resp = make_response(render_template(
         "data.html",
-        email=session["username"],
+        email=get_current_username(),
         uploaded_data=uploaded_data,
         columns=columns,
         grouped_data=grouped_data,
         projects=projects_list,
         error_msg=error_msg,
         selected_project=selected_project
-    )
+    ))
+
+    # if project_name resolved from args/form, update cookie so future requests remember it
+    if project_name:
+        set_auth_cookies(resp, get_current_username() or "", role=get_current_role(), role_display=get_role_display(), selected_project=project_name)
+
+    return resp
 
 
 @app.route('/vms_demo')
@@ -384,11 +497,11 @@ def vms_demo():
 
 @app.route("/superadmin", methods=["GET", "POST"])
 def superadmin():
-    if not session.get("username"):
+    if not get_current_username():
         flash("Login required", "danger")
         return redirect(url_for("login"))
 
-    user = User.query.filter_by(username=session["username"]).first()
+    user = User.query.filter_by(username=get_current_username()).first()
     if not user or user.role != "Super Admin":
         flash("Access denied", "danger")
         return redirect(url_for("upload_file"))
@@ -436,13 +549,16 @@ def edit_user_role():
     user.role = display_role
     db.session.commit()
 
-    # if the logged-in user changed their own role, update the session role (normalized)
-    if session.get("username") == username:
-        session["role"] = new_role_norm
-        session["role_display"] = display_role
+    # if the logged-in user changed their own role, update the cookies.
+    if get_current_username() == username:
+        resp = redirect(request.referrer or url_for("superadmin"))
+        set_auth_cookies(resp, username, role=new_role_norm, role_display=display_role, selected_project=get_selected_project())
+        flash(f"Role updated to {display_role} for {username}", "success")
+        return resp
 
     flash(f"Role updated to {display_role} for {username}", "success")
     return redirect(request.referrer or url_for("superadmin"))
+
 
 @app.route("/edit_user_password", methods=["POST"])
 def edit_user_password():
@@ -512,7 +628,7 @@ def edit_project():
 
     proj = Project.query.get(project_id)
     if not proj:
-        flash("Project not found.", "danger")
+        flash("Project not found", "danger")
         return redirect(url_for("superadmin"))
 
     old_name = proj.name
@@ -540,7 +656,7 @@ def delete_project():
     project_id = request.form["project_id"]
     proj = Project.query.get(project_id)
     if not proj:
-        flash("Project not found.", "danger")
+        flash("Project not found", "danger")
         return redirect(url_for("superadmin"))
     db.session.delete(proj)
     db.session.commit()
@@ -549,10 +665,8 @@ def delete_project():
 
 @app.route("/vms")
 def vms():
-    if "username" not in session:
-        return redirect(url_for("login"))  # force login first
-
-    return render_template("visitor_form.html", user=session["username"])
+    app.logger.info("✔ /vms route HIT — remote=%s, args=%s", request.remote_addr, request.args)
+    return render_template('visitor_form.html', user=get_current_username())
 
 
 @app.route("/add_visitor", methods=["POST"])
@@ -735,20 +849,15 @@ def add_visitor():
                 orig_contact_person = v.contact_person
                 orig_contact_email = v.contact_email
                 try:
-                    # temporarily set contact fields so your existing email helper can reuse templates
                     v.contact_person = it_user["username"]
                     v.contact_email = it_user["email"]
-                    # send_email_to_it signature: (visitor, contact_name, contact_email, visitor_id)
-                    # If your implementation differs, adapt this call accordingly.
                     try:
                         send_email_to_it(v, it_user["username"], it_user["email"], visitor_id=new_id)
                     except TypeError:
-                        # fallback: some setups expect (v, visitor_id=.., to_email=..)
                         send_email_to_it(v, visitor_id=new_id, to_email=it_user["email"])
                 except Exception:
                     app.logger.exception("Failed sending IT email for visitor %s to %s", new_id, it_user.get("email"))
                 finally:
-                    # always restore original values
                     v.contact_person = orig_contact_person
                     v.contact_email = orig_contact_email
 
@@ -769,6 +878,7 @@ def visitor_photo(visitor_id):
     # inline display
     resp.headers.set('Content-Disposition', 'inline', filename=v.photo_filename or f'photo_{visitor_id}.jpg')
     return resp
+
 
 def send_email_to_it(visitor_obj_or_dict, contact_name, contact_email, visitor_id=None):
     """
@@ -984,6 +1094,7 @@ def send_email_to_contact(visitor_obj_or_dict, visitor_id=None):
 
     return True
 
+
 @app.route("/approve_visitor/<int:visitor_id>")
 def approve_visitor(visitor_id):
     v = Visitor.query.get(visitor_id)
@@ -992,6 +1103,7 @@ def approve_visitor(visitor_id):
     v.approved = True
     db.session.commit()
     return "Visitor approved ✅."
+
 
 @app.route("/decline_visitor/<int:visitor_id>")
 def decline_visitor(visitor_id):
@@ -1002,6 +1114,7 @@ def decline_visitor(visitor_id):
     db.session.commit()
     return "Visitor declined ❌."
 
+
 @app.route("/approve_electronics/<int:visitor_id>")
 def approve_electronics(visitor_id):
     v = Visitor.query.get(visitor_id)
@@ -1011,6 +1124,7 @@ def approve_electronics(visitor_id):
     db.session.commit()
     app.logger.info("Electronics approved via link for id=%s", visitor_id)
     return "<html><body>Electronics approved. You can close this window.</body></html>"
+
 
 @app.route("/decline_electronics/<int:visitor_id>")
 def decline_electronics(visitor_id):
@@ -1041,9 +1155,9 @@ def get_users():
 
 @app.route("/visitors")
 def visitors_list():
-    import json
+    import json as _json
     all_visitors = Visitor.query.order_by(Visitor.created_at.desc()).all()
-    user_role = (session.get('role') or "").strip().lower()
+    user_role = get_current_role()
 
     out = []
     # keywords used server-side to detect electronics
@@ -1055,9 +1169,9 @@ def visitors_list():
         items_list = []
         try:
             if isinstance(items_value, str):
-                # try JSON first (handles '["Laptop","Pendrive"]')
+                # try JSON first (handles '['"Laptop","Pendrive"]')
                 try:
-                    parsed = json.loads(items_value)
+                    parsed = _json.loads(items_value)
                     if isinstance(parsed, (list, tuple, set)):
                         items_list = [str(x).strip() for x in parsed if str(x).strip()]
                     else:
@@ -1159,6 +1273,7 @@ def visitors_list():
 
     return render_template("visitors_list.html", visitors=out, user_role=user_role)
 
+
 @app.route("/api/visitors")
 def visitors_api():
     visitors = Visitor.query.order_by(Visitor.created_at.desc()).all()
@@ -1224,7 +1339,7 @@ def checkin(visitor_id):
 @app.route("/checkout/<int:visitor_id>", methods=["POST"])
 def checkout(visitor_id):
 
-    if session.get("role") != "security":
+    if get_current_role() != "security":
         return jsonify({"success": False, "message": "Forbidden: insufficient permissions"}), 403
     
     data = request.get_json()
@@ -1238,6 +1353,7 @@ def checkout(visitor_id):
     v.remarks = (v.remarks or "") + ("\n" + remarks if remarks else "")
     db.session.commit()
     return jsonify({"success": True, "message": "Visitor checked out successfully"})
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
