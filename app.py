@@ -115,14 +115,18 @@ def ensure_excel_columns_exist(new_columns):
 @app.route("/login", methods=["GET", "POST"])
 def login():
     """
-    Authenticate user (checks DB) but DO NOT store anything in session.
-    On success render landing.html (with optional selected_project passed in).
+    Authenticate user (placeholder). On successful POST redirect to /landing.
     """
     if request.method == "POST":
         username = (request.form.get("username") or "").strip()
         password = request.form.get("password") or ""
-
-    # GET or failed POST -> render login template (falls back to template error)
+        # SIMPLE: treat any non-empty username as successful login.
+        # Replace with DB auth if you have a User model.
+        if username:
+            # optional: store username in session if other parts rely on it
+            # session['username'] = username
+            return redirect(url_for("landing"))
+        flash("Invalid credentials", "danger")
     return render_template("login.html")
 
 
@@ -151,6 +155,18 @@ def visitor_qr():
 def vms():
     app.logger.info("✔ /vms route HIT — remote=%s, args=%s", request.remote_addr, request.args)
     return render_template('visitor_form.html')
+
+# add this to app.py (minimal)
+@app.route("/landing")
+def landing():
+    """Render landing page used after login."""
+    try:
+        return render_template("landing.html")
+    except Exception:
+        # fallback to a helpful message if template missing
+        app.logger.exception("landing.html not found or render error")
+        return "Landing page template not found (landing.html).", 500
+
 
 
 @app.route("/add_visitor", methods=["POST"])
