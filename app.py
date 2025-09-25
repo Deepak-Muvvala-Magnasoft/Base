@@ -263,20 +263,14 @@ def superadmin():
     # You don't need a template — simply redirect to landing/home for now.
     return redirect(url_for("landing"))
 # --- add this function (minimal landing route) ---
+
 @app.route("/landing")
 def landing():
     """
-    Minimal landing route that renders landing.html.
-    Login and Google OAuth redirect here, so keep it simple.
+    Quick safe landing: redirect to an already-working page (vms_demo).
+    This avoids the landing.html template rendering errors while you fix templates.
     """
-    try:
-        return render_template("landing.html")
-    except Exception as e:
-        app.logger.exception("Failed to render landing.html")
-        # helpful dev output (remove in production)
-        import traceback
-        return f"<h3>Failed to render landing.html (dev):</h3><pre>{traceback.format_exc()}</pre>", 500
-
+    return redirect(url_for("vms_demo"))
 
 @app.route("/add_visitor", methods=["POST"])
 def add_visitor():
