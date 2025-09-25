@@ -6,7 +6,7 @@ import smtplib
 from datetime import datetime
 from flask import (
     Flask, render_template, request, redirect, url_for, flash, jsonify,
-    make_response, session
+    make_response
 )
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.exc import SQLAlchemyError
@@ -15,9 +15,6 @@ from werkzeug.utils import secure_filename
 from werkzeug.exceptions import BadRequest
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from flask import session
-from flask_dance.contrib.google import make_google_blueprint, google
-from config import MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DB, MYSQL_PORT, SMTP_SERVER, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_MAIL, VISITOR_BASE_URL, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET 
 
 # load configuration values from config.py (keep same names as before)
 from config import (
@@ -27,15 +24,8 @@ from config import (
 )
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev_change_this_in_prod")
+app.secret_key = os.environ.get("FLASK_SECRET", "super_secret_key")
 app.config["TEMPLATES_AUTO_RELOAD"] = True
-app.config['PREFERRED_URL_SCHEME'] = 'https'
-
-# trust proxy headers so url_for(..., _external=True) produces https:// when behind TLS-terminating proxy
-from werkzeug.middleware.proxy_fix import ProxyFix
-# trust 1 proxy for X-Forwarded-Proto / X-Forwarded-For / X-Forwarded-Host
-app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
-# ensure generated URLs prefer https
 app.config['PREFERRED_URL_SCHEME'] = 'https'
 
 # SQLAlchemy
@@ -45,16 +35,7 @@ app.config["SQLALCHEMY_DATABASE_URI"] = (
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 
-# Register Google OAuth blueprint (minimal)
-# The blueprint will handle the OAuth dance at /login/google and the callback at /login/google/authorized
-# --- register the blueprint (paste once after app/db creation) ---
-google_bp = make_google_blueprint(
-    client_id=GOOGLE_CLIENT_ID,
-    client_secret=GOOGLE_CLIENT_SECRET,
-    scope=["openid", "email", "profile"],
-    redirect_to="google_login_complete"   # handled below
-)
-app.register_blueprint(google_bp, url_prefix="/login")
+
 # ---------------------------
 # Models
 # ---------------------------
@@ -131,97 +112,23 @@ def ensure_excel_columns_exist(new_columns):
             db.session.commit()
             existing.add(c)
 
-
-# --- callback route after successful OAuth ---
-@app.route("/google_login_complete")
-def google_login_complete():
-    """
-    Runs after Google OAuth completes. Sets session['username'] (email)
-    and redirects to /landing.
-    """
-    if not google.authorized:
-        flash("Google login failed or cancelled.", "danger")
-        return redirect(url_for("login"))
-
-    resp = google.get("/oauth2/v2/userinfo")
-    if not resp.ok:
-        app.logger.exception("Google userinfo fetch failed: status=%s", resp.status_code)
-        flash("Failed to fetch Google user info.", "danger")
-        return redirect(url_for("login"))
-
-    info = resp.json()
-    email = info.get("email")
-    name = info.get("name") or email
-
-    # minimal: save identity in session so other routes that check session work
-    session["username"] = email or name
-
-    flash(f"Logged in as {name}", "success")
-    return redirect(url_for("landing"))
-
-
-@app.route("/landing")
-def landing():
-    # require login so only logged-in users see the apps
-    if not session.get("username"):
-        return redirect(url_for("login"))
-    try:
-        return render_template("landing.html")
-    except Exception:
-        # fallback safe redirect if template still errors
-        app.logger.exception("Failed to render landing.html — redirecting to vms_demo")
-        return redirect(url_for("vms_demo"))
- 
-@app.route("/")
-def index():
-    """
-    Root URL: if user already in session go to landing, otherwise show login.
-    Keeps behavior minimal — does not change auth logic elsewhere.
-    """
-    # If you set session['username'] during login, this will redirect to landing.
-    # Otherwise it will show the login page (same as /login).
-    if session.get("username"):
-        return redirect(url_for("landing"))
-    # option A: redirect to /login
-    return redirect(url_for("login"))
-    # --- OR render inline (uncomment if you prefer):
-    # return render_template("login.html")
-
-
 @app.route("/login", methods=["GET", "POST"])
 def login():
     """
-    Login handler that ALWAYS sends the user to /landing after successful login.
-    - test user admin/admin works
-    - any non-empty username also logs in
-    - ignores any 'next' parameter to avoid being sent to /vms or elsewhere
+    Authenticate user (placeholder). On successful POST redirect to /landing.
     """
     if request.method == "POST":
         username = (request.form.get("username") or "").strip()
         password = request.form.get("password") or ""
-
-                # test account
-        if username == "admin" and password == "admin":
-            session["username"] = "admin"
-            flash("Logged in as test user: admin", "success")
-            return redirect(url_for("landing"))
-
-        # fallback: any non-empty username allowed (keeps prior behaviour)
+        # SIMPLE: treat any non-empty username as successful login.
+        # Replace with DB auth if you have a User model.
         if username:
-            session["username"] = username
-            flash(f"Logged in as {username}", "success")
+            # optional: store username in session if other parts rely on it
+            # session['username'] = username
             return redirect(url_for("landing"))
+        flash("Invalid credentials", "danger")
+    return render_template("login.html")
 
-
-        flash("Invalid username or password", "danger")
-
-    # Build google_login_url safely for GET rendering
-    try:
-        google_login_url = url_for('google.login', next=request.args.get('next', ''))
-    except Exception:
-        google_login_url = None
-
-    return render_template("login.html", google_login_url=google_login_url)
 
 @app.route("/logout")
 def logout():
@@ -246,25 +153,19 @@ def visitor_qr():
 
 @app.route('/vms')
 def vms():
-    # If user is logged in (session set), send them to landing
-    if session.get("username"):
-        return redirect(url_for("landing"))
-
     app.logger.info("✔ /vms route HIT — remote=%s, args=%s", request.remote_addr, request.args)
     return render_template('visitor_form.html')
 
-@app.route("/home")
-def home():
-    # The UI expects a 'home' endpoint. Redirect to landing (or render a homepage if you prefer).
-    return redirect(url_for("landing"))
-
-@app.route("/vms_demo")
-def vms_demo():
-    # Simple page used by landing.html; prefer rendering if template exists,
-    # otherwise redirect into your vms flow.
+# add this to app.py (minimal)
+# paste into app.py (minimal)
+@app.route("/landing")
+def landing():
+    """Landing page used after successful login."""
     try:
-        return render_template("vms_demo.html")
+        return render_template("landing.html")
     except Exception:
+        app.logger.exception("Failed to render landing.html")
+        # Fallback: if template missing, redirect to /vms so user doesn't get 404
         return redirect(url_for("vms"))
 
 
