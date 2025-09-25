@@ -192,13 +192,13 @@ def login():
         if username == "admin" and password == "admin":
             session["username"] = "admin"
             flash("Logged in as test user: admin", "success")
-            return redirect(url_for("landing"))
+            return redirect(url_for("vms"))
 
         # fallback: any non-empty username allowed (keeps prior behaviour)
         if username:
             session["username"] = username
             flash(f"Logged in as {username}", "success")
-            return redirect(url_for("landing"))
+            return redirect(url_for("vms"))
 
         flash("Invalid username or password", "danger")
 
@@ -255,22 +255,7 @@ def vms_demo():
         return redirect(url_for("vms"))
 
 
-@app.route("/superadmin")
-def superadmin():
-    # require login to access (keeps behaviour sensible)
-    if not session.get("username"):
-        return redirect(url_for("login"))
-    # You don't need a template — simply redirect to landing/home for now.
-    return redirect(url_for("landing"))
-# --- add this function (minimal landing route) ---
 
-@app.route("/landing")
-def landing():
-    """
-    Quick safe landing: redirect to an already-working page (vms_demo).
-    This avoids the landing.html template rendering errors while you fix templates.
-    """
-    return redirect(url_for("vms_demo"))
 
 @app.route("/add_visitor", methods=["POST"])
 def add_visitor():
