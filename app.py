@@ -114,40 +114,28 @@ def ensure_excel_columns_exist(new_columns):
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    """
+    Authenticate user (checks DB) but DO NOT store anything in session.
+    On success render landing.html (with optional selected_project passed in).
+    """
     if request.method == "POST":
-        # no DB checks in this simplified app; just redirect to landing
-        flash("Logged in (no DB checks performed).", "info")
-        return redirect(url_for("landing_page"))
+        username = (request.form.get("username") or "").strip()
+        password = request.form.get("password") or ""
 
-    # GET: render login template if present, otherwise show a fallback form
-    try:
-        return render_template("login.html")
-    except Exception:
-        google_login_link = ""
-        try:
-            google_login_link = f'<p><a href="{url_for("google.login")}">Sign in with Google</a></p>'
-        except Exception:
-            google_login_link = ""
-        return f"""
-        <!doctype html>
-        <html>
-          <head><meta charset="utf-8"><title>Login</title></head>
-          <body>
-            <h2>Login (fallback)</h2>
-            <form method="post" action="{url_for('login')}">
-              <label>Username: <input name="username" /></label><br/>
-              <label>Password: <input name="password" type="password" /></label><br/>
-              <button type="submit">Login</button>
-            </form>
-            {google_login_link}
-          </body>
-        </html>
-        """
+    # GET or failed POST -> render login template (falls back to template error)
+    return render_template("login.html")
+
+
 @app.route("/logout")
 def logout():
-    resp = redirect(url_for("login"))   # or url_for("landing_page")
+    """
+    Simple logout that performs no session manipulation and redirects to /login.
+    (If you previously used cookie helpers like `clear_auth_cookies`, keep or call them here
+    — but per your request we are not touching session.)
+    """
     flash("You have been logged out.", "info")
-    return resp
+    return redirect(url_for("login"))
+
 # ---------------------------
 # Visitor flows (unchanged logic, no auth)
 # ---------------------------
