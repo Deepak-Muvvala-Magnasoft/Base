@@ -160,6 +160,18 @@ def google_login_complete():
     return redirect(url_for("landing"))
 
 
+@app.route("/landing")
+def landing():
+    # require login so only logged-in users see the apps
+    if not session.get("username"):
+        return redirect(url_for("login"))
+    try:
+        return render_template("landing.html")
+    except Exception:
+        # fallback safe redirect if template still errors
+        app.logger.exception("Failed to render landing.html — redirecting to vms_demo")
+        return redirect(url_for("vms_demo"))
+ 
 @app.route("/")
 def index():
     """
@@ -188,17 +200,18 @@ def login():
         username = (request.form.get("username") or "").strip()
         password = request.form.get("password") or ""
 
-        # test account
+                # test account
         if username == "admin" and password == "admin":
             session["username"] = "admin"
             flash("Logged in as test user: admin", "success")
-            return redirect(url_for("vms"))
+            return redirect(url_for("landing"))
 
         # fallback: any non-empty username allowed (keeps prior behaviour)
         if username:
             session["username"] = username
             flash(f"Logged in as {username}", "success")
-            return redirect(url_for("vms"))
+            return redirect(url_for("landing"))
+
 
         flash("Invalid username or password", "danger")
 
