@@ -179,29 +179,30 @@ def index():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     """
-    Login handler.
-    - Accepts a built-in test account: admin/admin (for quick SSO tests).
-    - Otherwise keeps the previous simple placeholder behavior (any non-empty username logs in).
-    - Builds google_login_url safely for the template.
+    Login handler that ALWAYS sends the user to /landing after successful login.
+    - test user admin/admin works
+    - any non-empty username also logs in
+    - ignores any 'next' parameter to avoid being sent to /vms or elsewhere
     """
     if request.method == "POST":
         username = (request.form.get("username") or "").strip()
         password = request.form.get("password") or ""
 
-        # --- TEST ACCOUNT (temporary) ---
+        # test account
         if username == "admin" and password == "admin":
             session["username"] = "admin"
             flash("Logged in as test user: admin", "success")
             return redirect(url_for("landing"))
 
-        # --- existing placeholder behaviour (keeps compatibility) ---
+        # fallback: any non-empty username allowed (keeps prior behaviour)
         if username:
-            session['username'] = username
+            session["username"] = username
+            flash(f"Logged in as {username}", "success")
             return redirect(url_for("landing"))
 
         flash("Invalid username or password", "danger")
 
-    # Safely build google login URL (avoid BuildError if blueprint not registered)
+    # Build google_login_url safely for GET rendering
     try:
         google_login_url = url_for('google.login', next=request.args.get('next', ''))
     except Exception:
