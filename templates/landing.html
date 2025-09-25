@@ -13,23 +13,24 @@
 
 <body>
     <!-- Nav Bar -->
-    <header class="d-flex justify-content-between align-items-center p-2 border-bottom">
-        <!-- Left: Logo -->
-        <a href="{{ url_for('landing_page') }}">
-            <img src="{{ url_for('static', filename='images/Magnasoft.png') }}" alt="Magnasoft Logo"
-                class="logo-height">
-        </a>
+<header class="d-flex justify-content-between align-items-center p-2 border-bottom">
+  <!-- Left: Logo -->
+  <a href="{{ url_for('landing_page') }}">
+    <img src="{{ url_for('static', filename='images/Magnasoft.png') }}" alt="Magnasoft Logo" class="logo-height">
+  </a>
 
-        <!-- Right: Buttons -->
-        <div class="d-flex align-items-center gap-2">
-            <a href="{{ url_for('login') }}" class="btn btn-outline-primary">Exit</a>
+  <!-- Right: Buttons -->
+  <div class="d-flex align-items-center gap-2">
+    <a href="{{ url_for('login') }}" class="btn btn-outline-primary">Exit</a>
 
-            <!-- User label + Login/Logout -->
-            <div class="d-flex align-items-center">
-                <i class="bi bi-person-circle me-2 text-primary user-icon"></i>
-            </div>
-        </div>
-    </header>
+  {% if session.get('username') %}
+  <div class="d-flex align-items-center">
+    <i class="bi bi-person-circle me-2 text-primary user-icon"></i>
+    <span class="fw-semibold small mb-0">{{ session.get('username') }}</span>
+  </div>
+{% endif %}
+  </div>
+</header>
 
     <!-- Modules -->
     <div class="container-images">
