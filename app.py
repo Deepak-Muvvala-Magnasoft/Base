@@ -115,20 +115,18 @@ def ensure_excel_columns_exist(new_columns):
 @app.route("/login", methods=["GET", "POST"])
 def login():
     """
-    Authenticate user (placeholder). On successful POST redirect to /landing.
+    Simple login handler: on POST redirect to /landing (or render on GET).
     """
     if request.method == "POST":
         username = (request.form.get("username") or "").strip()
         password = request.form.get("password") or ""
-        # SIMPLE: treat any non-empty username as successful login.
-        # Replace with DB auth if you have a User model.
+        # Temporary: treat non-empty username as success; replace with DB check later.
         if username:
-            # optional: store username in session if other parts rely on it
+            # if other routes expect session, uncomment next line:
             # session['username'] = username
             return redirect(url_for("landing"))
-        flash("Invalid credentials", "danger")
+        flash("Invalid username or password", "danger")
     return render_template("login.html")
-
 
 @app.route("/logout")
 def logout():
@@ -157,15 +155,17 @@ def vms():
     return render_template('visitor_form.html')
 
 # add this to app.py (minimal)
+# paste into app.py (minimal)
 @app.route("/landing")
 def landing():
-    """Render landing page used after login."""
+    """Landing page used after successful login."""
     try:
         return render_template("landing.html")
     except Exception:
-        # fallback to a helpful message if template missing
-        app.logger.exception("landing.html not found or render error")
-        return "Landing page template not found (landing.html).", 500
+        app.logger.exception("Failed to render landing.html")
+        # Fallback: if template missing, redirect to /vms so user doesn't get 404
+        return redirect(url_for("vms"))
+
 
 
 
