@@ -322,29 +322,28 @@ def google_login():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        username = request.form["username"]
-        password = request.form["password"]
+        username = request.form.get("username")
+        password = request.form.get("password")
 
         user = User.query.filter_by(username=username).first()
+
         if user and check_password_hash(user.password, password):
-            role_norm = (user.role or "").strip().lower()
-            role_display = (user.role or "").strip()
-
-            # ✅ Find the first project name alphabetically
-            first_project = Project.query.order_by(Project.name).first()
-            project_name = first_project.name if first_project else ""
-
-            # ✅ Build response and set cookies
-            resp = make_response(render_template("landing.html"))
-            set_auth_cookies(resp, user.username, role=role_norm, role_display=role_display, selected_project=project_name)
-
-            flash("✅ Logged in", "success")
+            # ✅ Successful login → set cookie "auth_user"
+            resp = make_response(redirect(url_for("upload_file")))  
+            # or url_for("superadmin") if you want superadmin to land there directly
+            resp.set_cookie(
+                "auth_user",
+                user.username,
+                httponly=True,     # safer, not accessible to JS
+                samesite="Lax"     # prevents CSRF in most cases
+                # domain="myportal.magnasoft.com"  # uncomment if you deploy on a domain
+            )
             return resp
         else:
-            flash("❌ Invalid username or password!", "danger")
+            flash("Invalid username or password", "danger")
 
+    # GET request just shows the login form
     return render_template("login.html")
-
 
 @app.route("/logout")
 def logout():
