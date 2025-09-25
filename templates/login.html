@@ -26,7 +26,6 @@
       </h1>
 
       <form method="POST" aria-label="Login Form">
-        <input type="hidden" name="next" value="{{ request.args.get('next', '') }}">
         <div class="mb-3">
           <label for="username" class="form-label visually-hidden">Username</label>
           <input type="text" id="username" name="username" class="form-control" placeholder="Username" required />
@@ -40,13 +39,11 @@
         <button type="submit" class="btn btn-primary w-100">Login</button>
 
         <hr>
-    {% if google_login_url %}
-  <a href="{{ google_login_url }}"
-     class="btn btn-light w-100 d-flex align-items-center justify-content-center">
-    <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" width="20" height="20">
-    Login with Google
-  </a>
-{% endif %}
+        <a href="{{ url_for('google.login') }}"
+          class="btn btn-light w-100 d-flex align-items-center justify-content-center">
+          <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" width="20" height="20">
+          Login with Google
+        </a>
       </form>
     </main>
   </div>
