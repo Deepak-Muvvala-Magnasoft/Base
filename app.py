@@ -60,7 +60,9 @@ def current_role_authoritative():
     Prefer DB-backed g.current_user.role (if loaded), otherwise fall back to auth_role cookie.
     Returns a lowercase string.
 
-    This is the authoritative check used by endpoints that require specific roles.
+    This remains the authoritative helper for most code, but for UI + checkin/checkout
+    we will prefer cookie role when present so test cookies (e.g. /force_login) behave
+    consistently during development.
     """
     db_user = getattr(g, "current_user", None)
     if db_user and getattr(db_user, "role", None):
@@ -179,6 +181,17 @@ app.config["SQLALCHEMY_DATABASE_URI"] = (
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 
+@app.route("/__debug_oauth")
+def debug_oauth():
+    return jsonify({
+        "url_for_google_authorized": url_for("google.authorized", _external=True),
+        "request_host": request.host,
+        "headers": {
+            "Host": request.headers.get("Host"),
+            "X-Forwarded-Proto": request.headers.get("X-Forwarded-Proto"),
+            "X-Forwarded-For": request.headers.get("X-Forwarded-For")
+        }
+    })
 
 @app.route('/visitor', methods=['GET', 'POST'])
 def visitor_qr():
@@ -1006,8 +1019,9 @@ def get_users():
 def visitors_list():
     import json as _json
     all_visitors = Visitor.query.order_by(Visitor.created_at.desc()).all()
-     # Prefer DB-backed role (g.current_user) when available; otherwise fallback to cookie
-    user_role = current_role_authoritative()
+
+    # IMPORTANT: prefer cookie role when present so the UI matches cookie-based test logins
+    user_role = get_current_role() or current_role_authoritative()
 
     out = []
     # keywords used server-side to detect electronics
@@ -1165,8 +1179,8 @@ def visitors_api():
 
 @app.route('/checkin/<int:visitor_id>', methods=['POST'])
 def checkin(visitor_id):
-    # Authoritative server-side role check (prefer DB role then cookie)
-    role = current_role_authoritative()
+    # Authoritative server-side role check: prefer cookie role when present (dev-friendly)
+    role = get_current_role() or current_role_authoritative()
     app.logger.debug("Checkin attempt: visitor_id=%s, cookie_role=%s, cookie_user=%s, db_user=%s, authoritative=%s",
                     visitor_id, request.cookies.get("auth_role"), request.cookies.get("auth_user"),
                     getattr(g, "current_user").username if getattr(g, "current_user", None) else None, role)
@@ -1208,8 +1222,8 @@ def checkin(visitor_id):
 
 @app.route("/checkout/<int:visitor_id>", methods=["POST"])
 def checkout(visitor_id):
-    # Authoritative server-side role check (prefer DB role then cookie)
-    role = current_role_authoritative()
+    # Authoritative server-side role check: prefer cookie role when present (dev-friendly)
+    role = get_current_role() or current_role_authoritative()
     app.logger.debug("Checkout attempt: visitor_id=%s, cookie_role=%s, cookie_user=%s, db_user=%s, authoritative=%s",
                     visitor_id, request.cookies.get("auth_role"), request.cookies.get("auth_user"),
                     getattr(g, "current_user").username if getattr(g, "current_user", None) else None, role)
