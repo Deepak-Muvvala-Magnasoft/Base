@@ -300,6 +300,68 @@ def verify_password(stored_password: str, provided_password: str) -> bool:
 # -------------------------------------------------------------------------------
 
 
+# --- Authorization helpers (place near other utilities) ---
+ELECTRONICS_KEYWORDS = {
+    "laptop", "pendrive", "usb", "usb-drive", "usb drive",
+    "ipad", "tablet", "mobile", "phone", "charger", "powerbank",
+    "notebook", "macbook"
+}
+
+def visitor_has_electronics(visitor):
+    """Return True if visitor.items (or otherItems) contains an electronics keyword."""
+    try:
+        items_src = getattr(visitor, "items", None) or ""
+        other_text = getattr(visitor, "otherItems", "") or ""
+        items_list = []
+
+        # if stored as JSON string
+        if isinstance(items_src, str):
+            try:
+                parsed = json.loads(items_src)
+                if isinstance(parsed, (list, tuple, set)):
+                    items_list = [str(x).strip() for x in parsed if x]
+                else:
+                    items_list = [str(parsed).strip()] if parsed else []
+            except Exception:
+                # fallback: comma-separated or bracketed string
+                cleaned = items_src.strip().strip("[]").replace('"', "").replace("'", "")
+                items_list = [s.strip() for s in cleaned.split(",") if s.strip()]
+        elif isinstance(items_src, (list, tuple, set)):
+            items_list = [str(x).strip() for x in items_src if x]
+
+        if other_text:
+            items_list.append(str(other_text).strip())
+
+        items_lower = [it.lower() for it in items_list if it]
+        for it in items_lower:
+            for kw in ELECTRONICS_KEYWORDS:
+                if kw in it:
+                    return True
+    except Exception:
+        app.logger.exception("visitor_has_electronics() failed for id=%s", getattr(visitor, "id", None))
+    return False
+
+
+def visitor_allowed_to_checkin(visitor):
+    """
+    Return (allowed:bool, reason:str_or_None).
+    Rules:
+      - department approval (visitor.approved) must be True
+      - if visitor carries electronics, visitor.electronics_approved must be True
+    """
+    if not visitor:
+        return False, "Visitor not found"
+
+    # department approval required
+    if visitor.approved is not True:
+        return False, "Awaiting department approval or approval denied"
+
+    # electronics require IT approval
+    if visitor_has_electronics(visitor) and visitor.electronics_approved is not True:
+        return False, "Awaiting IT approval (electronics)"
+
+    return True, None
+
 @app.route("/")
 def home():
     """
@@ -1052,6 +1114,7 @@ def visitors_list():
             "approved": v.approved,
             "electronics_approved": getattr(v, "electronics_approved", None),
             "has_electronics": has_electronics_flag,       # <-- NEW boolean flag
+             "allowed_to_checkin": allowed_to_checkin, 
             "remarks": v.remarks or "",
             "photo_url": photo_url,
         })
@@ -1099,6 +1162,10 @@ def visitors_api():
 
 @app.route('/checkin/<int:visitor_id>', methods=['POST'])
 def checkin(visitor_id):
+    # Enforce server-side role check (cookie-based)
+    if get_current_role() != "security":
+        return jsonify(success=False, message="Forbidden: insufficient permissions"), 403
+
     try:
         data = request.get_json(silent=True) or {}
         badge = (data.get('badge') or "").strip()
@@ -1109,35 +1176,62 @@ def checkin(visitor_id):
         if not v:
             return jsonify(success=False, message="Visitor not found"), 404
 
-        # store badge and mark check-in time
+        # prevent double check-in
+        if v.check_in:
+            return jsonify(success=False, message="Visitor already checked in"), 400
+
+        # enforce approvals server-side
+        allowed, reason = visitor_allowed_to_checkin(v)
+        if not allowed:
+            return jsonify(success=False, message=f"Not allowed to check in: {reason}"), 403
+
+        # all good — record badge and check-in time
         v.badge_number = badge
         v.check_in = datetime.utcnow()
-
         db.session.commit()
+
         return jsonify(success=True, message="Checked in", badge=badge, check_in=v.check_in.isoformat()), 200
 
     except Exception:
         app.logger.exception("Checkin error")
         return jsonify(success=False, message="Server error"), 500
 
-
 @app.route("/checkout/<int:visitor_id>", methods=["POST"])
 def checkout(visitor_id):
-
+    # Server-side role enforcement: only 'security' may checkout visitors
     if get_current_role() != "security":
         return jsonify({"success": False, "message": "Forbidden: insufficient permissions"}), 403
-    
-    data = request.get_json()
-    remarks = data.get("remarks", "")
 
-    v = Visitor.query.get(visitor_id)
-    if not v:
-        return jsonify({"success": False, "message": "Visitor not found"}), 404
+    try:
+        data = request.get_json(silent=True) or {}
+        remarks = (data.get("remarks") or "").strip()
 
-    v.check_out = datetime.now()
-    v.remarks = (v.remarks or "") + ("\n" + remarks if remarks else "")
-    db.session.commit()
-    return jsonify({"success": True, "message": "Visitor checked out successfully"})
+        # optional: allow client to send checked_items for auditing (not required)
+        # checked_items = data.get("checked_items", [])
+
+        v = Visitor.query.get(visitor_id)
+        if not v:
+            return jsonify({"success": False, "message": "Visitor not found"}), 404
+
+        # must be checked-in before checking out
+        if not v.check_in:
+            return jsonify({"success": False, "message": "Cannot checkout: visitor is not checked in"}), 400
+
+        # prevent double checkout
+        if v.check_out:
+            return jsonify({"success": False, "message": "Visitor already checked out"}), 400
+
+        # record check-out time and append optional remarks
+        v.check_out = datetime.utcnow()
+        if remarks:
+            v.remarks = (v.remarks or "") + ("\n" + remarks if v.remarks else remarks)
+
+        db.session.commit()
+        return jsonify({"success": True, "message": "Visitor checked out successfully", "check_out": v.check_out.isoformat()}), 200
+
+    except Exception:
+        app.logger.exception("Checkout error")
+        return jsonify({"success": False, "message": "Server error"}), 500
 
 # --- Ensure a default admin user exists (run once on startup) ---
 def ensure_default_admin():
