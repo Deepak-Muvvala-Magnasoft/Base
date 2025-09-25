@@ -1,33 +1,35 @@
+# app.py
 import os
-import pandas as pd
 import json
-import smtplib
 import logging
+import pandas as pd
+import smtplib
 
-
-from flask import Flask, render_template,request, redirect, url_for, flash, session, jsonify
+from datetime import datetime, timedelta
+from flask import (
+    Flask, render_template, request, redirect, url_for, flash, session, jsonify, make_response
+)
 from flask_sqlalchemy import SQLAlchemy
-# from flask_pymongo import PyMongo
-# from bson.objectid import ObjectId
-from datetime import datetime
-# from authlib.integrations.flask_client import OAuth
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy import text
-# from flask import redirect, url_for
-from sqlalchemy import func, inspect
+from sqlalchemy import text, func, inspect
 from werkzeug.security import generate_password_hash, check_password_hash
-from config import MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DB, MYSQL_PORT, SMTP_SERVER, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_MAIL, VISITOR_BASE_URL, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET 
-# from datetime import datetime
+from werkzeug.utils import secure_filename
+from werkzeug.middleware.proxy_fix import ProxyFix
+
 from flask_dance.contrib.google import make_google_blueprint, google
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-# from urllib.parse import quote_plus
-from werkzeug.utils import secure_filename
-from flask import make_response
-from datetime import datetime, timedelta
-from werkzeug.middleware.proxy_fix import ProxyFix
 
+# config values (imported from config.py in your project)
+from config import (
+    MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DB, MYSQL_PORT,
+    SMTP_SERVER, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_MAIL,
+    VISITOR_BASE_URL, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+)
+
+# Basic logging
 logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
@@ -52,10 +54,15 @@ else:
     app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
     app.config['SESSION_COOKIE_SECURE'] = False
 
+# IMPORTANT: set cookie domain & path to match your host (adjust as needed)
+# Use the exact hostname you access the app with in browser (no scheme)
+app.config['SESSION_COOKIE_DOMAIN'] = "myportal.magnasoft.com"
+app.config['SESSION_COOKIE_PATH'] = "/"
+
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)
 
-# If you are behind a reverse-proxy (nginx / IIS / ELB), make Flask respect X-Forwarded-* headers
+# If you are behind a reverse-proxy (nginx / IIS / ALB), make Flask respect X-Forwarded-* headers
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 # --- Register Google OAuth blueprint AFTER app configuration ---
@@ -84,16 +91,6 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 
 
-@app.route('/visitor', methods=['GET', 'POST'])
-def visitor_qr():
-    # if POST, you can reuse your existing add_visitor logic
-    if request.method == 'POST':
-        # quick reuse: delegate to same function that handles add_visitor
-        return add_visitor()   # only if add_visitor() returns a response
-    # GET: render the same template but hide navbar
-    return render_template('visitor_form.html', visitor_only=True)
-
-
 # --- Models ---
 class Visitor(db.Model):
     __tablename__ = "visitors"
@@ -118,11 +115,11 @@ class Visitor(db.Model):
     remarks = db.Column(db.Text)
     verified = db.Column(db.Boolean, default=False)
     approved = db.Column(db.Boolean, nullable=True)
-    electronics_approved = db.Column(db.Boolean, nullable=True)  
+    electronics_approved = db.Column(db.Boolean, nullable=True)
     created_at = db.Column(db.DateTime, default=func.now())
     photo_filename = db.Column(db.String(255), nullable=True)
     photo_mime = db.Column(db.String(100), nullable=True)
-    photo_data = db.Column(db.LargeBinary, nullable=True) 
+    photo_data = db.Column(db.LargeBinary, nullable=True)
 
 
 class User(db.Model):
@@ -141,36 +138,26 @@ class Project(db.Model):
 
 # --- Utilities ---
 def safe_colname(col: str) -> str:
-    """
-    Sanitize a column name for MySQL identifiers.
-    Converts spaces/dashes to underscores and strips weird chars.
-    """
     name = col.strip().replace(" ", "_").replace("-", "_")
-    # optional: keep only alnum + underscore
     import re
     name = re.sub(r"[^0-9a-zA-Z_]", "", name)
     if not name:
         name = "col"
-    # avoid starting with digit
     if name[0].isdigit():
         name = f"c_{name}"
     return name
 
 
 def safe_table_name(name: str) -> str:
-    """Sanitize project name for a MySQL table name."""
     import re
     tbl = name.strip().replace(" ", "_").replace("-", "_")
     tbl = re.sub(r"[^0-9a-zA-Z_]", "", tbl)
-    if tbl[0].isdigit():
+    if tbl and tbl[0].isdigit():
         tbl = f"t_{tbl}"
     return tbl.lower()
 
 
 def ensure_columns_exist(new_columns):
-    """
-    ALTER TABLE excel_data ADD COLUMN `<col>` TEXT for any missing  columns.
-    """
     inspector = inspect(db.engine)
     existing = {c["name"] for c in inspector.get_columns("excel_data")}
     for col in new_columns:
@@ -182,6 +169,57 @@ def ensure_columns_exist(new_columns):
 
 
 # --- Routes ---
+@app.context_processor
+def inject_user_role():
+    role_raw = (session.get("role") or "").strip()
+    role_norm = role_raw.lower()
+    role_display = session.get("role_display") or (role_raw.title() if role_raw else "")
+    return {
+        "user_role": role_norm,
+        "role_display": role_display,
+        "is_superadmin": role_norm == "super admin"
+    }
+
+
+@app.route("/set_test_cookie")
+def set_test_cookie():
+    """Temporary helper: set a simple cookie (use in private window to test acceptance)."""
+    resp = make_response("test cookie set")
+    resp.set_cookie(
+        "test_cookie", "1",
+        samesite=app.config.get('SESSION_COOKIE_SAMESITE', 'Lax'),
+        secure=app.config.get('SESSION_COOKIE_SECURE', False),
+        path=app.config.get('SESSION_COOKIE_PATH', "/"),
+        domain=app.config.get('SESSION_COOKIE_DOMAIN', None)
+    )
+    return resp
+
+
+@app.route("/show_cookies")
+def show_cookies():
+    return jsonify({
+        "request_cookies": dict(request.cookies),
+        "session_keys": list(session.keys())
+    })
+
+
+@app.route('/debug_session')
+def debug_session():
+    info = {
+        "request_cookies": dict(request.cookies),
+        "session": dict(session),
+        "host": request.host,
+        "url": request.url,
+        "scheme": request.scheme,
+        "headers": {
+            k: v for k, v in request.headers.items()
+            if k.lower().startswith(("host", "cookie", "referer", "user-agent"))
+        }
+    }
+    app.logger.debug("DEBUG_SESSION: %s", info)
+    return jsonify(info)
+
+
 @app.route('/')
 def home():
     if "username" not in session:
@@ -192,7 +230,7 @@ def home():
 @app.route("/google")
 def google_login():
     if not google.authorized:
-        return redirect(url_for("google.login"))  # Redirect to Google OAuth
+        return redirect(url_for("google.login"))
 
     resp = google.get("/oauth2/v2/userinfo")
     if not resp.ok:
@@ -205,7 +243,6 @@ def google_login():
         app.logger.warning("GOOGLE_LOGIN: no email in userinfo: %s", user_info)
         return "Google login failed (no email)!", 400
 
-    # Ensure user exists
     user = User.query.filter_by(username=email).first()
     if not user:
         try:
@@ -215,27 +252,24 @@ def google_login():
         except Exception:
             db.session.rollback()
             app.logger.exception("GOOGLE_LOGIN: failed to create user for %s", email)
-            # continue — still try to create a session (or return error if you prefer)
             return "Google login failed (DB error)", 500
 
-    # Create session (mark permanent so cookie persists per PERMANENT_SESSION_LIFETIME)
     session["username"] = email
     session["role"] = (user.role or "").strip().lower()
     session["role_display"] = (user.role or "").strip()
     session.permanent = True
 
-    # Determine project_name: prefer request param, then existing session, then first project
     project_name = request.args.get('project_name') or session.get('selected_project')
     if not project_name:
         first_project = Project.query.order_by(Project.name).first()
         project_name = first_project.name if first_project else ""
     session["selected_project"] = project_name
 
-    # Helpful debug log to inspect cookie/session behaviour during OAuth redirect testing
-    app.logger.debug("GOOGLE_LOGIN: created session for %s; project=%s; request.cookies=%s; session=%s",
-                     email, project_name, dict(request.cookies), {k: session.get(k) for k in ("username", "role", "selected_project")})
+    app.logger.debug(
+        "GOOGLE_LOGIN: created session for %s; project=%s; request.cookies=%s; session=%s",
+        email, project_name, dict(request.cookies), {k: session.get(k) for k in ("username", "role", "selected_project")}
+    )
 
-    # Redirect (preferred) so browser receives Set-Cookie and next request sends cookie back
     return redirect(url_for("upload_file", project_name=project_name))
 
 
@@ -247,31 +281,24 @@ def login():
 
         user = User.query.filter_by(username=username).first()
         if user and check_password_hash(user.password, password):
-            # create session
             session["username"] = user.username
             session["role"] = (user.role or "").strip().lower()
             session["role_display"] = (user.role or "").strip()
-            session.permanent = True  # honour PERMANENT_SESSION_LIFETIME
+            session.permanent = True
 
-            # Determine project_name (first project as fallback)
             first_project = Project.query.order_by(Project.name).first()
             project_name = first_project.name if first_project else ""
             session["selected_project"] = project_name
 
-            # Debug log to inspect cookie/session behaviour
             app.logger.debug(
                 "LOGIN success: user=%s project=%s request.cookies=%s session_keys=%s host=%s scheme=%s",
                 user.username, project_name, dict(request.cookies), list(session.keys()), request.host, request.scheme
             )
 
-            # Prefer a 'next' param if present (safe relative redirect)
             next_url = request.args.get("next") or request.form.get("next")
             if next_url:
-                # optional: you can validate next_url to avoid open redirects
                 return redirect(next_url)
-            # Redirect to data page so Set-Cookie is sent and used on the next request
             return redirect(url_for("upload_file", project_name=project_name))
-
         else:
             flash("❌ Invalid username or password!", "danger")
 
@@ -283,23 +310,16 @@ def logout():
     session.pop("username", None)
     session.pop("role", None)
     session.pop("role_display", None)
-
     return redirect(url_for("login"))
 
-@app.route("/debug_session")
-def debug_session():
-    # Shows request cookies + session on the server side
-    info = {
-        "request_cookies": dict(request.cookies),
-        "session": dict(session),
-        "host": request.host,
-        "url": request.url,
-        "scheme": request.scheme,
-        "headers": {k: v for k, v in request.headers.items() if k.lower().startswith(("host", "cookie", "referer", "user-agent"))}
-    }
-    app.logger.debug("DEBUG_SESSION: %s", info)
-    return jsonify(info)
 
+@app.route("/vms")
+def vms():
+    app.logger.debug("VMS: request.cookies=%s session=%s host=%s scheme=%s",
+                     dict(request.cookies), dict(session), request.host, request.scheme)
+    if "username" not in session:
+        return redirect(url_for("login"))
+    return render_template("visitor_form.html", user=session["username"])
 
 @app.route("/data", methods=["GET", "POST"])
 def upload_file():
@@ -598,16 +618,6 @@ def delete_project():
     db.session.delete(proj)
     db.session.commit()
     return redirect(url_for("superadmin"))
-
-
-@app.route("/vms")
-def vms():
-    app.logger.debug("VMS: request.cookies=%s session=%s host=%s scheme=%s",
-                     dict(request.cookies), dict(session), request.host, request.scheme)
-    if "username" not in session:
-        return redirect(url_for("login"))  # force login first
-    return render_template("visitor_form.html", user=session["username"])
-
 
 
 @app.route("/add_visitor", methods=["POST"])
