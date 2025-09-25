@@ -278,8 +278,16 @@ def home():
 
 @app.route("/landing")
 def landing_page():
-    # show landing.html (does not force login). Still injects current_user via your context processor.
-    return render_template("landing.html", user=get_current_username())
+    """
+    Always render landing.html (no redirect). Add no-cache headers so browser shows
+    what server returns and doesn't reuse any cached redirect.
+    """
+    username = get_current_username()  # may be None
+    resp = make_response(render_template("landing.html", user=username))
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 @app.route("/google")
 def google_login():
@@ -489,36 +497,54 @@ def vms_demo():
 
 @app.route("/superadmin", methods=["GET", "POST"])
 def superadmin():
-    if not get_current_username():
+    # Logged-in user from cookie
+    current_username = get_current_username()
+    if not current_username:
         flash("Login required", "danger")
         return redirect(url_for("login"))
 
-    user = User.query.filter_by(username=get_current_username()).first()
+    user = User.query.filter_by(username=current_username).first()
     if not user or user.role != "Super Admin":
         flash("Access denied", "danger")
         return redirect(url_for("upload_file"))
 
     if request.method == "POST":
-        username = request.form["username"]
+        # New user details from form
+        new_username = request.form["username"]
         password = request.form["password"]
         role = request.form["role"]
 
-        if User.query.filter_by(username=username).first():
+        if User.query.filter_by(username=new_username).first():
             flash("Username already exists", "warning")
         else:
             hashed_pw = generate_password_hash(password)
-            new_user = User(username=username, password=hashed_pw, role=(role or "").strip().title())
+            new_user = User(
+                username=new_username,
+                password=hashed_pw,
+                role=(role or "").strip().title()
+            )
             db.session.add(new_user)
             db.session.commit()
             flash("User added successfully", "success")
 
-    # Provide data to template similar to your Mongo shape (but without password)
-    all_users = [{"username": u.username, "role": u.role} for u in User.query.order_by(User.username).all()]
-    all_projects = [{"id": p.id, "name": p.name} for p in Project.query.order_by(Project.name).all()]
+    # Provide data to template (exclude passwords)
+    all_users = [
+        {"username": u.username, "role": u.role}
+        for u in User.query.order_by(User.username).all()
+    ]
+    all_projects = [
+        {"id": p.id, "name": p.name}
+        for p in Project.query.order_by(Project.name).all()
+    ]
     first_project = Project.query.order_by(Project.name).first()
     first_project_name = first_project.name if first_project else ""
-    return render_template("admin.html", all_users=all_users, all_projects=all_projects, first_project_name=first_project_name) 
 
+    return render_template(
+        "admin.html",
+        all_users=all_users,
+        all_projects=all_projects,
+        first_project_name=first_project_name
+    )
 
 @app.route("/edit_user_role", methods=["POST"])
 def edit_user_role():
