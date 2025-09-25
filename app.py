@@ -470,45 +470,6 @@ def login():
             flash("✅ Logged in", "success")
             return resp
 
-        # Dev-friendly fallback: create/accept admin/admin if DB user missing
-        # NOTE: Remove or secure this behavior before production use.
-        if username == "admin" and password == "admin":
-            try:
-                # If admin exists but password mismatch, overwrite? we create only if missing.
-                if not user:
-                    hashed = generate_password_hash("admin")
-                    admin_user = User(username="admin", password=hashed, role="Super Admin")
-                    db.session.add(admin_user)
-                    db.session.commit()
-                    user = admin_user
-                    app.logger.info("✅ Created default admin user (development): admin / admin")
-
-                # Log in admin (use DB role if present)
-                role_norm = (user.role or "Super Admin").strip().lower()
-                role_display = (user.role or "Super Admin").strip()
-        
-
-                resp = redirect(url_for("landing_page"))
-                set_auth_cookies(
-                    resp,
-                    user.username,
-                    role=role_norm,
-                    role_display=role_display,
-                )
-                flash("✅ Logged in (dev fallback)", "success")
-                return resp
-
-            except Exception:
-                # If DB create fails (e.g., no DB), still set cookie so developer can proceed.
-                app.logger.exception("Failed to create admin user; using cookie fallback")
-                role_norm = "super admin"
-                role_display = "Super Admin"
-
-                resp = redirect(url_for("landing_page"))
-                set_auth_cookies(resp, "admin", role=role_norm, role_display=role_display)
-                flash("✅ Logged in (cookie fallback)", "success")
-                return resp
-
         # If we reach here, authentication failed
         flash("❌ Invalid username or password!", "danger")
 
