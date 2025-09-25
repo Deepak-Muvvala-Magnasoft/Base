@@ -454,10 +454,10 @@ def login():
             app.logger.exception("DB lookup failed in login()")
 
         # Normal DB-auth path (supports hashed OR plaintext DB passwords via verify_password)
+
         if user and verify_password(user.password, password):
             role_norm = (user.role or "").strip().lower()
             role_display = (user.role or "").strip()
-      
 
             resp = redirect(url_for("landing_page"))
             set_auth_cookies(
@@ -465,14 +465,13 @@ def login():
                 user.username,
                 role=role_norm,
                 role_display=role_display,
-    
             )
             return resp
 
-        # --- Removed dev fallback (admin/admin) as requested ---
-        # Authentication failed -> PRG (flash then redirect) so message shows once and won't reappear on refresh
+        # show an error message then redirect to the login page (PRG)
         flash("❌ Invalid username or password!", "danger")
         return redirect(url_for("login"))
+
 
     # GET -> render login page (any flashed message will display once)
     return render_template("login.html")

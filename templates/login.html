@@ -25,13 +25,11 @@
         <img src="{{ url_for('static', filename='images/user-icon.png') }}" alt="User Logo" class="user-logo" />
       </h1>
 
-      {# show flashed messages (success / danger) - place this immediately above the <form> #}
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
           {% for category, message in messages %}
-            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+            <div class="alert alert-{{ 'danger' if category == 'danger' else category }} mt-2" role="alert">
               {{ message }}
-              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
           {% endfor %}
         {% endif %}
