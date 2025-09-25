@@ -240,6 +240,19 @@ def vms():
     app.logger.info("✔ /vms route HIT — remote=%s, args=%s", request.remote_addr, request.args)
     return render_template('visitor_form.html')
 
+@app.route("/home")
+def home():
+    # The UI expects a 'home' endpoint. Redirect to landing (or render a homepage if you prefer).
+    return redirect(url_for("landing"))
+
+@app.route("/vms_demo")
+def vms_demo():
+    # Simple page used by landing.html; prefer rendering if template exists,
+    # otherwise redirect into your vms flow.
+    try:
+        return render_template("vms_demo.html")
+    except Exception:
+        return redirect(url_for("vms"))
 
 # @app.route("/landing")
 # def landing():
