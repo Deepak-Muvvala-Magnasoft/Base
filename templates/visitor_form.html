@@ -706,7 +706,33 @@ document.getElementById('photo')?.addEventListener('change', function(e){
   // release the object URL when image loads
   img.onload = () => { URL.revokeObjectURL(url); };
 });
-</script>
+
+function resetPhotoPreview() {
+  try {
+    const input = document.getElementById('photo');
+    const preview = document.getElementById('photoPreview');
+    // revoke previous object URL (if any) stored on the element
+    if (preview && preview._objectURL) {
+      try { URL.revokeObjectURL(preview._objectURL); } catch (e) {}
+      preview._objectURL = null;
+    }
+    if (preview) {
+      preview.src = '';
+      preview.style.display = 'none';
+    }
+    if (input) {
+      // clear file input value (works in modern browsers)
+      try { input.value = ''; } catch (e) {}
+      // also clear input.files if possible (DataTransfer unsupported in some browsers)
+      try {
+        const dt = new DataTransfer();
+        input.files = dt.files;
+      } catch (e) {}
+    }
+  } catch (err) {
+    console.warn('resetPhotoPreview failed', err);
+  }
+}
 </script>
 
 </body>
