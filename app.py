@@ -15,6 +15,8 @@ from werkzeug.utils import secure_filename
 from werkzeug.exceptions import BadRequest
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from flask import session
+from flask_dance.contrib.google import make_google_blueprint, google
 
 # load configuration values from config.py (keep same names as before)
 from config import (
@@ -35,7 +37,15 @@ app.config["SQLALCHEMY_DATABASE_URI"] = (
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 
-
+# Register Google OAuth blueprint (minimal)
+# The blueprint will handle the OAuth dance at /login/google and the callback at /login/google/authorized
+google_bp = make_google_blueprint(
+    client_id=GOOGLE_CLIENT_ID,
+    client_secret=GOOGLE_CLIENT_SECRET,
+    scope=["openid", "email", "profile"],
+    redirect_to="google_login_complete"   # after OAuth success we'll land on this endpoint
+)
+app.register_blueprint(google_bp, url_prefix="/login")
 # ---------------------------
 # Models
 # ---------------------------
@@ -111,6 +121,41 @@ def ensure_excel_columns_exist(new_columns):
             db.session.execute(text(f"ALTER TABLE `{table_name}` ADD COLUMN `{c}` TEXT"))
             db.session.commit()
             existing.add(c)
+
+
+@app.route("/google_login_complete")
+def google_login_complete():
+    """
+    Called after successful Google OAuth (redirect_to above).
+    Fetches userinfo, sets session username, and redirects to landing.
+    """
+    if not google.authorized:
+        flash("Google login failed or cancelled.", "danger")
+        return redirect(url_for("login"))
+
+    resp = google.get("/oauth2/v2/userinfo")
+    if not resp.ok:
+        app.logger.exception("Google userinfo fetch failed: status=%s", resp.status_code)
+        flash("Failed to fetch Google user info.", "danger")
+        return redirect(url_for("login"))
+
+    info = resp.json()
+    # pick identifier you prefer (email is usually best)
+    email = info.get("email")
+    name = info.get("name") or email
+
+    # minimal: store username in session so other routes work
+    session["username"] = email or name
+
+    # OPTIONAL: create / lookup app user record here (if you have User model)
+    # e.g.
+    # user = User.query.filter_by(email=email).first()
+    # if not user:
+    #     user = User(email=email, name=name)
+    #     db.session.add(user); db.session.commit()
+
+    flash(f"Logged in as {name}", "success")
+    return redirect(url_for("landing"))
 
 @app.route("/")
 def index():
