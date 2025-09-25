@@ -232,11 +232,14 @@ def visitor_qr():
 
 @app.route('/vms')
 def vms():
+    # If user is logged in (session set), send them to landing
+    if session.get("username"):
+        return redirect(url_for("landing"))
+
     app.logger.info("✔ /vms route HIT — remote=%s, args=%s", request.remote_addr, request.args)
     return render_template('visitor_form.html')
 
-# add this to app.py (minimal)
-# paste into app.py (minimal)
+
 @app.route("/landing")
 def landing():
     """Landing page used after successful login."""
