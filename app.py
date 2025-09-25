@@ -1004,7 +1004,12 @@ def get_users():
 def visitors_list():
     import json as _json
     all_visitors = Visitor.query.order_by(Visitor.created_at.desc()).all()
-    user_role = get_current_role()
+     # Prefer DB-backed role (g.current_user) when available; otherwise fallback to cookie
+    db_user = getattr(g, "current_user", None)
+    if db_user and getattr(db_user, "role", None):
+        user_role = (db_user.role or "").strip().lower()
+    else:
+        user_role = get_current_role()
 
     out = []
     # keywords used server-side to detect electronics
