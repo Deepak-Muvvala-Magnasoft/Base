@@ -243,16 +243,24 @@ def vms():
 
 @app.route("/landing")
 def landing():
-    """Landing page used after successful login."""
+    """
+    Render landing page. If rendering fails, return a helpful error message
+    instead of redirecting to /vms (avoids hiding the real template error).
+    """
+    import traceback
     try:
         return render_template("landing.html")
-    except Exception:
-        app.logger.exception("Failed to render landing.html")
-        # Fallback: if template missing, redirect to /vms so user doesn't get 404
-        return redirect(url_for("vms"))
-
-
-
+    except Exception as e:
+        # log full traceback
+        tb = traceback.format_exc()
+        app.logger.exception("Failed to render landing.html: %s", e)
+        # Return a clear 500 with the traceback for dev debugging
+        # REMOVE or tighten this in production
+        return (
+            "<h2>Landing page error</h2>"
+            "<p>The landing template failed to render. See details below (dev only):</p>"
+            f"<pre>{tb}</pre>"
+        ), 500
 
 @app.route("/add_visitor", methods=["POST"])
 def add_visitor():
