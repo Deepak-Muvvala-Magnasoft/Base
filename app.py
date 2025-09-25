@@ -3,6 +3,7 @@ import pandas as pd
 import json
 import smtplib
 from flask import g
+from urllib.parse import urlencode
 
 from flask import (
     Flask, render_template, request, redirect, url_for, flash, jsonify,
@@ -454,7 +455,6 @@ def login():
             app.logger.exception("DB lookup failed in login()")
 
         # Normal DB-auth path (supports hashed OR plaintext DB passwords via verify_password)
-
         if user and verify_password(user.password, password):
             role_norm = (user.role or "").strip().lower()
             role_display = (user.role or "").strip()
@@ -468,10 +468,9 @@ def login():
             )
             return resp
 
-        # show an error message then redirect to the login page (PRG)
-        flash("❌ Invalid username or password!", "danger")
-        return redirect(url_for("login"))
-
+        # --- replaced flash() approach with query-param approach ---
+        params = {"error": "Invalid username or password!"}
+        return redirect(url_for("login") + "?" + urlencode(params))
 
     # GET -> render login page (any flashed message will display once)
     return render_template("login.html")
