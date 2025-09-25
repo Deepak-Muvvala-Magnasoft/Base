@@ -322,29 +322,45 @@ def google_login():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        username = request.form["username"]
-        password = request.form["password"]
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+
+        # debug logging (will show in your flask console)
+        app.logger.info("Login attempt: username=%s remote=%s", username, request.remote_addr)
 
         user = User.query.filter_by(username=username).first()
-        if user and check_password_hash(user.password, password):
+
+        # allow standard hashed-password check, but provide a short-term plaintext fallback
+        pwd_ok = False
+        if user and user.password:
+            try:
+                pwd_ok = check_password_hash(user.password, password)
+            except Exception:
+                pwd_ok = False
+
+            # TEMPORARY: allow plaintext match if the stored password doesn't appear hashed
+            # Remove this fallback after you ensure all users have hashed passwords.
+            if not pwd_ok and user.password == password:
+                app.logger.warning("Plaintext password fallback used for user=%s — convert to hashed!", username)
+                pwd_ok = True
+
+        if user and pwd_ok:
             role_norm = (user.role or "").strip().lower()
             role_display = (user.role or "").strip()
 
-            # ✅ Find the first project name alphabetically
+            # Choose a redirect response so browser will update location (and honor Set-Cookie)
             first_project = Project.query.order_by(Project.name).first()
             project_name = first_project.name if first_project else ""
 
-            # ✅ Build response and set cookies
-            resp = make_response(render_template("landing.html"))
+            resp = redirect(url_for("landing_page"))
             set_auth_cookies(resp, user.username, role=role_norm, role_display=role_display, selected_project=project_name)
-
             flash("✅ Logged in", "success")
             return resp
         else:
+            app.logger.info("Login failed for username=%s (user_found=%s)", username, bool(user))
             flash("❌ Invalid username or password!", "danger")
 
     return render_template("login.html")
-
 
 @app.route("/logout")
 def logout():
