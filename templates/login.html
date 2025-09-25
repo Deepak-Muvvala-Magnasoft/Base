@@ -37,7 +37,7 @@
         {% endif %}
       {% endwith %}
 
-      <form method="POST" aria-label="Login Form">
+     <form method="POST" action="{{ url_for('login') }}" aria-label="Login Form">
         <div class="mb-3">
           <label for="username" class="form-label visually-hidden">Username</label>
           <input type="text" id="username" name="username" class="form-control" placeholder="Username" required />
