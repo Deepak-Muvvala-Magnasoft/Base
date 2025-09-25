@@ -6,7 +6,7 @@ import smtplib
 from datetime import datetime
 from flask import (
     Flask, render_template, request, redirect, url_for, flash, jsonify,
-    make_response
+    make_response, session
 )
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.exc import SQLAlchemyError
@@ -111,6 +111,22 @@ def ensure_excel_columns_exist(new_columns):
             db.session.execute(text(f"ALTER TABLE `{table_name}` ADD COLUMN `{c}` TEXT"))
             db.session.commit()
             existing.add(c)
+
+@app.route("/")
+def index():
+    """
+    Root URL: if user already in session go to landing, otherwise show login.
+    Keeps behavior minimal — does not change auth logic elsewhere.
+    """
+    # If you set session['username'] during login, this will redirect to landing.
+    # Otherwise it will show the login page (same as /login).
+    if session.get("username"):
+        return redirect(url_for("landing"))
+    # option A: redirect to /login
+    return redirect(url_for("login"))
+    # --- OR render inline (uncomment if you prefer):
+    # return render_template("login.html")
+
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
