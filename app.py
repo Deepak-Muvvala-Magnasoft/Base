@@ -328,21 +328,19 @@ def login():
         user = User.query.filter_by(username=username).first()
 
         if user and check_password_hash(user.password, password):
-            # ✅ Successful login → set cookie "auth_user"
-            resp = make_response(redirect(url_for("upload_file")))  
-            # or url_for("superadmin") if you want superadmin to land there directly
+            resp = make_response(redirect(url_for("upload_file")))  # or "superadmin"
             resp.set_cookie(
                 "auth_user",
                 user.username,
-                httponly=True,     # safer, not accessible to JS
-                samesite="Lax"     # prevents CSRF in most cases
-                # domain="myportal.magnasoft.com"  # uncomment if you deploy on a domain
+                httponly=True,
+                samesite="Lax"
+                # ⚠️ Do NOT add secure=True unless you're on HTTPS
+                # domain="myportal.magnasoft.com"  # optional, only if cookies not persisting
             )
             return resp
         else:
             flash("Invalid username or password", "danger")
 
-    # GET request just shows the login form
     return render_template("login.html")
 
 @app.route("/logout")
