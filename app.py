@@ -467,7 +467,6 @@ def login():
                 role_display=role_display,
     
             )
-            flash("✅ Logged in", "success")
             return resp
 
         # --- Removed dev fallback (admin/admin) as requested ---
