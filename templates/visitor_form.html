@@ -58,7 +58,7 @@
     </div>
 
     <ul class="nav-links">
-      <li><a href="/" class="nav-btn-outline">Home</a></li>
+      <li><a href="{{ url_for('landing_page') }}" class="nav-btn-outline">Home</a></li>
       <li>
         <a href="{{ url_for('visitors_list') }}"
            class="nav-link {% if active_page=='list' %}active{% endif %}">

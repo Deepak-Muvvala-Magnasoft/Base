@@ -276,6 +276,10 @@ def home():
     resp.headers["Expires"] = "0"
     return resp
 
+@app.route("/landing")
+def landing_page():
+    # show landing.html (does not force login). Still injects current_user via your context processor.
+    return render_template("landing.html", user=get_current_username())
 
 @app.route("/google")
 def google_login():
