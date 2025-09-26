@@ -10,6 +10,43 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/global.css') }}">
 </head>
+<script>
+(function(){
+  // Helper: read auth info from query string
+  function qsToObj() {
+    const params = new URLSearchParams(window.location.search);
+    const o = {};
+    if (params.get('user')) o.user = params.get('user');
+    if (params.get('role')) o.role = params.get('role');
+    if (params.get('role_display')) o.role_display = params.get('role_display');
+    return o;
+  }
+
+  // If server rendered current_user is empty, try localStorage or querystring
+  try {
+    const serverUser = "{{ current_user|default('') }}";
+    if (!serverUser || serverUser === "None") {
+      // prefer querystring if present (fresh login redirect)
+      const qs = qsToObj();
+      const stored = localStorage.getItem('vms_auth');
+      let auth = stored ? JSON.parse(stored) : {};
+      if (qs.user) {
+        auth.user = qs.user; auth.role = qs.role || auth.role; auth.role_display = qs.role_display || auth.role_display;
+        // persist for subsequent pages
+        localStorage.setItem('vms_auth', JSON.stringify(auth));
+        // update visible header element if it exists
+        const headerUserEl = document.querySelector('.header-username');
+        if (headerUserEl && auth.user) headerUserEl.textContent = auth.user;
+      } else if (auth.user) {
+        const headerUserEl = document.querySelector('.header-username');
+        if (headerUserEl) headerUserEl.textContent = auth.user;
+      }
+    }
+  } catch (e) {
+    console && console.debug && console.debug("vms_auth fallback error", e);
+  }
+})();
+</script>
 
 <body>
 <header class="d-flex justify-content-between align-items-center p-2 border-bottom">

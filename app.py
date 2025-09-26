@@ -7,7 +7,7 @@ from urllib.parse import urlencode
 
 from flask import (
     Flask, render_template, request, redirect, url_for, flash, jsonify,
-    make_response
+    make_response, session,
 )
 from flask_sqlalchemy import SQLAlchemy
 # from flask_pymongo import PyMongo
@@ -107,51 +107,27 @@ def clear_auth_cookies(response):
 def set_auth_cookies(response, username, role="", role_display="", selected_project=""):
     """
     Robust cookie setter:
-      - Detects whether host is an IP and avoids setting 'domain' for IPs (use host-only cookie).
-      - Uses X-Forwarded-Proto or request.is_secure to decide Secure flag.
-      - Emits helpful logs to debug per-client failures.
+      - Use host-only cookies (do NOT set domain) so IP access and domain access both work.
+      - Decide Secure flag from X-Forwarded-Proto or request.is_secure.
+      - Use SameSite='Lax' by default for safety; OAuth flows may need None+Secure on HTTPS only.
     """
-    import ipaddress
-
-    # determine host (without port)
-    host = (request.host or "").split(":")[0]
-
-    # is host an IP address?
-    is_ip = False
-    try:
-        if host:
-            ipaddress.ip_address(host)
-            is_ip = True
-    except Exception:
-        is_ip = False
-
-    # Detect whether request originally used HTTPS (common when TLS terminates at LB)
     forwarded_proto = request.headers.get("X-Forwarded-Proto", "") or ""
     secure_flag = forwarded_proto.lower() == "https" or request.is_secure
 
-    # base cookie options
+    # host-only cookie opts (no 'domain' key)
     cookie_opts = {"httponly": True, "samesite": "Lax", "path": "/"}
 
-    # Only set a domain value when host is a normal hostname (not IP or localhost).
-    # Setting domain for IP hosts can cause browsers to ignore the cookie.
-    if host and not is_ip and host not in ("localhost", "127.0.0.1"):
-        # set domain explicitly to the request host (no leading dot). This is safer
-        # than using a different domain or a leading dot that may mismatch.
-        cookie_opts["domain"] = host
-
-    # Helpful debug logging so you can see what's happening on failing clients.
-    # Check your server logs for this line when reproducing from the problematic IP.
     app.logger.info(
-        "SET_AUTH_COOKIE: user=%s host=%s is_ip=%s forwarded_proto=%s request.is_secure=%s secure_flag=%s cookie_opts=%s",
-        username, host, is_ip, forwarded_proto, request.is_secure, secure_flag, cookie_opts
+        "SET_AUTH_COOKIE: user=%s remote=%s host=%s forwarded_proto=%s is_secure=%s secure_flag=%s cookie_opts=%s",
+        username, request.remote_addr, request.host, forwarded_proto, request.is_secure, secure_flag, cookie_opts
     )
 
-    # finally set the cookies
     response.set_cookie("auth_user", username or "", secure=secure_flag, **cookie_opts)
     response.set_cookie("auth_role", (role or "").strip().lower(), secure=secure_flag, **cookie_opts)
     response.set_cookie("auth_role_display", role_display or "", secure=secure_flag, **cookie_opts)
     response.set_cookie("selected_project", selected_project or "", secure=secure_flag, **cookie_opts)
     return response
+
 
 
 # -----------------------------------------------------------------------------------
@@ -173,36 +149,94 @@ def load_current_user():
             g.current_user = None
 
 
+# @app.context_processor
+# def inject_user_role():
+#     """
+#     Provide role/user info to templates using request.args (preferred) and fallback to DB/cookies.
+#     Returns:
+#       - current_user: username or None
+#       - is_authenticated: bool
+#       - user_role: normalized role (lowercase)
+#       - role_display: nice display string (title-case)
+#       - is_superadmin: bool
+#       - selected_project: project name (if present)
+#       - auth_qs: query string like ?user=..&role=..
+#     """
+#     # prefer DB-loaded user (safer) but fall back to request.args and cookies
+#     db_user = getattr(g, "current_user", None)
+#     username = db_user.username if db_user else (request.args.get("user") or get_current_username() or None)
+#     is_authenticated = bool(username)
+
+#     # Prefer authoritative DB role if available, otherwise use request args then cookie
+#     if db_user:
+#         role_raw = (db_user.role or "").strip()
+#     else:
+#         role_raw = (request.args.get("role") or get_current_role() or "").strip()
+
+#     role_norm = role_raw.lower()
+#     role_display = (request.args.get("role_display") or get_role_display() or (role_raw.title() if role_raw else ""))
+
+#     selected_project = get_selected_project() or ""
+
+#     # Build auth_qs to append to URLs in templates (e.g. ?user=...&role=...)
+#     auth_params = {}
+#     if username:
+#         auth_params["user"] = username
+#     if role_norm:
+#         auth_params["role"] = role_norm
+#     if role_display:
+#         auth_params["role_display"] = role_display
+#     auth_qs = ("?" + urlencode(auth_params)) if auth_params else ""
+
+#     # Serialize auth_params to JSON string (safe for templates/JS)
+#     auth_params_json = json.dumps(auth_params or {})
+
+#     return {
+#         "current_user": username,
+#         "is_authenticated": is_authenticated,
+#         "user_role": role_norm,
+#         "role_display": role_display,
+#         "is_superadmin": role_norm == "super admin",
+#         "selected_project": selected_project,
+#         "auth_qs": auth_qs,
+#         "auth_params": auth_params,
+#         "auth_params_json": auth_params_json,   # <-- add this
+#     }
+
 @app.context_processor
 def inject_user_role():
-    """
-    Provide role/user info to templates using request.args (preferred) and fallback to DB/cookies.
-    Returns:
-      - current_user: username or None
-      - is_authenticated: bool
-      - user_role: normalized role (lowercase)
-      - role_display: nice display string (title-case)
-      - is_superadmin: bool
-      - selected_project: project name (if present)
-      - auth_qs: query string like ?user=..&role=..
-    """
-    # prefer DB-loaded user (safer) but fall back to request.args and cookies
+    # Prefer server-side session first (most authoritative if present)
+    sess_user = session.get("username")
+    sess_role = session.get("role")
+    sess_role_display = session.get("role_display")
+
+    # prefer DB-loaded user (safer) then fall back to session -> request.args -> cookies
     db_user = getattr(g, "current_user", None)
-    username = db_user.username if db_user else (request.args.get("user") or get_current_username() or None)
+
+    username = None
+    if db_user and getattr(db_user, "username", None):
+        username = db_user.username
+    elif sess_user:
+        username = sess_user
+    else:
+        username = request.args.get("user") or get_current_username() or None
+
     is_authenticated = bool(username)
 
-    # Prefer authoritative DB role if available, otherwise use request args then cookie
-    if db_user:
+    # Role resolution: DB-backed role if present -> session -> query args -> cookie
+    if db_user and getattr(db_user, "role", None):
         role_raw = (db_user.role or "").strip()
+    elif sess_role:
+        role_raw = sess_role
     else:
         role_raw = (request.args.get("role") or get_current_role() or "").strip()
 
     role_norm = role_raw.lower()
-    role_display = (request.args.get("role_display") or get_role_display() or (role_raw.title() if role_raw else ""))
+    role_display = (request.args.get("role_display") or sess_role_display or get_role_display() or (role_raw.title() if role_raw else ""))
 
     selected_project = get_selected_project() or ""
 
-    # Build auth_qs to append to URLs in templates (e.g. ?user=...&role=...)
+    # Build auth_qs...
     auth_params = {}
     if username:
         auth_params["user"] = username
@@ -211,8 +245,6 @@ def inject_user_role():
     if role_display:
         auth_params["role_display"] = role_display
     auth_qs = ("?" + urlencode(auth_params)) if auth_params else ""
-
-    # Serialize auth_params to JSON string (safe for templates/JS)
     auth_params_json = json.dumps(auth_params or {})
 
     return {
@@ -224,8 +256,9 @@ def inject_user_role():
         "selected_project": selected_project,
         "auth_qs": auth_qs,
         "auth_params": auth_params,
-        "auth_params_json": auth_params_json,   # <-- add this
+        "auth_params_json": auth_params_json,
     }
+
 
 
 
@@ -530,18 +563,40 @@ def login():
 
         # authenticate user (your existing logic)
         user = User.query.filter_by(username=username).first() if username else None
+        # if user and verify_password(user.password, password):
+        #     role_norm = (user.role or "").strip().lower()
+        #     role_display = (user.role or "").strip()
+        #     # set cookies (username + role) — this ensures role persists independently
+        #     resp = redirect(url_for("landing_page"))
+        #     set_auth_cookies(resp, username=user.username,
+        #                           role=role_norm,
+        #                           role_display=role_display,
+        #                           selected_project="")
+        #     return resp
+
+        # return redirect(url_for("login") + "?error=Invalid+credentials")
         if user and verify_password(user.password, password):
             role_norm = (user.role or "").strip().lower()
             role_display = (user.role or "").strip()
-            # set cookies (username + role) — this ensures role persists independently
-            resp = redirect(url_for("landing_page"))
-            set_auth_cookies(resp, username=user.username,
-                                  role=role_norm,
-                                  role_display=role_display,
-                                  selected_project="")
-            return resp
 
-        return redirect(url_for("login") + "?error=Invalid+credentials")
+            # 1) prepare response & set host-only cookies
+            resp = redirect(url_for("landing_page"))
+            set_auth_cookies(resp,
+                            username=user.username,
+                            role=role_norm,
+                            role_display=role_display,
+                            selected_project="")
+
+            # 2) server-side session fallback (helps when cookies partially blocked but session might work)
+            session["username"] = user.username
+            session["role"] = role_norm
+            session["role_display"] = role_display
+
+            # 3) include query params on redirect so landing sees them immediately (works when cookies aren't stored)
+            from urllib.parse import urlencode
+            params = {"user": user.username, "role": role_norm, "role_display": role_display}
+            return redirect(url_for("landing_page") + "?" + urlencode(params))
+
 
     return render_template("login.html")
 
