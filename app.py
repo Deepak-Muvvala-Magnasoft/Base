@@ -31,6 +31,7 @@ from email.mime.text import MIMEText
 # from urllib.parse import quote_plus
 from werkzeug.utils import secure_filename
 from werkzeug.exceptions import BadRequest
+from datetime import timedelta
 
 app = Flask(__name__)
 
@@ -40,6 +41,7 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 app.secret_key = os.environ.get("FLASK_SECRET", "super_secret_key")
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.config['PREFERRED_URL_SCHEME'] = 'https'
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=365)
 
 # ----------------- Cookie-based auth helpers (paste after imports) -----------------
 from flask import request as _request
@@ -105,23 +107,11 @@ def clear_auth_cookies(response):
     return response
 
 def set_auth_cookies(response, username, role="", role_display="", selected_project=""):
-    """
-    Robust cookie setter:
-      - Use host-only cookies (do NOT set domain) so IP access and domain access both work.
-      - Decide Secure flag from X-Forwarded-Proto or request.is_secure.
-      - Use SameSite='Lax' by default for safety; OAuth flows may need None+Secure on HTTPS only.
-    """
     forwarded_proto = request.headers.get("X-Forwarded-Proto", "") or ""
     secure_flag = forwarded_proto.lower() == "https" or request.is_secure
-
-    # host-only cookie opts (no 'domain' key)
-    cookie_opts = {"httponly": True, "samesite": "Lax", "path": "/"}
-
-    app.logger.info(
-        "SET_AUTH_COOKIE: user=%s remote=%s host=%s forwarded_proto=%s is_secure=%s secure_flag=%s cookie_opts=%s",
-        username, request.remote_addr, request.host, forwarded_proto, request.is_secure, secure_flag, cookie_opts
-    )
-
+    max_age = 365 * 24 * 3600   # 1 year
+    cookie_opts = {"httponly": True, "samesite": "Lax", "path": "/", "max_age": max_age}
+    # host-only cookie: do NOT set domain
     response.set_cookie("auth_user", username or "", secure=secure_flag, **cookie_opts)
     response.set_cookie("auth_role", (role or "").strip().lower(), secure=secure_flag, **cookie_opts)
     response.set_cookie("auth_role_display", role_display or "", secure=secure_flag, **cookie_opts)
@@ -588,15 +578,19 @@ def login():
                             selected_project="")
 
             # 2) server-side session fallback (helps when cookies partially blocked but session might work)
+            session.permanent = True
             session["username"] = user.username
-            session["role"] = role_norm
-            session["role_display"] = role_display
+            session["role"] = (user.role or "").strip().lower()
+            session["role_display"] = (user.role or "").strip()
 
-            # 3) include query params on redirect so landing sees them immediately (works when cookies aren't stored)
+            # prepare redirect & persistent host-only cookies (14 days or more)
+            resp = redirect(url_for("landing_page"))
+            set_auth_cookies(resp, username=user.username, role=session["role"], role_display=session["role_display"], selected_project="")
+
+            # include query params so landing shows immediately even if cookie storage is flaky
             from urllib.parse import urlencode
-            params = {"user": user.username, "role": role_norm, "role_display": role_display}
+            params = {"user": user.username, "role": session["role"], "role_display": session["role_display"]}
             return redirect(url_for("landing_page") + "?" + urlencode(params))
-
 
     return render_template("login.html")
 
@@ -612,13 +606,20 @@ def logout():
     return redirect(url_for("landing_page"))
 
 # ---------- EXIT (full sign-out) ----------
+# @app.route("/exit")
+# def exit_app():
+#     """
+#     Full sign-out: clear all auth cookies and redirect to landing/login.
+#     """
+#     resp = redirect(url_for("login"))
+#     clear_auth_cookies(resp)   # this deletes auth_user, auth_role, auth_role_display, selected_project
+#     return resp
+
 @app.route("/exit")
 def exit_app():
-    """
-    Full sign-out: clear all auth cookies and redirect to landing/login.
-    """
+    session.clear()
     resp = redirect(url_for("login"))
-    clear_auth_cookies(resp)   # this deletes auth_user, auth_role, auth_role_display, selected_project
+    clear_auth_cookies(resp)
     return resp
 
 @app.route('/vms_demo')
