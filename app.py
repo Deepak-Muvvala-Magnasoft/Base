@@ -596,23 +596,15 @@ def login():
 
 
 # ---------- LOGOUT (partial logout) ----------
-@app.route("/logout")
-def logout():
-    """
-    Minimal / logout behavior: DO NOT delete any auth cookies.
-    This keeps both auth_user and auth_role intact so the header continues
-    to show the username and role until the user clicks Exit (which does a full sign-out).
-    """
-    username = get_current_username()
-    app.logger.info("✔ / route HIT — remote=%s, user=%s, args=%s",
-                    request.remote_addr, username, request.args)
-
-    # prevent caching so auth changes are reflected immediately in browser
-    resp = make_response(render_template("landing.html", user=username))
-    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
-    resp.headers["Pragma"] = "no-cache"
-    resp.headers["Expires"] = "0"
-    return redirect(url_for("landing_page"))
+# @app.route("/logout")
+# def logout():
+#     """
+#     Minimal / logout behavior: DO NOT delete any auth cookies.
+#     This keeps both auth_user and auth_role intact so the header continues
+#     to show the username and role until the user clicks Exit (which does a full sign-out).
+#     """
+    
+#     return redirect(url_for("landing_page"))
 
 # ---------- EXIT (full sign-out) ----------
 # @app.route("/exit")
