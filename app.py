@@ -8,13 +8,15 @@ from urllib.parse import urlencode
 from functools import wraps
 from flask import (
     Flask, render_template, request, redirect, url_for, jsonify,
-    make_response, session,
+    make_response, session,  redirect, url_for, render_template
 )
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import text
 from sqlalchemy import func, inspect
+from werkzeug.security import generate_password_hash
+from flask import request, jsonify, session
 from werkzeug.security import generate_password_hash, check_password_hash
 from config import (
     MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DB, MYSQL_PORT,
@@ -289,7 +291,47 @@ google_bp = make_google_blueprint(
 )
 app.register_blueprint(google_bp, url_prefix="/login")
 
+@app.route('/change_password', methods=['POST'])
+def change_password():
+    try:
+        # get username from session or cookie (whichever you use)
+        username = session.get('username') or request.cookies.get('auth_user')
+        if not username:
+            return jsonify({"success": False, "message": "Not authenticated"}), 401
 
+        data = request.get_json(silent=True) or {}
+        new_password = (data.get('new_password') or "").strip()
+        if not new_password or len(new_password) < 8:
+            return jsonify({"success": False, "message": "Password must be at least 8 characters"}), 400
+
+        # optional: further validation can be added here
+
+        user = User.query.filter_by(username=username).first()
+        if not user:
+            return jsonify({"success": False, "message": "User not found"}), 404
+
+        # set hashed password
+        user.password = generate_password_hash(new_password)
+        # if you keep a 'password_last_changed' timestamp, set it here:
+        # user.password_last_changed = datetime.utcnow()
+
+        db.session.commit()
+        app.logger.info("Password changed for user=%s", username)
+
+        # do NOT force logout here — you said "once user exit, user can login with new password only":
+        # session remains so user stays logged in until they click Exit. If you want to force re-login,
+        # uncomment the logout lines below.
+
+        # session.pop('username', None)
+        # session.pop('role', None)
+        # resp = jsonify({"success": True, "message": "Password changed. Please log in again."})
+        # return resp, 200
+
+        return jsonify({"success": True, "message": "Password changed successfully"}), 200
+
+    except Exception:
+        app.logger.exception("Error changing password")
+        return jsonify({"success": False, "message": "Server error"}), 500
 
 
 # --- SQLAlchemy / MySQL ---
@@ -573,18 +615,7 @@ def login():
 
         # authenticate user (your existing logic)
         user = User.query.filter_by(username=username).first() if username else None
-        # if user and verify_password(user.password, password):
-        #     role_norm = (user.role or "").strip().lower()
-        #     role_display = (user.role or "").strip()
-        #     # set cookies (username + role) — this ensures role persists independently
-        #     resp = redirect(url_for("landing_page"))
-        #     set_auth_cookies(resp, username=user.username,
-        #                           role=role_norm,
-        #                           role_display=role_display,
-        #                           selected_project="")
-        #     return resp
-
-        # return redirect(url_for("login") + "?error=Invalid+credentials")
+       
         if user and verify_password(user.password, password):
             role_norm = (user.role or "").strip().lower()
             role_display = (user.role or "").strip()
