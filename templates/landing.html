@@ -12,25 +12,47 @@
 </head>
 
 <body>
-    <!-- Nav Bar -->
 <header class="d-flex justify-content-between align-items-center p-2 border-bottom">
-  <!-- Left: Logo -->
-  <a href="{{ url_for('landing_page') }}">
+  <a href="{{ url_for('landing_page') }}{{ auth_qs }}">
     <img src="{{ url_for('static', filename='images/Magnasoft.png') }}" alt="Magnasoft Logo" class="logo-height">
   </a>
 
-  <!-- Right: Buttons -->
   <div class="d-flex align-items-center gap-2">
-    <a href="{{ url_for('login') }}" class="btn btn-outline-primary">Exit</a>
+    <!-- Exit now calls the full sign-out route -->
+    <a href="{{ url_for('exit_app') }}" class="btn btn-outline-primary">Exit</a>
 
-  {% if session.get('username') %}
-  <div class="d-flex align-items-center">
-    <i class="bi bi-person-circle me-2 text-primary user-icon"></i>
-    <span class="fw-semibold small mb-0">{{ session.get('username') }}</span>
-  </div>
-{% endif %}
+    {% if current_user %}
+      <div class="d-flex align-items-center">
+        <i class="bi bi-person-circle me-2 text-primary user-icon"></i>
+        <div class="d-flex flex-column small">
+          <span class="fw-semibold mb-0">{{ current_user }}</span>
+          <span class="text-muted" style="font-size:11px;">
+            Role: <strong>{{ role_display or user_role or '—' }}</strong>
+          </span>
+        </div>
+      </div>
+
+    {% elif user_role %}
+      <!-- No username (partial logout) but role cookie still present -->
+      <div class="d-flex align-items-center">
+        <i class="bi bi-person-circle me-2 user-icon text-muted"></i>
+        <div class="d-flex flex-column small text-muted">
+          <span class="fw-semibold mb-0">No user</span>
+          <span style="font-size:11px;">
+            Role: <strong>{{ role_display or user_role }}</strong>
+          </span>
+        </div>
+      </div>
+
+    {% else %}
+      <div class="d-flex align-items-center text-muted small">
+        <i class="bi bi-person-circle me-2 user-icon"></i>
+        <span>No user</span>
+      </div>
+    {% endif %}
   </div>
 </header>
+
 
     <!-- Modules -->
     <div class="container-images">
@@ -80,7 +102,8 @@
             <h4>Project Tool</h4>
         </a>
 
-        <a href="{{ url_for('vms_demo') }}" class="image-card">
+        <!-- Contact Details (internal) - preserve auth_qs so role/user follows -->
+        <a href="{{ url_for('vms_demo') }}{{ auth_qs }}" class="image-card">
             <img src="{{ url_for('static', filename='images/user-icon.png') }}" alt="Contact">
             <h4>Contact Details</h4>
         </a>
@@ -103,22 +126,22 @@
     </div>
 
     <div class="container-images">
-        <a href="{{  url_for('vms_demo')}}" class="image-card">
+        <a href="{{ url_for('vms_demo') }}{{ auth_qs }}" class="image-card">
             <img src="{{ url_for('static', filename='images/E2C.jpg') }}" alt="PMS">
             <h4>Excel Tool</h4>
         </a>
 
-        <a href="{{ url_for('vms') }}" class="image-card">
+        <a href="{{ url_for('vms') }}{{ auth_qs }}" class="image-card">
             <img src="{{ url_for('static', filename='images/VMS.jpg') }}" alt="VMS">
             <h4>Visitor Tool</h4>
         </a>
 
-        <a href="{{ url_for('vms_demo') }}" class="image-card">
+        <a href="{{ url_for('vms_demo') }}{{ auth_qs }}" class="image-card">
             <img src="{{ url_for('static', filename='images/QMS.png') }}" alt="QMS">
             <h4>QMS</h4>
         </a>
 
-        <a href="{{ url_for('vms_demo') }}" class="image-card">
+        <a href="{{ url_for('vms_demo') }}{{ auth_qs }}" class="image-card">
             <img src="{{ url_for('static', filename='images/GatePass.jpg') }}" alt="GatePass">
             <h4>GatePass</h4>
         </a>

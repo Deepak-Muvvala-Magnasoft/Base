@@ -41,39 +41,35 @@ app.secret_key = os.environ.get("FLASK_SECRET", "super_secret_key")
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.config['PREFERRED_URL_SCHEME'] = 'https'
 
-
 # ----------------- Cookie-based auth helpers (paste after imports) -----------------
 from flask import request as _request
 
 
 def get_current_username():
-    """Return username from cookie or None."""
-    return _request.cookies.get("auth_user")
+    """Prefer ?user=... then fallback to cookie (for development)."""
+    return request.args.get("user") or _request.cookies.get("auth_user")
 
 
 def get_current_role():
-    """Normalized role (lowercase) from cookie."""
-    return (_request.cookies.get("auth_role") or "").strip().lower()
+    """Normalized role (lowercase). Prefer ?role=... then cookie."""
+    return (request.args.get("role") or _request.cookies.get("auth_role") or "").strip().lower()
 
 
 def current_role_authoritative():
     """
-    Prefer DB-backed g.current_user.role (if loaded), otherwise fall back to auth_role cookie.
-    Returns a lowercase string.
-
-    This remains the authoritative helper for most code, but for UI + checkin/checkout
-    we will prefer cookie role when present so test cookies (e.g. /force_login) behave
-    consistently during development.
+    Prefer DB-backed g.current_user.role (if loaded), otherwise prefer request.args role,
+    then fallback to cookie. Returns lowercase.
     """
     db_user = getattr(g, "current_user", None)
     if db_user and getattr(db_user, "role", None):
         return (db_user.role or "").strip().lower()
-    return (_request.cookies.get("auth_role") or "").strip().lower()
+    return (request.args.get("role") or _request.cookies.get("auth_role") or "").strip().lower()
 
 
 def get_role_display():
-    """Role display value (title-case) from cookie."""
-    return _request.cookies.get("auth_role_display") or ""
+    """Role display value (title-case) from request args or cookie."""
+    rd = request.args.get("role_display") or _request.cookies.get("auth_role_display") or ""
+    return rd
 
 
 def get_selected_project():
@@ -106,20 +102,20 @@ def load_current_user():
     Optional: load a DB-backed User into `g.current_user` when a username cookie exists.
     This lets templates / code use g.current_user safely (avoids trusting cookies only).
     """
-    uname = get_current_username()  # returns None or the cookie value
+    uname = get_current_username()  # returns None or the query/cookie value
     g.current_user = None
     if uname:
         try:
             g.current_user = User.query.filter_by(username=uname).first()
         except Exception:
-            # swallow DB errors here — injector will still work using cookies
+            # swallow DB errors here — injector will still work using query params
             g.current_user = None
 
 
 @app.context_processor
 def inject_user_role():
     """
-    Provide role/user info to templates using cookies (and fallback to DB when necessary).
+    Provide role/user info to templates using request.args (preferred) and fallback to DB/cookies.
     Returns:
       - current_user: username or None
       - is_authenticated: bool
@@ -127,22 +123,36 @@ def inject_user_role():
       - role_display: nice display string (title-case)
       - is_superadmin: bool
       - selected_project: project name (if present)
+      - auth_qs: query string like ?user=..&role=..
     """
-    # prefer DB-loaded user (safer) but fall back to cookies
+    # prefer DB-loaded user (safer) but fall back to request.args and cookies
     db_user = getattr(g, "current_user", None)
-    username = db_user.username if db_user else (get_current_username() or None)
+    username = db_user.username if db_user else (request.args.get("user") or get_current_username() or None)
     is_authenticated = bool(username)
 
-    # Prefer authoritative DB role if available, otherwise use cookie
+    # Prefer authoritative DB role if available, otherwise use request args then cookie
     if db_user:
         role_raw = (db_user.role or "").strip()
     else:
-        role_raw = (get_current_role() or "").strip()
+        role_raw = (request.args.get("role") or get_current_role() or "").strip()
 
     role_norm = role_raw.lower()
-    role_display = get_role_display() or (role_raw.title() if role_raw else "")
+    role_display = (request.args.get("role_display") or get_role_display() or (role_raw.title() if role_raw else ""))
 
     selected_project = get_selected_project() or ""
+
+    # Build auth_qs to append to URLs in templates (e.g. ?user=...&role=...)
+    auth_params = {}
+    if username:
+        auth_params["user"] = username
+    if role_norm:
+        auth_params["role"] = role_norm
+    if role_display:
+        auth_params["role_display"] = role_display
+    auth_qs = ("?" + urlencode(auth_params)) if auth_params else ""
+
+    # Serialize auth_params to JSON string (safe for templates/JS)
+    auth_params_json = json.dumps(auth_params or {})
 
     return {
         "current_user": username,
@@ -150,7 +160,10 @@ def inject_user_role():
         "user_role": role_norm,
         "role_display": role_display,
         "is_superadmin": role_norm == "super admin",
-        "selected_project": selected_project
+        "selected_project": selected_project,
+        "auth_qs": auth_qs,
+        "auth_params": auth_params,
+        "auth_params_json": auth_params_json,   # <-- add this
     }
 
 
@@ -182,6 +195,7 @@ app.config["SQLALCHEMY_DATABASE_URI"] = (
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 
+
 @app.route("/__debug_oauth")
 def debug_oauth():
     return jsonify({
@@ -193,6 +207,7 @@ def debug_oauth():
             "X-Forwarded-For": request.headers.get("X-Forwarded-For")
         }
     })
+
 
 @app.route('/visitor', methods=['GET', 'POST'])
 def visitor_qr():
@@ -228,11 +243,11 @@ class Visitor(db.Model):
     remarks = db.Column(db.Text)
     verified = db.Column(db.Boolean, default=False)
     approved = db.Column(db.Boolean, nullable=True)
-    electronics_approved = db.Column(db.Boolean, nullable=True)  
+    electronics_approved = db.Column(db.Boolean, nullable=True)
     created_at = db.Column(db.DateTime, default=func.now())
     photo_filename = db.Column(db.String(255), nullable=True)
     photo_mime = db.Column(db.String(100), nullable=True)
-    photo_data = db.Column(db.LargeBinary, nullable=True) 
+    photo_data = db.Column(db.LargeBinary, nullable=True)
 
 
 class User(db.Model):
@@ -424,61 +439,63 @@ def google_login():
         # ✅ Check if user exists in DB, else create
         user = User.query.filter_by(username=email).first()
         if not user:
-            user = User(username=email, password="", role="User")  
+            user = User(username=email, password="", role="User")
             db.session.add(user)
             db.session.commit()
 
-        # ✅ Create cookie-based session
+        # Use query param redirect (no cookie dependency)
         role_norm = (user.role or "").strip().lower()
         role_display = (user.role or "").strip()
 
-
-        resp = make_response(render_template("landing.html"))
-        set_auth_cookies(resp, email, role=role_norm, role_display=role_display)
-        return resp
+        params = {"user": email, "role": role_norm, "role_display": role_display}
+        return redirect(url_for("landing_page") + "?" + urlencode(params))
 
     return "Google login failed!", 400
 
 
+# ---------- LOGIN (keep or replace existing login success path) ----------
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        username = request.form.get("username", "").strip()
-        password = request.form.get("password", "")
+        username = request.form.get("username","").strip()
+        password = request.form.get("password","")
 
-        # Try to find user in DB
-        user = None
-        try:
-            user = User.query.filter_by(username=username).first()
-        except Exception:
-            # DB may be unreachable; log and continue (don't leak details to user)
-            app.logger.exception("DB lookup failed in login()")
-
-        # Normal DB-auth path (supports hashed OR plaintext DB passwords via verify_password)
+        # authenticate user (your existing logic)
+        user = User.query.filter_by(username=username).first() if username else None
         if user and verify_password(user.password, password):
             role_norm = (user.role or "").strip().lower()
             role_display = (user.role or "").strip()
-
+            # set cookies (username + role) — this ensures role persists independently
             resp = redirect(url_for("landing_page"))
-            set_auth_cookies(
-                resp,
-                user.username,
-                role=role_norm,
-                role_display=role_display,
-            )
+            set_auth_cookies(resp, username=user.username,
+                                  role=role_norm,
+                                  role_display=role_display,
+                                  selected_project="")
             return resp
 
-        # --- replaced flash() approach with query-param approach ---
-        params = {"error": "Invalid username or password!"}
-        return redirect(url_for("login") + "?" + urlencode(params))
+        return redirect(url_for("login") + "?error=Invalid+credentials")
 
-    # GET -> render login page (any flashed message will display once)
     return render_template("login.html")
 
+
+# ---------- LOGOUT (partial logout) ----------
 @app.route("/logout")
 def logout():
-    resp = redirect(url_for("landing_page"))
-    clear_auth_cookies(resp)
+    """
+    Minimal / logout behavior: DO NOT delete any auth cookies.
+    This keeps both auth_user and auth_role intact so the header continues
+    to show the username and role until the user clicks Exit (which does a full sign-out).
+    """
+    return redirect(url_for("landing_page"))
+
+# ---------- EXIT (full sign-out) ----------
+@app.route("/exit")
+def exit_app():
+    """
+    Full sign-out: clear all auth cookies and redirect to landing/login.
+    """
+    resp = redirect(url_for("login"))
+    clear_auth_cookies(resp)   # this deletes auth_user, auth_role, auth_role_display, selected_project
     return resp
 
 @app.route('/vms_demo')
@@ -981,7 +998,7 @@ def visitors_list():
     import json as _json
     all_visitors = Visitor.query.order_by(Visitor.created_at.desc()).all()
 
-    # IMPORTANT: prefer cookie role when present so the UI matches cookie-based test logins
+    # IMPORTANT: prefer query param role when present so the UI matches query-param-based logins
     user_role = get_current_role() or current_role_authoritative()
 
     out = []
@@ -1092,7 +1109,7 @@ def visitors_list():
             "approved": v.approved,
             "electronics_approved": getattr(v, "electronics_approved", None),
             "has_electronics": has_electronics_flag,       # <-- NEW boolean flag
-             "allowed_to_checkin": allowed_to_checkin, 
+             "allowed_to_checkin": allowed_to_checkin,
             "remarks": v.remarks or "",
             "photo_url": photo_url,
         })
@@ -1140,17 +1157,26 @@ def visitors_api():
 
 @app.route('/checkin/<int:visitor_id>', methods=['POST'])
 def checkin(visitor_id):
-    # Authoritative server-side role check: prefer cookie role when present (dev-friendly)
-    role = get_current_role() or current_role_authoritative()
-    app.logger.debug("Checkin attempt: visitor_id=%s, cookie_role=%s, cookie_user=%s, db_user=%s, authoritative=%s",
-                    visitor_id, request.cookies.get("auth_role"), request.cookies.get("auth_user"),
-                    getattr(g, "current_user").username if getattr(g, "current_user", None) else None, role)
-    if role != "security":
-        return jsonify(success=False, message="Forbidden: insufficient permissions"), 403
-
-
+    # read JSON early so we can accept role from the client payload (works when querystring lost)
     try:
         data = request.get_json(silent=True) or {}
+    except Exception:
+        data = {}
+
+    # Extra logging to debug role visibility
+    app.logger.info("CHECKIN REQUEST: visitor_id=%s, raw_payload=%s, query_args=%s", visitor_id, data, dict(request.args))
+
+    # Authoritative server-side role check:
+    # prefer role from POST body -> request.args -> DB/cookie fallback
+    role_raw = (data.get('role') or request.args.get('role') or current_role_authoritative() or "")
+    role = str(role_raw).strip().lower()
+    app.logger.info("CHECKIN ROLE RESOLVED: payload_role=%s, query_role=%s, authoritative=%s", data.get('role'), request.args.get('role'), role)
+
+    if role != "security":
+        app.logger.warning("CHECKIN FORBIDDEN: resolved role=%s (not 'security')", role)
+        return jsonify(success=False, message="Forbidden: insufficient permissions"), 403
+
+    try:
         badge = (data.get('badge') or "").strip()
         override = data.get('override') in (True, 'true', '1', 'yes')
 
@@ -1183,22 +1209,25 @@ def checkin(visitor_id):
 
 @app.route("/checkout/<int:visitor_id>", methods=["POST"])
 def checkout(visitor_id):
-    # Authoritative server-side role check: prefer cookie role when present (dev-friendly)
-    role = get_current_role() or current_role_authoritative()
-    app.logger.debug("Checkout attempt: visitor_id=%s, cookie_role=%s, cookie_user=%s, db_user=%s, authoritative=%s",
-                    visitor_id, request.cookies.get("auth_role"), request.cookies.get("auth_user"),
-                    getattr(g, "current_user").username if getattr(g, "current_user", None) else None, role)
-    if role != "security":
-        return jsonify({"success": False, "message": "Forbidden: insufficient permissions"}), 403
-
-
-
+    # read JSON early so we can accept role from the client payload
     try:
         data = request.get_json(silent=True) or {}
-        remarks = (data.get("remarks") or "").strip()
+    except Exception:
+        data = {}
 
-        # optional: allow client to send checked_items for auditing (not required)
-        # checked_items = data.get("checked_items", [])
+    app.logger.info("CHECKOUT REQUEST: visitor_id=%s, raw_payload=%s, query_args=%s", visitor_id, data, dict(request.args))
+
+    # prefer role from POST body -> request.args -> DB/cookie fallback
+    role_raw = (data.get('role') or request.args.get('role') or current_role_authoritative() or "")
+    role = str(role_raw).strip().lower()
+    app.logger.info("CHECKOUT ROLE RESOLVED: payload_role=%s, query_role=%s, authoritative=%s", data.get('role'), request.args.get('role'), role)
+
+    if role != "security":
+        app.logger.warning("CHECKOUT FORBIDDEN: resolved role=%s (not 'security')", role)
+        return jsonify({"success": False, "message": "Forbidden: insufficient permissions"}), 403
+
+    try:
+        remarks = (data.get("remarks") or "").strip()
 
         v = Visitor.query.get(visitor_id)
         if not v:

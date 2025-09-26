@@ -25,12 +25,12 @@
         <img src="{{ url_for('static', filename='images/user-icon.png') }}" alt="User Logo" class="user-logo" />
       </h1>
 
-      {# near top of template #}
-        {% if request.args.get('error') %}
-          <div class="alert alert-danger mt-2" role="alert">
-            {{ request.args.get('error') }}
-          </div>
-        {% endif %}
+      {# show error passed via query string #}
+      {% if request.args.get('error') %}
+        <div class="alert alert-danger mt-2" role="alert">
+          {{ request.args.get('error') }}
+        </div>
+      {% endif %}
 
       <form method="POST" aria-label="Login Form">
         <div class="mb-3">

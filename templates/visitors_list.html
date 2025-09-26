@@ -9,17 +9,26 @@
 </head>
 
 <body>
-  <nav class="navbar">
+    <nav class="navbar">
     <div class="logo">
-      <a href="{{ url_for('vms') }}">
+      <a href="{{ url_for('vms') }}{{ auth_qs }}">
         <img src="{{ url_for('static', filename='images/Magnasoft.png') }}" alt="Company Logo">
       </a>
     </div>
     <ul class="nav-links">
-      <li><a href="{{ url_for('landing_page') }}" class="btn btn-outline-primary">Home</a></li>
-      <li><a href="{{ url_for('vms') }}" class="{% if active_page=='form' %}active{% endif %}">Add Visitor</a></li>
+      <li><a href="{{ url_for('landing_page') }}{{ auth_qs }}" class="btn btn-outline-primary">Home</a></li>
+      <li><a href="{{ url_for('vms') }}{{ auth_qs }}" class="{% if active_page=='form' %}active{% endif %}">Add Visitor</a></li>
       <li><a href="{{ url_for('logout') }}">Logout</a></li>
     </ul>
+
+    <div class="nav-user">
+      {% if current_user %}
+        <div class="small text-end">
+          <div class="fw-semibold">{{ current_user }}</div>
+          <div style="font-size:11px;color:#666;">Role: {{ role_display or user_role }}</div>
+        </div>
+      {% endif %}
+    </div>
   </nav>
   <h2>Visitors List</h2>
   <div class="table-container">
@@ -31,7 +40,7 @@
           <!-- <th>Phone</th>
         <th>Email</th> -->
           <th>Location</th>
-          
+
           <th>Badge ID</th>
           <th>ID Proof</th>
           <!-- <th>Purpose</th> -->
@@ -213,50 +222,120 @@
 
     </table>
   </div>
-
+   <script id="auth-params" type="application/json">{{ auth_params_json | e }}</script>
   <script>
-function checkInVisitor(id) {
-  const badge = document.getElementById(`badge-${id}`).value.trim();
-  fetch(`/checkin/${id}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'same-origin',   // <<< send cookies
-    body: JSON.stringify({ badge })
-  })
-  .then(r => r.json())
-  .then(data => {
-    if (data.success) {
-      location.reload(); // or update UI as you prefer
-    } else {
-      alert(data.message || "Check-in failed");
-    }
-  }).catch(err => {
-    console.error(err);
-    alert("Server error during check-in");
-  });
+  // Auth query-string passed into template by inject_user_role()
+   const AUTH_QS = "{{ auth_qs|e }}";
+
+  // Parse server-provided JSON (auth_params_json injected server-side).
+  // Defensive: fall back to {} if parsing fails.
+let AUTH_PARAMS = {};
+try {
+  const el = document.getElementById('auth-params');
+  if (el && el.textContent && el.textContent.trim()) {
+    AUTH_PARAMS = JSON.parse(el.textContent);
+    if (!AUTH_PARAMS || typeof AUTH_PARAMS !== 'object') AUTH_PARAMS = {};
+  } else {
+    AUTH_PARAMS = {};
+  }
+} catch (e) {
+  console.warn("AUTH_PARAMS parse fallback (invalid/missing JSON)", e);
+  AUTH_PARAMS = {};
 }
 
-function checkOutVisitor(id) {
-  const remarks = document.getElementById(`remarks-${id}`)?.value || "";
-  fetch(`/checkout/${id}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'same-origin',   // <<< send cookies
-    body: JSON.stringify({ remarks })
-  })
-  .then(r => r.json())
-  .then(data => {
-    if (data.success) {
-      location.reload();
-    } else {
-      alert(data.message || "Checkout failed");
-    }
-  }).catch(err => {
-    console.error(err);
-    alert("Server error during checkout");
-  });
+const FALLBACK_ROLE = ("{{ user_role|e }}" || (AUTH_PARAMS.role || "")).toString().toLowerCase();
+
+function debugDump() {
+  console.groupCollapsed("VMS DEBUG: auth snapshot");
+  console.log("AUTH_QS (raw):", AUTH_QS);
+  console.log("AUTH_PARAMS (object):", AUTH_PARAMS);
+  console.log("FALLBACK_ROLE:", FALLBACK_ROLE);
+  console.groupEnd();
 }
+try { debugDump(); } catch(e) { console.error("debugDump failed", e); }
+  function checkInVisitor(id) {
+    const badge = document.getElementById(`badge-${id}`).value.trim();
+    // Defensive: always include role in payload (use AUTH_PARAMS.role or FALLBACK_ROLE)
+    const roleToSend = (AUTH_PARAMS.role || FALLBACK_ROLE || "").toString().toLowerCase();
+
+    const payload = { badge: badge, role: roleToSend };
+
+    // debug log the payload before sending
+    console.info("CHECKIN: sending payload to", `/checkin/${id}${AUTH_QS}`, payload);
+
+    fetch(`/checkin/${id}${AUTH_QS}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify(payload)
+    })
+    .then(async r => {
+      // read body safely and log
+      let bodyText;
+      try { bodyText = await r.text(); } catch(e) { bodyText = "<failed to read body>"; }
+      console.info("CHECKIN: response status", r.status, "body:", bodyText);
+      // try parse JSON if content-type indicates JSON
+      try {
+        const json = JSON.parse(bodyText);
+        return json;
+      } catch(e) {
+        return { success: false, message: "Non-JSON response or parse error", raw: bodyText };
+      }
+    })
+    .then(data => {
+      if (data.success) {
+        location.reload();
+      } else {
+        alert(data.message || "Check-in failed");
+      }
+    }).catch(err => {
+      console.error("CHECKIN: fetch error", err);
+      alert("Server error during check-in");
+    });
+  }
+
+  function checkOutVisitor(id) {
+    const remarks = document.getElementById(`remarks-${id}`)?.value || "";
+    const roleToSend = (AUTH_PARAMS.role || FALLBACK_ROLE || "").toString().toLowerCase();
+
+    const payload = { remarks: remarks, role: roleToSend };
+
+    console.info("CHECKOUT: sending payload to", `/checkout/${id}${AUTH_QS}`, payload);
+
+    fetch(`/checkout/${id}${AUTH_QS}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify(payload)
+    })
+    .then(async r => {
+      let bodyText;
+      try { bodyText = await r.text(); } catch(e) { bodyText = "<failed to read body>"; }
+      console.info("CHECKOUT: response status", r.status, "body:", bodyText);
+      try {
+        return JSON.parse(bodyText);
+      } catch(e) {
+        return { success: false, message: "Non-JSON response or parse error", raw: bodyText };
+      }
+    })
+    .then(data => {
+      if (data.success) {
+        location.reload();
+      } else {
+        alert(data.message || "Checkout failed");
+      }
+    }).catch(err => {
+      console.error("CHECKOUT: fetch error", err);
+      alert("Server error during checkout");
+    });
+  }
+
+  // Expose for easy manual testing from DevTools console:
+  window.VMS_DEBUG = { debugDump, AUTH_QS, AUTH_PARAMS, FALLBACK_ROLE, checkInVisitor, checkOutVisitor };
+
 </script>
+
+
 
 </body>
 
