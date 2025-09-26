@@ -25,12 +25,15 @@
         <img src="{{ url_for('static', filename='images/user-icon.png') }}" alt="User Logo" class="user-logo" />
       </h1>
 
-      {# show error passed via query string #}
-      {% if request.args.get('error') %}
-        <div class="alert alert-danger mt-2" role="alert">
-          {{ request.args.get('error') }}
-        </div>
-      {% endif %}
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="alert alert-{{ 'danger' if category == 'danger' else category }} mt-2" role="alert">
+              {{ message }}
+            </div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
 
       <form method="POST" aria-label="Login Form">
         <div class="mb-3">

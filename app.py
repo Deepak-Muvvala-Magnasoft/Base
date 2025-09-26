@@ -10,6 +10,7 @@ from flask import (
     Flask, render_template, request, redirect, url_for, jsonify,
     make_response, session,  redirect, url_for, render_template
 )
+from urllib.parse import urlencode
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 from sqlalchemy.exc import SQLAlchemyError
@@ -607,43 +608,50 @@ def google_login():
 
 
 # ---------- LOGIN (keep or replace existing login success path) ----------
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        username = request.form.get("username","").strip()
-        password = request.form.get("password","")
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
 
         # authenticate user (your existing logic)
         user = User.query.filter_by(username=username).first() if username else None
-       
+
         if user and verify_password(user.password, password):
             role_norm = (user.role or "").strip().lower()
             role_display = (user.role or "").strip()
 
-            # 1) prepare response & set host-only cookies
-            resp = redirect(url_for("landing_page"))
-            set_auth_cookies(resp,
-                            username=user.username,
-                            role=role_norm,
-                            role_display=role_display,
-                            selected_project="")
-
-            # 2) server-side session fallback (helps when cookies partially blocked but session might work)
+            # session fallback
             session.permanent = True
             session["username"] = user.username
-            session["role"] = (user.role or "").strip().lower()
-            session["role_display"] = (user.role or "").strip()
+            session["role"] = role_norm
+            session["role_display"] = role_display
 
-            # prepare redirect & persistent host-only cookies (14 days or more)
-            resp = redirect(url_for("landing_page"))
-            set_auth_cookies(resp, username=user.username, role=session["role"], role_display=session["role_display"], selected_project="")
-
-            # include query params so landing shows immediately even if cookie storage is flaky
-            from urllib.parse import urlencode
+            # prepare redirect and set cookies (assign returned response)
             params = {"user": user.username, "role": session["role"], "role_display": session["role_display"]}
-            return redirect(url_for("landing_page") + "?" + urlencode(params))
+            resp = redirect(url_for("landing_page") + "?" + urlencode(params))
 
+            # ensure cookies are attached to the response object we return
+            resp = set_auth_cookies(
+                resp,
+                username=user.username,
+                role=role_norm,
+                role_display=role_display,
+                selected_project=""
+            )
+
+            return resp
+
+        else:
+            # failed login -> flash an error and redirect back to login page
+            flash("❌ Invalid username or password!", "danger")
+            return redirect(url_for("login"))
+
+    # GET -> render the login page (always returns a template response)
     return render_template("login.html")
+
 
 
 # ---------- LOGOUT (partial logout) ----------
