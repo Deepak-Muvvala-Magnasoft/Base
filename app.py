@@ -2,6 +2,7 @@ import os
 import pandas as pd
 import json
 import smtplib
+import traceback 
 from flask import g
 from urllib.parse import urlencode
 from functools import wraps
@@ -1313,11 +1314,33 @@ def checkin(visitor_id):
         return jsonify(success=False, message="Forbidden: insufficient permissions"), 403
 
     try:
-        badge = (data.get('badge') or "").strip()
-        override = data.get('override') in (True, 'true', '1', 'yes')
+        app.logger.info("CHECKIN: payload=%s", data)
+
+        # --- normalize badge safely (accept strings or numbers) ---
+        badge_raw = data.get('badge', "")
+        badge = str(badge_raw).strip() if badge_raw is not None else ""
+
+        # --- normalize override (accept bools or strings like "true"/"1"/"yes") ---
+        ov_raw = data.get('override', "")
+        if isinstance(ov_raw, bool):
+            override = ov_raw
+        else:
+            override = str(ov_raw).strip().lower() in ("true", "1", "yes")
 
         if not badge:
             return jsonify(success=False, message="Missing badge"), 400
+
+        # --- normalize verified: accept boolean True or text like "yes"/"true" ---
+        verified_raw = data.get('verified', "")
+        if isinstance(verified_raw, bool):
+            verified_bool = verified_raw
+            verified = "true" if verified_raw else ""
+        else:
+            verified = str(verified_raw or "").strip()
+            verified_bool = bool(verified)
+
+        if not verified_bool:
+            return jsonify(success=False, message="ID verification missing"), 400
 
         v = Visitor.query.get(visitor_id)
         if not v:
@@ -1329,19 +1352,39 @@ def checkin(visitor_id):
 
         # enforce approvals server-side, but allow explicit security override
         allowed, reason = visitor_allowed_to_checkin(v)
+        # log the result so we can debug
+        app.logger.info("visitor_allowed_to_checkin: allowed=%s reason=%s", allowed, reason)
         if not allowed and not override:
             return jsonify(success=False, message=f"Not allowed to check in: {reason}"), 403
 
         # all good — record badge and check-in time
         v.badge_number = badge
+
+        # --- IMPORTANT: store boolean if your DB column is boolean ---
+        # If your Visitor.verified column is Boolean, save the boolean:
+        try:
+            v.verified = verified_bool
+        except Exception:
+            # fallback: store the string representation (keeps old behaviour)
+            app.logger.exception("Could not assign boolean to v.verified; falling back to string assignment")
+            v.verified = verified
+
         v.check_in = datetime.utcnow()
         db.session.commit()
 
-        return jsonify(success=True, message="Checked in", badge=badge, check_in=v.check_in.isoformat()), 200
+        return jsonify(success=True, message="Checked in", badge=badge, verified=verified , check_in=v.check_in.isoformat()), 200
 
-    except Exception:
-        app.logger.exception("Checkin error")
-        return jsonify(success=False, message="Server error"), 500
+    except Exception as e:
+        # log full traceback for debugging
+        tb = traceback.format_exc()
+        app.logger.error("Checkin error: %s\n%s", str(e), tb)
+
+        # In development you may want to return the traceback to the client (debug help).
+        # Only include traceback in response if DEBUG enabled to avoid leaking internals in production.
+        if app.config.get("DEBUG", False):
+            return jsonify(success=False, message="Server error", error=str(e), traceback=tb), 500
+        else:
+            return jsonify(success=False, message="Server error"), 500
 
 @app.route("/checkout/<int:visitor_id>", methods=["POST"])
 def checkout(visitor_id):
@@ -1351,12 +1394,18 @@ def checkout(visitor_id):
     except Exception:
         data = {}
 
-    app.logger.info("CHECKOUT REQUEST: visitor_id=%s, raw_payload=%s, query_args=%s", visitor_id, data, dict(request.args))
+    app.logger.info(
+        "CHECKOUT REQUEST: visitor_id=%s, raw_payload=%s, query_args=%s",
+        visitor_id, data, dict(request.args)
+    )
 
     # prefer role from POST body -> request.args -> DB/cookie fallback
     role_raw = (data.get('role') or request.args.get('role') or current_role_authoritative() or "")
     role = str(role_raw).strip().lower()
-    app.logger.info("CHECKOUT ROLE RESOLVED: payload_role=%s, query_role=%s, authoritative=%s", data.get('role'), request.args.get('role'), role)
+    app.logger.info(
+        "CHECKOUT ROLE RESOLVED: payload_role=%s, query_role=%s, authoritative=%s",
+        data.get('role'), request.args.get('role'), role
+    )
 
     if role != "security":
         app.logger.warning("CHECKOUT FORBIDDEN: resolved role=%s (not 'security')", role)
@@ -1364,6 +1413,51 @@ def checkout(visitor_id):
 
     try:
         remarks = (data.get("remarks") or "").strip()
+
+        # --- normalize override (security can force checkout if needed) ---
+        ov_raw = data.get("override", "")
+        if isinstance(ov_raw, bool):
+            override = ov_raw
+        else:
+            override = str(ov_raw or "").strip().lower() in ("true", "1", "yes", "on")
+
+        # small helper for common truthy checkbox/form values
+        def is_truthy(val):
+            if isinstance(val, bool):
+                return val
+            if val is None:
+                return False
+            if isinstance(val, (int, float)):
+                return val != 0
+            s = str(val).strip().lower()
+            return s in ("true", "1", "yes", "on")
+
+        # --- require all_returned (preferred) OR accept returned_items list where every entry is truthy ---
+        all_returned = False
+        if "all_returned" in data:
+            all_returned = is_truthy(data.get("all_returned"))
+        elif "returned_items" in data:
+            ri = data.get("returned_items")
+            if isinstance(ri, list):
+                # treat each element as truthy if it's checkbox-like ("on") or boolean/dict with returned field
+                def item_ok(it):
+                    if isinstance(it, bool):
+                        return it
+                    if isinstance(it, dict):
+                        # check common keys
+                        return is_truthy(it.get("returned") or it.get("checked") or next(iter(it.values()), None))
+                    return is_truthy(it)
+                all_returned = (len(ri) == 0) or all(item_ok(x) for x in ri)
+            elif isinstance(ri, dict):
+                # dict of id -> bool-like
+                all_returned = all(is_truthy(v) for v in ri.values())
+            else:
+                all_returned = is_truthy(ri)
+        else:
+            # no explicit info from client: treat as NOT all returned (force explicit client signal)
+            all_returned = False
+
+        app.logger.info("CHECKOUT: all_returned=%s override=%s payload=%s", all_returned, override, data)
 
         v = Visitor.query.get(visitor_id)
         if not v:
@@ -1377,6 +1471,10 @@ def checkout(visitor_id):
         if v.check_out:
             return jsonify({"success": False, "message": "Visitor already checked out"}), 400
 
+        # enforce 'all_returned' unless override provided
+        if not all_returned and not override:
+            return jsonify({"success": False, "message": "Please mark all return items as returned before checkout."}), 400
+
         # record check-out time and append optional remarks
         v.check_out = datetime.utcnow()
         if remarks:
@@ -1388,6 +1486,7 @@ def checkout(visitor_id):
     except Exception:
         app.logger.exception("Checkout error")
         return jsonify({"success": False, "message": "Server error"}), 500
+
 
 # --- Ensure a default admin user exists (run once on startup) ---
 def ensure_default_admin():
