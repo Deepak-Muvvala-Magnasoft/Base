@@ -4,19 +4,15 @@ import json
 import smtplib
 from flask import g
 from urllib.parse import urlencode
-
+from functools import wraps
 from flask import (
-    Flask, render_template, request, redirect, url_for, flash, jsonify,
+    Flask, render_template, request, redirect, url_for, jsonify,
     make_response, session,
 )
 from flask_sqlalchemy import SQLAlchemy
-# from flask_pymongo import PyMongo
-# from bson.objectid import ObjectId
 from datetime import datetime
-# from authlib.integrations.flask_client import OAuth
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import text
-# from flask import redirect, url_for
 from sqlalchemy import func, inspect
 from werkzeug.security import generate_password_hash, check_password_hash
 from config import (
@@ -24,11 +20,9 @@ from config import (
     SMTP_SERVER, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_MAIL,
     VISITOR_BASE_URL, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
 )
-# from datetime import datetime
 from flask_dance.contrib.google import make_google_blueprint, google
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-# from urllib.parse import quote_plus
 from werkzeug.utils import secure_filename
 from werkzeug.exceptions import BadRequest
 from datetime import timedelta
@@ -118,6 +112,83 @@ def set_auth_cookies(response, username, role="", role_display="", selected_proj
     response.set_cookie("selected_project", selected_project or "", secure=secure_flag, **cookie_opts)
     return response
 
+from functools import wraps
+from flask import session, request, redirect, url_for, flash, jsonify
+
+def _is_strictly_authenticated():
+    """
+    Strict auth check used for protected pages:
+      - Accept g.current_user (DB-backed), OR
+      - Accept server session username, OR
+      - Accept stored cookie auth_user (host-only cookie)
+    IMPORTANT: do NOT accept login via request.args here (prevents ?user=... URL forging).
+    """
+    # prefer DB-loaded user
+    if getattr(g, "current_user", None):
+        return True
+
+    # server-side session fallback
+    if session.get("username"):
+        return True
+
+    # cookie fallback: only accept browser-stored auth_user (not query args)
+    if request.cookies.get("auth_user"):
+        return True
+
+    return False
+
+
+def login_required_strict(f):
+    """Decorator: block access unless strictly authenticated (no ?user query allowed)."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if _is_strictly_authenticated():
+            return f(*args, **kwargs)
+
+        # AJAX callers: return JSON 401
+        if request.is_json or request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return jsonify({"success": False, "message": "Unauthorized"}), 401
+
+        # normal browser: redirect to login (optionally include next)
+        next_url = request.path
+        flash("Please login to access that page", "warning")
+        return redirect(url_for("login", next=next_url))
+    return decorated
+
+
+def role_required(role_name):
+    """
+    Decorator: require a normalized role (e.g., 'security', 'admin').
+    Uses strict auth first then checks role resolved from DB/session/cookie.
+    """
+    role_name = (role_name or "").strip().lower()
+    def _decorator(f):
+        @wraps(f)
+        def decorated(*args, **kwargs):
+            if not _is_strictly_authenticated():
+                if request.is_json or request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                    return jsonify({"success": False, "message": "Unauthorized"}), 401
+                flash("Please login to access that page", "warning")
+                return redirect(url_for("login", next=request.path))
+
+            # resolve authoritative role: prefer DB user -> session -> cookie
+            db_user = getattr(g, "current_user", None)
+            if db_user and getattr(db_user, "role", None):
+                user_role = (db_user.role or "").strip().lower()
+            elif session.get("role"):
+                user_role = (session.get("role") or "").strip().lower()
+            else:
+                user_role = (request.cookies.get("auth_role") or "").strip().lower()
+
+            if user_role != role_name:
+                # Forbidden for wrong role
+                if request.is_json or request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                    return jsonify({"success": False, "message": "Forbidden"}), 403
+                flash("Insufficient permissions", "danger")
+                return redirect(url_for("landing_page"))
+            return f(*args, **kwargs)
+        return decorated
+    return _decorator
 
 
 # -----------------------------------------------------------------------------------
@@ -139,59 +210,7 @@ def load_current_user():
             g.current_user = None
 
 
-# @app.context_processor
-# def inject_user_role():
-#     """
-#     Provide role/user info to templates using request.args (preferred) and fallback to DB/cookies.
-#     Returns:
-#       - current_user: username or None
-#       - is_authenticated: bool
-#       - user_role: normalized role (lowercase)
-#       - role_display: nice display string (title-case)
-#       - is_superadmin: bool
-#       - selected_project: project name (if present)
-#       - auth_qs: query string like ?user=..&role=..
-#     """
-#     # prefer DB-loaded user (safer) but fall back to request.args and cookies
-#     db_user = getattr(g, "current_user", None)
-#     username = db_user.username if db_user else (request.args.get("user") or get_current_username() or None)
-#     is_authenticated = bool(username)
 
-#     # Prefer authoritative DB role if available, otherwise use request args then cookie
-#     if db_user:
-#         role_raw = (db_user.role or "").strip()
-#     else:
-#         role_raw = (request.args.get("role") or get_current_role() or "").strip()
-
-#     role_norm = role_raw.lower()
-#     role_display = (request.args.get("role_display") or get_role_display() or (role_raw.title() if role_raw else ""))
-
-#     selected_project = get_selected_project() or ""
-
-#     # Build auth_qs to append to URLs in templates (e.g. ?user=...&role=...)
-#     auth_params = {}
-#     if username:
-#         auth_params["user"] = username
-#     if role_norm:
-#         auth_params["role"] = role_norm
-#     if role_display:
-#         auth_params["role_display"] = role_display
-#     auth_qs = ("?" + urlencode(auth_params)) if auth_params else ""
-
-#     # Serialize auth_params to JSON string (safe for templates/JS)
-#     auth_params_json = json.dumps(auth_params or {})
-
-#     return {
-#         "current_user": username,
-#         "is_authenticated": is_authenticated,
-#         "user_role": role_norm,
-#         "role_display": role_display,
-#         "is_superadmin": role_norm == "super admin",
-#         "selected_project": selected_project,
-#         "auth_qs": auth_qs,
-#         "auth_params": auth_params,
-#         "auth_params_json": auth_params_json,   # <-- add this
-#     }
 
 @app.context_processor
 def inject_user_role():
@@ -606,16 +625,6 @@ def logout():
     
     return redirect(url_for("landing_page"))
 
-# ---------- EXIT (full sign-out) ----------
-# @app.route("/exit")
-# def exit_app():
-#     """
-#     Full sign-out: clear all auth cookies and redirect to landing/login.
-#     """
-#     resp = redirect(url_for("login"))
-#     clear_auth_cookies(resp)   # this deletes auth_user, auth_role, auth_role_display, selected_project
-#     return resp
-
 @app.route("/exit")
 def exit_app():
     session.clear()
@@ -629,6 +638,7 @@ def vms_demo():
 
 
 @app.route("/vms")
+@login_required_strict
 def vms():
     app.logger.info("✔ /vms route HIT — remote=%s, args=%s", request.remote_addr, request.args)
     return render_template('visitor_form.html', user=get_current_username())
