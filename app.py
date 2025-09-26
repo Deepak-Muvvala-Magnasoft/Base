@@ -596,15 +596,15 @@ def login():
 
 
 # ---------- LOGOUT (partial logout) ----------
-# @app.route("/logout")
-# def logout():
-#     """
-#     Minimal / logout behavior: DO NOT delete any auth cookies.
-#     This keeps both auth_user and auth_role intact so the header continues
-#     to show the username and role until the user clicks Exit (which does a full sign-out).
-#     """
+@app.route("/logout")
+def logout():
+    """
+    Minimal / logout behavior: DO NOT delete any auth cookies.
+    This keeps both auth_user and auth_role intact so the header continues
+    to show the username and role until the user clicks Exit (which does a full sign-out).
+    """
     
-#     return redirect(url_for("landing_page"))
+    return redirect(url_for("landing_page"))
 
 # ---------- EXIT (full sign-out) ----------
 # @app.route("/exit")
