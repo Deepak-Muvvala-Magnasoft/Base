@@ -1129,6 +1129,7 @@ def get_users():
 
 
 @app.route("/visitors")
+@login_required_strict
 def visitors_list():
     import json as _json
     all_visitors = Visitor.query.order_by(Visitor.created_at.desc()).all()

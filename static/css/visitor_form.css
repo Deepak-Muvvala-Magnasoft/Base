@@ -471,7 +471,18 @@ input:invalid {
     z-index: 1050;
     display: none;
 }
-
+/* add to static/css/visitor_form.css */
+.col-field {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 8px;
+}
+.col-field input[type="file"]#photo {
+  margin-left: 0;
+  padding: 6px;
+  transform: none;
+}
 /* responsive */
 @media (max-width: 880px) {
     .form-grid {

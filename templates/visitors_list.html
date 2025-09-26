@@ -21,14 +21,6 @@
       <!-- <li><a href="{{ url_for('logout') }}">Logout</a></li> -->
     </ul>
 
-    <div class="nav-user">
-      {% if current_user %}
-        <div class="small text-end">
-          <div class="fw-semibold">{{ current_user }}</div>
-          <div style="font-size:11px;color:#666;">Role: {{ role_display or user_role }}</div>
-        </div>
-      {% endif %}
-    </div>
   </nav>
   <h2>Visitors List</h2>
   <div class="table-container">
