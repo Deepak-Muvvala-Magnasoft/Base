@@ -77,20 +77,31 @@ def get_selected_project():
 
 
 def set_auth_cookies(response, username, role="", role_display="", selected_project=""):
-    """Set httponly cookies for auth state. Return the response object."""
-    # choose secure=True when using HTTPS/production and set appropriate samesite
-    response.set_cookie("auth_user", username or "", httponly=True, samesite="Lax")
-    response.set_cookie("auth_role", (role or "").strip().lower(), httponly=True, samesite="Lax")
-    response.set_cookie("auth_role_display", role_display or "", httponly=True, samesite="Lax")
-    response.set_cookie("selected_project", selected_project or "", httponly=True, samesite="Lax")
+    """
+    Set auth cookies robustly for both local and proxied (HTTPS-terminated) deployments.
+    Uses X-Forwarded-Proto to detect HTTPS when behind a load balancer.
+    """
+    # Detect whether request was originally HTTPS (common when TLS terminates at LB)
+    forwarded_proto = request.headers.get("X-Forwarded-Proto", "") or ""
+    secure_flag = forwarded_proto.lower() == "https" or request.is_secure
+
+    # ensure cookies apply site-wide
+    cookie_opts = {"httponly": True, "samesite": "Lax", "path": "/"}
+
+    response.set_cookie("auth_user", username or "", secure=secure_flag, **cookie_opts)
+    response.set_cookie("auth_role", (role or "").strip().lower(), secure=secure_flag, **cookie_opts)
+    response.set_cookie("auth_role_display", role_display or "", secure=secure_flag, **cookie_opts)
+    response.set_cookie("selected_project", selected_project or "", secure=secure_flag, **cookie_opts)
     return response
 
 
+
 def clear_auth_cookies(response):
-    response.delete_cookie("auth_user")
-    response.delete_cookie("auth_role")
-    response.delete_cookie("auth_role_display")
-    response.delete_cookie("selected_project")
+    # clear with explicit path and no domain so it matches set cookies
+    response.delete_cookie("auth_user", path="/")
+    response.delete_cookie("auth_role", path="/")
+    response.delete_cookie("auth_role_display", path="/")
+    response.delete_cookie("selected_project", path="/")
     return response
 
 # -----------------------------------------------------------------------------------
@@ -208,6 +219,13 @@ def debug_oauth():
         }
     })
 
+# add somewhere for debugging (temporary)
+@app.route("/debug_cookies")
+def debug_cookies():
+    return jsonify({
+      "cookie_sent_by_browser": {k: request.cookies.get(k) for k in ["auth_user","auth_role","auth_role_display","selected_project"]},
+      "headers": { "X-Forwarded-Proto": request.headers.get("X-Forwarded-Proto"), "Host": request.headers.get("Host") }
+    })
 
 @app.route('/visitor', methods=['GET', 'POST'])
 def visitor_qr():
