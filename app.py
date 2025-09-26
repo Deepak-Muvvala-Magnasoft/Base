@@ -939,7 +939,7 @@ def send_email_to_it(visitor_obj_or_dict, contact_name, contact_email, visitor_i
     try:
         base = VISITOR_BASE_URL or request.url_root.rstrip('/')
     except Exception:
-        base = VISITOR_BASE_URL or "http://localhost:5001"
+        base = VISITOR_BASE_URL or "http://myportal.magnasoft.com"
     base = base.rstrip('/')
 
     approve_link = f"{base}/approve_electronics/{vid}"
