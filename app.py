@@ -607,9 +607,6 @@ def logout():
     app.logger.info("✔ / route HIT — remote=%s, user=%s, args=%s",
                     request.remote_addr, username, request.args)
 
-    if not username:
-        return redirect(url_for("login"))
-
     # prevent caching so auth changes are reflected immediately in browser
     resp = make_response(render_template("landing.html", user=username))
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, private"
