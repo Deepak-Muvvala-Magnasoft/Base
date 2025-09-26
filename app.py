@@ -76,23 +76,23 @@ def get_selected_project():
     return _request.cookies.get("selected_project") or ""
 
 
-def set_auth_cookies(response, username, role="", role_display="", selected_project=""):
-    """
-    Set auth cookies robustly for both local and proxied (HTTPS-terminated) deployments.
-    Uses X-Forwarded-Proto to detect HTTPS when behind a load balancer.
-    """
-    # Detect whether request was originally HTTPS (common when TLS terminates at LB)
-    forwarded_proto = request.headers.get("X-Forwarded-Proto", "") or ""
-    secure_flag = forwarded_proto.lower() == "https" or request.is_secure
+# def set_auth_cookies(response, username, role="", role_display="", selected_project=""):
+#     """
+#     Set auth cookies robustly for both local and proxied (HTTPS-terminated) deployments.
+#     Uses X-Forwarded-Proto to detect HTTPS when behind a load balancer.
+#     """
+#     # Detect whether request was originally HTTPS (common when TLS terminates at LB)
+#     forwarded_proto = request.headers.get("X-Forwarded-Proto", "") or ""
+#     secure_flag = forwarded_proto.lower() == "https" or request.is_secure
 
-    # ensure cookies apply site-wide
-    cookie_opts = {"httponly": True, "samesite": "Lax", "path": "/"}
+#     # ensure cookies apply site-wide
+#     cookie_opts = {"httponly": True, "samesite": "Lax", "path": "/"}
 
-    response.set_cookie("auth_user", username or "", secure=secure_flag, **cookie_opts)
-    response.set_cookie("auth_role", (role or "").strip().lower(), secure=secure_flag, **cookie_opts)
-    response.set_cookie("auth_role_display", role_display or "", secure=secure_flag, **cookie_opts)
-    response.set_cookie("selected_project", selected_project or "", secure=secure_flag, **cookie_opts)
-    return response
+#     response.set_cookie("auth_user", username or "", secure=secure_flag, **cookie_opts)
+#     response.set_cookie("auth_role", (role or "").strip().lower(), secure=secure_flag, **cookie_opts)
+#     response.set_cookie("auth_role_display", role_display or "", secure=secure_flag, **cookie_opts)
+#     response.set_cookie("selected_project", selected_project or "", secure=secure_flag, **cookie_opts)
+#     return response
 
 
 
@@ -103,6 +103,56 @@ def clear_auth_cookies(response):
     response.delete_cookie("auth_role_display", path="/")
     response.delete_cookie("selected_project", path="/")
     return response
+
+def set_auth_cookies(response, username, role="", role_display="", selected_project=""):
+    """
+    Robust cookie setter:
+      - Detects whether host is an IP and avoids setting 'domain' for IPs (use host-only cookie).
+      - Uses X-Forwarded-Proto or request.is_secure to decide Secure flag.
+      - Emits helpful logs to debug per-client failures.
+    """
+    import ipaddress
+
+    # determine host (without port)
+    host = (request.host or "").split(":")[0]
+
+    # is host an IP address?
+    is_ip = False
+    try:
+        if host:
+            ipaddress.ip_address(host)
+            is_ip = True
+    except Exception:
+        is_ip = False
+
+    # Detect whether request originally used HTTPS (common when TLS terminates at LB)
+    forwarded_proto = request.headers.get("X-Forwarded-Proto", "") or ""
+    secure_flag = forwarded_proto.lower() == "https" or request.is_secure
+
+    # base cookie options
+    cookie_opts = {"httponly": True, "samesite": "Lax", "path": "/"}
+
+    # Only set a domain value when host is a normal hostname (not IP or localhost).
+    # Setting domain for IP hosts can cause browsers to ignore the cookie.
+    if host and not is_ip and host not in ("localhost", "127.0.0.1"):
+        # set domain explicitly to the request host (no leading dot). This is safer
+        # than using a different domain or a leading dot that may mismatch.
+        cookie_opts["domain"] = host
+
+    # Helpful debug logging so you can see what's happening on failing clients.
+    # Check your server logs for this line when reproducing from the problematic IP.
+    app.logger.info(
+        "SET_AUTH_COOKIE: user=%s host=%s is_ip=%s forwarded_proto=%s request.is_secure=%s secure_flag=%s cookie_opts=%s",
+        username, host, is_ip, forwarded_proto, request.is_secure, secure_flag, cookie_opts
+    )
+
+    # finally set the cookies
+    response.set_cookie("auth_user", username or "", secure=secure_flag, **cookie_opts)
+    response.set_cookie("auth_role", (role or "").strip().lower(), secure=secure_flag, **cookie_opts)
+    response.set_cookie("auth_role_display", role_display or "", secure=secure_flag, **cookie_opts)
+    response.set_cookie("selected_project", selected_project or "", secure=secure_flag, **cookie_opts)
+    return response
+
 
 # -----------------------------------------------------------------------------------
 
