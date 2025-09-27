@@ -292,28 +292,22 @@ def change_password():
     try:
         session_cookie_name = app.config.get('SESSION_COOKIE_NAME', 'session')
         app.logger.info(
-            "DBG CHANGE_PW: remote=%s, xff=%s, proto=%s, host=%s, scheme=%s, ua=%s, cookies=%s, session_cookie=%s",
+            "DBG CHANGE_PW ENTRY: remote=%s, host=%s, scheme=%s, ua=%s, cookies=%s",
             request.remote_addr,
-            request.headers.get('X-Forwarded-For'),
-            request.headers.get('X-Forwarded-Proto'),
             request.host,
             request.scheme,
             request.headers.get('User-Agent'),
-            dict(request.cookies),
-            request.cookies.get(session_cookie_name)
+            dict(request.cookies)
         )
 
-        # Try multiple auth sources: session, flask-login current_user, then auth_user cookie
+        # 1) try session / flask-login / auth_user cookie (unchanged)
         username = session.get('username')
 
         try:
             from flask_login import current_user, login_user
             if not username and getattr(current_user, "is_authenticated", False):
                 uid = getattr(current_user, "get_id", None)
-                if callable(uid):
-                    username = uid()
-                else:
-                    username = getattr(current_user, "username", username)
+                username = uid() if callable(uid) else getattr(current_user, "username", username)
         except Exception:
             current_user = None
             login_user = None
@@ -332,56 +326,74 @@ def change_password():
                     except Exception:
                         app.logger.debug("login_user() failed during session restore", exc_info=True)
 
-        # --- NEW: if still not authenticated via session/cookie, accept username+current_password in JSON body ---
-        data = request.get_json(silent=True) or {}
+        # Read json if present; log raw body for debugging (truncated)
+        data = request.get_json(silent=True)
+        if data is None:
+            raw = request.get_data(as_text=True) or ""
+            app.logger.info("DBG CHANGE_PW: no JSON parsed; raw_body (truncated)=%s", raw[:1000])
+        else:
+            app.logger.info("DBG CHANGE_PW: parsed JSON keys=%s", list(data.keys()))
 
+        # 2) Fallback: accept username + current_password in JSON OR via HTTP Basic Auth
         if not username:
-            body_username = (data.get('username') or "").strip()
-            current_password = (data.get('current_password') or "")
+            body_username = ""
+            current_password = ""
+
+            # JSON fallback
+            if data:
+                body_username = (data.get('username') or "").strip()
+                current_password = data.get('current_password') or ""
+
+            # If JSON not provided, try Basic Auth (works well for curl / scripts)
+            if not body_username:
+                auth = request.authorization  # Flask parses "Authorization: Basic ..."
+                if auth:
+                    body_username = auth.username or ""
+                    current_password = auth.password or ""
+
             if body_username and current_password:
                 user_obj = User.query.filter_by(username=body_username).first()
-                # verify user exists and current_password is correct
                 if user_obj and check_password_hash(user_obj.password, current_password):
                     username = user_obj.username
-                    # re-create minimal session without relying on cookie (optional)
                     session['username'] = username
                     session.permanent = True
-                    app.logger.info("CHANGE_PW: authenticated via current_password fallback for user=%s", username)
+                    app.logger.info("CHANGE_PW: authenticated via fallback for user=%s", username)
                 else:
-                    # don't reveal which one failed; log generic and return 401
-                    app.logger.warning("CHANGE_PW: fallback auth failed for username=%s (bad credentials)", body_username)
+                    app.logger.warning("CHANGE_PW: fallback auth failed for username=%s", body_username)
                     return jsonify({"success": False, "message": "Not authenticated"}), 401
 
-        # If still no username, unauthenticated
+        # Still not authenticated -> 401
         if not username:
-            app.logger.info("CHANGE_PW: unauthenticated request; cookies=%s", dict(request.cookies))
+            app.logger.info("CHANGE_PW: unauthenticated (no session/cookie/fallback). cookies=%s", dict(request.cookies))
             return jsonify({"success": False, "message": "Not authenticated"}), 401
 
-        # --- proceed with password change logic ---
-        new_password = (data.get('new_password') or "").strip()
+        # Proceed: validate new_password
+        if data is None:
+            # if no JSON, allow new_password in form data for compatibility
+            new_password = (request.form.get('new_password') or "").strip()
+        else:
+            new_password = (data.get('new_password') or "").strip()
+
         if not new_password or len(new_password) < 8:
             return jsonify({"success": False, "message": "Password must be at least 8 characters"}), 400
 
-        # optional: disallow reusing the same password
         user = User.query.filter_by(username=username).first()
         if not user:
             return jsonify({"success": False, "message": "User not found"}), 404
 
-        # OPTIONAL: ensure new password differs from old
+        # Optional: disallow reuse
         if check_password_hash(user.password, new_password):
             return jsonify({"success": False, "message": "New password must be different from the current password"}), 400
 
-        # set hashed password
         user.password = generate_password_hash(new_password)
-        # user.password_last_changed = datetime.utcnow()   # optional
+        # user.password_last_changed = datetime.utcnow()
         db.session.commit()
         app.logger.info("Password changed for user=%s (via change_password route)", username)
-
         return jsonify({"success": True, "message": "Password changed successfully"}), 200
 
-    except Exception as e:
+    except Exception:
         app.logger.exception("Error changing password (full stack):")
-        return jsonify({"success": False, "message": "Server error: " + str(e)}), 500
+        return jsonify({"success": False, "message": "Server error"}), 500
 
 
 
