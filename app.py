@@ -43,6 +43,7 @@ app.secret_key = os.environ.get("FLASK_SECRET", "super_secret_key")
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.config['PREFERRED_URL_SCHEME'] = 'https'
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=365)
+app.config['ALLOW_HEADER_FALLBACK'] = True
 
 # ----------------- Cookie-based auth helpers (paste after imports) -----------------
 from flask import request as _request
@@ -291,18 +292,21 @@ app.register_blueprint(google_bp, url_prefix="/login")
 def change_password():
     try:
         session_cookie_name = app.config.get('SESSION_COOKIE_NAME', 'session')
+        # Log entry + client IPs (including proxied)
+        proxied_for = request.headers.get('X-Forwarded-For')
+        client_ip = request.remote_addr
         app.logger.info(
-            "DBG CHANGE_PW ENTRY: remote=%s, host=%s, scheme=%s, ua=%s, cookies=%s",
-            request.remote_addr,
+            "DBG CHANGE_PW ENTRY: remote=%s, xff=%s, host=%s, scheme=%s, ua=%s, cookies=%s",
+            client_ip,
+            proxied_for,
             request.host,
             request.scheme,
             request.headers.get('User-Agent'),
             dict(request.cookies)
         )
 
-        # 1) try session / flask-login / auth_user cookie (unchanged)
+        # 1) Try session / flask-login / auth_user cookie
         username = session.get('username')
-
         try:
             from flask_login import current_user, login_user
             if not username and getattr(current_user, "is_authenticated", False):
@@ -326,11 +330,11 @@ def change_password():
                     except Exception:
                         app.logger.debug("login_user() failed during session restore", exc_info=True)
 
-        # Read json if present; log raw body for debugging (truncated)
+        # 2) Parse JSON (robust: try raw body if Content-Type missing)
         data = request.get_json(silent=True)
         if data is None:
             raw = request.get_data(as_text=True) or ""
-            app.logger.info("DBG CHANGE_PW: no JSON parsed; raw_body (truncated)=%s", raw[:1000])
+            app.logger.info("DBG CHANGE_PW: no JSON parsed; raw_body_trunc=%s", raw[:1000])
             if raw:
                 try:
                     parsed = _json.loads(raw)
@@ -342,48 +346,62 @@ def change_password():
         else:
             app.logger.info("DBG CHANGE_PW: parsed JSON keys=%s", list(data.keys()))
 
-        # quick log of session/cookie state for debugging (no sensitive data)
-        app.logger.info("DBG CHANGE_PW: session_username=%s, auth_user_cookie=%s", session.get('username'), request.cookies.get('auth_user'))
+        # 3) Fallback authentication: JSON fields / Basic Auth
+        def try_password_fallback(body_username, current_password):
+            if not body_username or not current_password:
+                return None
+            user_obj = User.query.filter_by(username=body_username).first()
+            if user_obj and check_password_hash(user_obj.password, current_password):
+                return user_obj.username
+            return None
 
-        # 2) Fallback: accept username + current_password in JSON OR via HTTP Basic Auth
-        
         if not username:
-            body_username = ""
-            current_password = ""
-
             # JSON fallback
-            if data:
-                body_username = (data.get('username') or "").strip()
-                current_password = data.get('current_password') or ""
+            body_username = (data.get('username') or "").strip() if data else ""
+            current_password = data.get('current_password') if data else ""
 
-            # If JSON not provided, try Basic Auth (works well for curl / scripts)
+            # Basic Auth fallback (Authorization: Basic ...)
             if not body_username:
-                auth = request.authorization  # Flask parses "Authorization: Basic ..."
+                auth = request.authorization
                 if auth:
                     body_username = auth.username or ""
                     current_password = auth.password or ""
 
+            # Try JSON/Basic auth fallback now
             if body_username and current_password:
-                app.logger.info("DBG CHANGE_PW: fallback candidates - body_username_provided=%s, has_basic_auth=%s",
-                bool(body_username), bool(request.authorization))
-                user_obj = User.query.filter_by(username=body_username).first()
-                if user_obj and check_password_hash(user_obj.password, current_password):
-                    username = user_obj.username
+                found = try_password_fallback(body_username, current_password)
+                if found:
+                    username = found
                     session['username'] = username
                     session.permanent = True
-                    app.logger.info("CHANGE_PW: authenticated via fallback for user=%s", username)
+                    app.logger.info("CHANGE_PW: authenticated via JSON/Basic fallback user=%s", username)
                 else:
-                    app.logger.warning("CHANGE_PW: fallback auth failed for username=%s", body_username)
+                    app.logger.warning("CHANGE_PW: JSON/Basic fallback auth failed for username=%s", body_username)
                     return jsonify({"success": False, "message": "Not authenticated"}), 401
 
-        # Still not authenticated -> 401
+        # 4) HEADER fallback (for stubborn clients behind proxies) — *guarded by config*
+        # Enable with: app.config['ALLOW_HEADER_FALLBACK'] = True
+        if not username and app.config.get('ALLOW_HEADER_FALLBACK', False):
+            header_user = (request.headers.get('X-Username') or "").strip()
+            header_pass = request.headers.get('X-Current-Password') or ""
+            if header_user and header_pass:
+                found = try_password_fallback(header_user, header_pass)
+                if found:
+                    username = found
+                    session['username'] = username
+                    session.permanent = True
+                    app.logger.info("CHANGE_PW: authenticated via header fallback user=%s, client_ip=%s, xff=%s", username, client_ip, proxied_for)
+                else:
+                    app.logger.warning("CHANGE_PW: header fallback auth failed for username=%s, client_ip=%s, xff=%s", header_user, client_ip, proxied_for)
+                    return jsonify({"success": False, "message": "Not authenticated"}), 401
+
+        # 5) If still no username -> unauthenticated
         if not username:
-            app.logger.info("CHANGE_PW: unauthenticated (no session/cookie/fallback). cookies=%s", dict(request.cookies))
+            app.logger.info("CHANGE_PW: unauthenticated (no session/cookie/fallback). cookies=%s, client_ip=%s, xff=%s", dict(request.cookies), client_ip, proxied_for)
             return jsonify({"success": False, "message": "Not authenticated"}), 401
 
-        # Proceed: validate new_password
+        # 6) Validate new_password (support JSON or form)
         if data is None:
-            # if no JSON, allow new_password in form data for compatibility
             new_password = (request.form.get('new_password') or "").strip()
         else:
             new_password = (data.get('new_password') or "").strip()
@@ -395,14 +413,13 @@ def change_password():
         if not user:
             return jsonify({"success": False, "message": "User not found"}), 404
 
-        # Optional: disallow reuse
         if check_password_hash(user.password, new_password):
             return jsonify({"success": False, "message": "New password must be different from the current password"}), 400
 
         user.password = generate_password_hash(new_password)
-        # user.password_last_changed = datetime.utcnow()
+        # user.password_last_changed = datetime.utcnow()  # optional
         db.session.commit()
-        app.logger.info("Password changed for user=%s (via change_password route)", username)
+        app.logger.info("Password changed for user=%s (via change_password)", username)
         return jsonify({"success": True, "message": "Password changed successfully"}), 200
 
     except Exception:
