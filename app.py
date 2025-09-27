@@ -35,9 +35,10 @@ from flask import session, request, redirect, url_for, flash, jsonify
 
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "please-change-this-to-a-secure-random-value")
 
 from werkzeug.middleware.proxy_fix import ProxyFix
-# Trust first proxy's X-Forwarded-* headers (adjust counts if you have more hops)
+
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 app.secret_key = os.environ.get("FLASK_SECRET", "super_secret_key")
 app.config["TEMPLATES_AUTO_RELOAD"] = True
@@ -787,8 +788,7 @@ def login():
 
         else:
             # failed login -> flash an error and redirect back to login page
-            flash("❌ Invalid username or password!", "danger")
-            return redirect(url_for("login"))
+            return redirect(url_for("login", error="❌ Invalid username or password!"))
 
     # GET -> render the login page (always returns a template response)
     return render_template("login.html")

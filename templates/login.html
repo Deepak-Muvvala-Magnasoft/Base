@@ -25,15 +25,28 @@
         <img src="{{ url_for('static', filename='images/user-icon.png') }}" alt="User Logo" class="user-logo" />
       </h1>
 
-      {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-          {% for category, message in messages %}
-            <div class="alert alert-{{ 'danger' if category == 'danger' else category }} mt-2" role="alert">
-              {{ message }}
-            </div>
-          {% endfor %}
-        {% endif %}
-      {% endwith %}
+      {# show error passed via query param (works without cookies/sessions) #}
+{% set q_error = request.args.get('error') %}
+{% if q_error %}
+  <div class="alert alert-danger alert-dismissible fade show mt-2" role="alert">
+    {{ q_error | safe }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+  </div>
+{% else %}
+  {# fallback: still render flashed messages if sessions work elsewhere #}
+  {% with messages = get_flashed_messages(with_categories=True) %}
+    {% if messages %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{ 'danger' if category == 'danger' else category }} alert-dismissible fade show mt-2" role="alert">
+          {{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+{% endif %}
+
+
 
       <form method="POST" aria-label="Login Form">
         <div class="mb-3">
@@ -59,6 +72,30 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+  // Remove only the "error" query param after first load so refresh won't re-show it.
+  document.addEventListener('DOMContentLoaded', function () {
+    try {
+      const u = new URL(window.location.href);
+      if (u.searchParams.has('error')) {
+        // Remove the error param but keep any other params (like ?next=...)
+        u.searchParams.delete('error');
+        // Use replaceState so the back/forward history is preserved and no reload happens
+        window.history.replaceState({}, document.title, u.pathname + u.search + u.hash);
+      }
+    } catch (e) {
+      // Fallback for very old browsers
+      const sp = new URLSearchParams(window.location.search || '');
+      if (sp.has('error')) {
+        sp.delete('error');
+        const newSearch = sp.toString();
+        const newUrl = window.location.pathname + (newSearch ? '?' + newSearch : '') + window.location.hash;
+        window.history.replaceState({}, document.title, newUrl);
+      }
+    }
+  });
+</script>
+
 </body>
 
 </html>
