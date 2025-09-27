@@ -362,10 +362,12 @@ def change_password():
 
         return jsonify({"success": True, "message": "Password changed successfully"}), 200
 
-    except Exception:
-        app.logger.exception("Error changing password")
-        return jsonify({"success": False, "message": "Server error"}), 500
+    except Exception as e:
+        # Log full stack trace to server logs
+        app.logger.exception("Error changing password (full stack):")
 
+        # Return the exception message in the JSON response for debugging (remove in production)
+        return jsonify({"success": False, "message": "Server error: " + str(e)}), 500
 
 
 # --- SQLAlchemy / MySQL ---
