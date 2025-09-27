@@ -10,7 +10,6 @@ from flask import (
     Flask, render_template, request, redirect, url_for, jsonify,
     make_response, session,  redirect, url_for, render_template
 )
-from flask_login import current_user, login_user
 from urllib.parse import urlencode
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
@@ -291,7 +290,8 @@ app.register_blueprint(google_bp, url_prefix="/login")
 @app.route('/change_password', methods=['POST'])
 def change_password():
     try:
-        # --- debug: what server sees (remove later) ---
+             # --- debug: what server sees (remove later) ---
+            # --- debug: what server sees (remove later) ---
         session_cookie_name = app.config.get('SESSION_COOKIE_NAME', 'session')
         app.logger.info(
             "DBG CHANGE_PW: remote=%s, xff=%s, proto=%s, host=%s, scheme=%s, ua=%s, cookies=%s, session_cookie=%s",
@@ -308,28 +308,36 @@ def change_password():
         # Try multiple auth sources: session, flask-login current_user, then auth_user cookie
         username = session.get('username')
 
-        # Prefer flask-login's current_user if present (we import it at module top)
-        if not username and getattr(current_user, "is_authenticated", False):
-            # Try username attribute first; fall back to get_id()
-            username = getattr(current_user, "username", None)
-            if not username:
-                gid = getattr(current_user, "get_id", None)
-                username = gid() if callable(gid) else username
+        # If you're using flask-login, prefer that as authoritative
+        try:
+            from flask_login import current_user, login_user
+            if not username and getattr(current_user, "is_authenticated", False):
+                # current_user may be an object with get_id or username attribute
+                uid = getattr(current_user, "get_id", None)
+                if callable(uid):
+                    username = uid()
+                else:
+                    username = getattr(current_user, "username", username)
+        except Exception:
+            # flask-login not installed/used — ignore
+            current_user = None
+            login_user = None
 
         # Fallback to the auth_user cookie (useful when session was lost but cookie exists)
         if not username:
             cookie_user = request.cookies.get('auth_user')
             if cookie_user:
-                # Attempt to find user in DB; if found, restore session and re-login
+                # Attempt to find user in DB; if found, restore session and (optionally) login_user
                 user = User.query.filter_by(username=cookie_user).first()
                 if user:
                     username = user.username
                     # re-create server-side session entry so subsequent checks work
                     session['username'] = username
                     session.permanent = True
-                    # Re-login via flask-login to recreate current_user/session state
+                    # If flask-login is available, re-login silently so current_user works
                     try:
-                        login_user(user)
+                        if login_user:
+                            login_user(user)
                     except Exception:
                         app.logger.debug("login_user() failed during session restore", exc_info=True)
 
@@ -362,7 +370,6 @@ def change_password():
 
         # Return the exception message in the JSON response for debugging (remove in production)
         return jsonify({"success": False, "message": "Server error: " + str(e)}), 500
-
 
 
 # --- SQLAlchemy / MySQL ---
