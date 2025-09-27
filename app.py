@@ -290,17 +290,65 @@ app.register_blueprint(google_bp, url_prefix="/login")
 @app.route('/change_password', methods=['POST'])
 def change_password():
     try:
-        # get username from session or cookie (whichever you use)
-        username = session.get('username') or request.cookies.get('auth_user')
+        # --- debug: what server sees (remove later) ---
+        app.logger.info(
+            "DBG CHANGE_PW: remote=%s, xff=%s, proto=%s, host=%s, scheme=%s, ua=%s, cookies=%s, session_cookie=%s",
+            request.remote_addr,
+            request.headers.get('X-Forwarded-For'),
+            request.headers.get('X-Forwarded-Proto'),
+            request.host,
+            request.scheme,
+            request.headers.get('User-Agent'),
+            dict(request.cookies),
+            request.cookies.get(app.session_cookie_name)
+        )
+
+        # Try multiple auth sources: session, flask-login current_user, then auth_user cookie
+        username = session.get('username')
+
+        # If you're using flask-login, prefer that as authoritative
+        try:
+            from flask_login import current_user, login_user
+            if not username and getattr(current_user, "is_authenticated", False):
+                # current_user may be an object with get_id or username attribute
+                uid = getattr(current_user, "get_id", None)
+                if callable(uid):
+                    username = uid()
+                else:
+                    username = getattr(current_user, "username", username)
+        except Exception:
+            # flask-login not installed/used — ignore
+            current_user = None
+            login_user = None
+
+        # Fallback to the auth_user cookie (useful when session was lost but cookie exists)
         if not username:
+            cookie_user = request.cookies.get('auth_user')
+            if cookie_user:
+                # Attempt to find user in DB; if found, restore session and (optionally) login_user
+                user = User.query.filter_by(username=cookie_user).first()
+                if user:
+                    username = user.username
+                    # re-create server-side session entry so subsequent checks work
+                    session['username'] = username
+                    session.permanent = True
+                    # If flask-login is available, re-login silently so current_user works
+                    try:
+                        if login_user:
+                            login_user(user)
+                    except Exception:
+                        app.logger.debug("login_user() failed during session restore", exc_info=True)
+
+        # If still no username, unauthenticated
+        if not username:
+            app.logger.info("CHANGE_PW: unauthenticated request; cookies=%s", dict(request.cookies))
             return jsonify({"success": False, "message": "Not authenticated"}), 401
 
+        # --- proceed with password change logic ---
         data = request.get_json(silent=True) or {}
         new_password = (data.get('new_password') or "").strip()
         if not new_password or len(new_password) < 8:
             return jsonify({"success": False, "message": "Password must be at least 8 characters"}), 400
-
-        # optional: further validation can be added here
 
         user = User.query.filter_by(username=username).first()
         if not user:
@@ -308,26 +356,16 @@ def change_password():
 
         # set hashed password
         user.password = generate_password_hash(new_password)
-        # if you keep a 'password_last_changed' timestamp, set it here:
-        # user.password_last_changed = datetime.utcnow()
-
+        # optional: user.password_last_changed = datetime.utcnow()
         db.session.commit()
-        app.logger.info("Password changed for user=%s", username)
-
-        # do NOT force logout here — you said "once user exit, user can login with new password only":
-        # session remains so user stays logged in until they click Exit. If you want to force re-login,
-        # uncomment the logout lines below.
-
-        # session.pop('username', None)
-        # session.pop('role', None)
-        # resp = jsonify({"success": True, "message": "Password changed. Please log in again."})
-        # return resp, 200
+        app.logger.info("Password changed for user=%s (via change_password route)", username)
 
         return jsonify({"success": True, "message": "Password changed successfully"}), 200
 
     except Exception:
         app.logger.exception("Error changing password")
         return jsonify({"success": False, "message": "Server error"}), 500
+
 
 
 # --- SQLAlchemy / MySQL ---
