@@ -264,7 +264,7 @@
     try {
       const resp = await fetch(`/change_password`, {
         method: 'POST',
-        credentials: 'same-origin',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ new_password: newPassword })
       });

@@ -30,6 +30,9 @@ from email.mime.text import MIMEText
 from werkzeug.utils import secure_filename
 from werkzeug.exceptions import BadRequest
 from datetime import timedelta
+from functools import wraps
+from flask import session, request, redirect, url_for, flash, jsonify
+
 
 app = Flask(__name__)
 
@@ -76,25 +79,6 @@ def get_selected_project():
     return _request.cookies.get("selected_project") or ""
 
 
-# def set_auth_cookies(response, username, role="", role_display="", selected_project=""):
-#     """
-#     Set auth cookies robustly for both local and proxied (HTTPS-terminated) deployments.
-#     Uses X-Forwarded-Proto to detect HTTPS when behind a load balancer.
-#     """
-#     # Detect whether request was originally HTTPS (common when TLS terminates at LB)
-#     forwarded_proto = request.headers.get("X-Forwarded-Proto", "") or ""
-#     secure_flag = forwarded_proto.lower() == "https" or request.is_secure
-
-#     # ensure cookies apply site-wide
-#     cookie_opts = {"httponly": True, "samesite": "Lax", "path": "/"}
-
-#     response.set_cookie("auth_user", username or "", secure=secure_flag, **cookie_opts)
-#     response.set_cookie("auth_role", (role or "").strip().lower(), secure=secure_flag, **cookie_opts)
-#     response.set_cookie("auth_role_display", role_display or "", secure=secure_flag, **cookie_opts)
-#     response.set_cookie("selected_project", selected_project or "", secure=secure_flag, **cookie_opts)
-#     return response
-
-
 
 def clear_auth_cookies(response):
     # clear with explicit path and no domain so it matches set cookies
@@ -105,10 +89,23 @@ def clear_auth_cookies(response):
     return response
 
 def set_auth_cookies(response, username, role="", role_display="", selected_project=""):
+    # Detect whether request came over HTTPS (directly or via proxy)
     forwarded_proto = request.headers.get("X-Forwarded-Proto", "") or ""
     secure_flag = forwarded_proto.lower() == "https" or request.is_secure
+
     max_age = 365 * 24 * 3600   # 1 year
-    cookie_opts = {"httponly": True, "samesite": "Lax", "path": "/", "max_age": max_age}
+
+    # Use SameSite=None when cookie will be Secure (required by browsers).
+    # For non-HTTPS/dev, keep Lax so browser behavior is safe for local testing.
+    samesite_val = "None" if secure_flag else "Lax"
+
+    cookie_opts = {
+        "httponly": True,
+        "samesite": samesite_val,
+        "path": "/",
+        "max_age": max_age
+    }
+
     # host-only cookie: do NOT set domain
     response.set_cookie("auth_user", username or "", secure=secure_flag, **cookie_opts)
     response.set_cookie("auth_role", (role or "").strip().lower(), secure=secure_flag, **cookie_opts)
@@ -116,8 +113,6 @@ def set_auth_cookies(response, username, role="", role_display="", selected_proj
     response.set_cookie("selected_project", selected_project or "", secure=secure_flag, **cookie_opts)
     return response
 
-from functools import wraps
-from flask import session, request, redirect, url_for, flash, jsonify
 
 def _is_strictly_authenticated():
     """
@@ -995,7 +990,28 @@ def send_email_to_it(visitor_obj_or_dict, contact_name, contact_email, visitor_i
     approve_link = f"{base}/approve_electronics/{vid}"
     decline_link = f"{base}/decline_electronics/{vid}"
 
-    subject = "IT Approval Required — Visitor carrying electronic item(s)"
+    dept = ""
+    try:
+        # if visitor is SQLAlchemy object
+        dept = (getattr(v, "dept", None) or getattr(v, "department", None) or "") if hasattr(v, "__table__") else ""
+    except Exception:
+        dept = ""
+
+    if not dept and isinstance(v, dict):
+        dept = v.get("dept") or v.get("department") or ""
+
+    dept = (dept or "").strip()
+
+    # friendly display: uppercase short acronyms (IT, HR) else Title Case
+    if not dept:
+        dept_display = (contact_name or "IT")
+    else:
+        dept_display = dept.upper() if len(dept) <= 3 else dept.title()
+
+    # final subject uses the requested format
+    subject = f"IT Approval Required for {dept_display} — Visitor carrying electronic item(s)"
+    # ----- end replacement -----
+
     body = f"""
     <html><body>
       <p>Hello {html.escape(str(contact_name or ''))},</p>
@@ -1066,7 +1082,7 @@ def send_email_to_contact(visitor_obj_or_dict, visitor_id=None):
         base = VISITOR_BASE_URL or request.url_root.rstrip('/')
     except Exception:
         # if called outside request context, fall back to localhost or config
-        base = VISITOR_BASE_URL or "http://localhost:5001"
+        base = VISITOR_BASE_URL or "http://myportal.magnasoft.com"
     base = base.rstrip('/')
 
     approve_link = f"{base}/approve_visitor/{vid}"
