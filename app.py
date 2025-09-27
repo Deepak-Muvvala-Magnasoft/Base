@@ -331,10 +331,22 @@ def change_password():
         if data is None:
             raw = request.get_data(as_text=True) or ""
             app.logger.info("DBG CHANGE_PW: no JSON parsed; raw_body (truncated)=%s", raw[:1000])
+            if raw:
+                try:
+                    parsed = _json.loads(raw)
+                    if isinstance(parsed, dict):
+                        data = parsed
+                        app.logger.info("DBG CHANGE_PW: parsed raw body as JSON keys=%s", list(data.keys()))
+                except Exception as _e:
+                    app.logger.info("DBG CHANGE_PW: raw body not JSON (parse error): %s", str(_e))
         else:
             app.logger.info("DBG CHANGE_PW: parsed JSON keys=%s", list(data.keys()))
 
+        # quick log of session/cookie state for debugging (no sensitive data)
+        app.logger.info("DBG CHANGE_PW: session_username=%s, auth_user_cookie=%s", session.get('username'), request.cookies.get('auth_user'))
+
         # 2) Fallback: accept username + current_password in JSON OR via HTTP Basic Auth
+        
         if not username:
             body_username = ""
             current_password = ""
@@ -352,6 +364,8 @@ def change_password():
                     current_password = auth.password or ""
 
             if body_username and current_password:
+                app.logger.info("DBG CHANGE_PW: fallback candidates - body_username_provided=%s, has_basic_auth=%s",
+                bool(body_username), bool(request.authorization))
                 user_obj = User.query.filter_by(username=body_username).first()
                 if user_obj and check_password_hash(user_obj.password, current_password):
                     username = user_obj.username
