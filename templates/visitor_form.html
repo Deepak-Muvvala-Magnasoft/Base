@@ -211,7 +211,8 @@
 
   <!-- Other items text (hidden by default) -->
   <div id="itemsOtherWrap" style="display:none; margin-top:10px;">
-    <input id="itemsOtherText" type="text" name="otherItems" placeholder="Describe other items">
+    <!-- Important: disabled by default so it's not validated when hidden -->
+    <input id="itemsOtherText" type="text" name="otherItems" placeholder="Describe other items" disabled>
   </div>
 
 </div>
@@ -345,23 +346,7 @@ if (contactPersonEl) {
       toggleItemsOther();
     }
 
-    // Optional: final validation before submit (extra safety)
-    const form = document.querySelector('form');
-    if (form) {
-      form.addEventListener('submit', function(e) {
-        // if purpose is Other but empty, prevent submit (browser also blocks due to required)
-        if (purposeSelect && purposeSelect.value === 'Other' && otherPurposeInput && !otherPurposeInput.value.trim()) {
-          otherPurposeInput.reportValidity();
-          e.preventDefault();
-          return;
-        }
-        if (itemsOtherCheckbox && itemsOtherCheckbox.checked && itemsOtherText && !itemsOtherText.value.trim()) {
-          itemsOtherText.reportValidity();
-          e.preventDefault();
-          return;
-        }
-      });
-    }
+    // NOTE: removed the extra submit listener here (we have a single AJAX submit handler in DOMContentLoaded)
   })();
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -400,136 +385,161 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function showError(el, msg) { if (el) el.textContent = msg || ''; }
 
-if (idType) idType.addEventListener('change', updateIdValidation);
+  function updateIdValidation() {
+    const val = idType && idType.value;
 
-(function () {
-  const input = document.getElementById('photo');
-  const preview = document.getElementById('photoPreview');
-  const previewWrap = document.getElementById('photoPreviewWrap');
-  // adjust max dimension (px) for resizing before upload
-  const MAX_DIM = 1280;
-
-  // helper to create File from Blob (preserve original name if possible)
-  function blobToFile(blob, fileName, mimeType) {
-    try {
-      return new File([blob], fileName, { type: mimeType, lastModified: Date.now() });
-    } catch (e) {
-      // IE fallback (older): blob.name isn't supported; return blob as-is
-      blob.name = fileName;
-      return blob;
+    // If there is a recognized ID type, enable the requirements for idNumber
+    if (val && ID_PATTERNS[val]) {
+      idNumber.required = true;
+      idNumber.placeholder = ID_PATTERNS[val].placeholder;
+      idNumber.title = ID_PATTERNS[val].title;
+      idNumber.setAttribute('pattern', ID_PATTERNS[val].regex.source);
+      // clear any old custom validity so browser starts fresh
+      idNumber.setCustomValidity('');
+    } else {
+      // NO id type selected -> ensure idNumber is NOT required and no pattern
+      idNumber.required = false;
+      idNumber.removeAttribute('pattern');
+      idNumber.placeholder = 'Enter ID Number';
+      idNumber.title = '';
+      // clear any previous custom validity so browser won't mark it invalid
+      idNumber.setCustomValidity('');
+      // also clear invalid/valid mark classes (optional for UI cleanliness)
+      clearMarks(idNumber);
     }
   }
 
-  // resize image if larger than MAX_DIM, returns Promise<File>
-  function resizeImageFile(file) {
-    return new Promise((resolve) => {
-      if (!file || !file.type.startsWith('image/')) return resolve(file);
+  // attach listener so idNumber state updates when idType changes
+  if (idType) idType.addEventListener('change', updateIdValidation);
 
-      const img = new Image();
-      const url = URL.createObjectURL(file);
-      img.onload = () => {
-        let { width, height } = img;
-        let scale = 1;
-        if (width > MAX_DIM || height > MAX_DIM) {
-          scale = Math.min(MAX_DIM / width, MAX_DIM / height);
-        }
-        if (scale >= 1) {
-          URL.revokeObjectURL(url);
-          return resolve(file); // already small enough
-        }
+  (function () {
+    const input = document.getElementById('photo');
+    const preview = document.getElementById('photoPreview');
+    const previewWrap = document.getElementById('photoPreviewWrap');
+    // adjust max dimension (px) for resizing before upload
+    const MAX_DIM = 1280;
 
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.round(width * scale);
-        canvas.height = Math.round(height * scale);
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-        // convert to JPEG to reduce size (adjust quality if you want)
-        canvas.toBlob((blob) => {
-          URL.revokeObjectURL(url);
-          const newFile = blobToFile(blob, (file.name || 'photo') + '.jpg', 'image/jpeg');
-          resolve(newFile);
-        }, 'image/jpeg', 0.85);
-      };
-      img.onerror = () => {
-        URL.revokeObjectURL(url);
-        resolve(file);
-      };
-      img.src = url;
-    });
-  }
-
-  // Put a File into input.files (supports modern browsers)
-  function setInputFile(file) {
-    try {
-      const dt = new DataTransfer();
-      dt.items.add(file);
-      input.files = dt.files;
-    } catch (e) {
-      // If DataTransfer not supported, we can't programmatically set input.files —
-      // user will upload original file (still fine).
-      console.warn('Could not replace input.files programmatically:', e);
-    }
-  }
-
-  // show preview (object URL)
-  function showPreview(file) {
-    if (!file) {
-      preview.style.display = 'none';
-      preview.src = '';
-      return;
-    }
-    const url = URL.createObjectURL(file);
-    preview.onload = () => URL.revokeObjectURL(url);
-    preview.src = url;
-    preview.style.display = 'block';
-  }
-
-  // handle file selection
-  input.addEventListener('change', async (ev) => {
-    const file = ev.target.files && ev.target.files[0];
-    if (!file) {
-      showPreview(null);
-      return;
-    }
-
-    // quick preview immediately (original file)
-    showPreview(file);
-
-    // resize if necessary and replace the input file with resized file (so server receives smaller image)
-    try {
-      const resized = await resizeImageFile(file);
-      // only replace if resized is different (size or name)
-      if (resized && (resized.size !== file.size || resized.name !== file.name)) {
-        setInputFile(resized);
-        showPreview(resized);
+    // helper to create File from Blob (preserve original name if possible)
+    function blobToFile(blob, fileName, mimeType) {
+      try {
+        return new File([blob], fileName, { type: mimeType, lastModified: Date.now() });
+      } catch (e) {
+        // IE fallback (older): blob.name isn't supported; return blob as-is
+        blob.name = fileName;
+        return blob;
       }
-    } catch (err) {
-      console.warn('Image resize failed, uploading original:', err);
     }
-  });
 
-  // If you have a form element, clear preview on reset & after submit
-  // try to guess containing form
-  const form = input.closest('form');
-  if (form) {
-    form.addEventListener('reset', () => {
-      preview.src = '';
-      preview.style.display = 'none';
-    });
+    // resize image if larger than MAX_DIM, returns Promise<File>
+    function resizeImageFile(file) {
+      return new Promise((resolve) => {
+        if (!file || !file.type.startsWith('image/')) return resolve(file);
 
-    // Clear preview after successful submit (if you submit via JS, call this manually)
-    form.addEventListener('submit', () => {
-      // optionally: keep preview if you want; here we clear it to allow next visitor to add photo
-      // If you do server-side redirect back to form, server should return blank value; this just helps SPA flows.
-      setTimeout(() => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => {
+          let { width, height } = img;
+          let scale = 1;
+          if (width > MAX_DIM || height > MAX_DIM) {
+            scale = Math.min(MAX_DIM / width, MAX_DIM / height);
+          }
+          if (scale >= 1) {
+            URL.revokeObjectURL(url);
+            return resolve(file); // already small enough
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.round(width * scale);
+          canvas.height = Math.round(height * scale);
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+          // convert to JPEG to reduce size (adjust quality if you want)
+          canvas.toBlob((blob) => {
+            URL.revokeObjectURL(url);
+            const newFile = blobToFile(blob, (file.name || 'photo') + '.jpg', 'image/jpeg');
+            resolve(newFile);
+          }, 'image/jpeg', 0.85);
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          resolve(file);
+        };
+        img.src = url;
+      });
+    }
+
+    // Put a File into input.files (supports modern browsers)
+    function setInputFile(file) {
+      try {
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        input.files = dt.files;
+      } catch (e) {
+        // If DataTransfer not supported, we can't programmatically set input.files —
+        // user will upload original file (still fine).
+        console.warn('Could not replace input.files programmatically:', e);
+      }
+    }
+
+    // show preview (object URL)
+    function showPreview(file) {
+      if (!file) {
+        preview.style.display = 'none';
+        preview.src = '';
+        return;
+      }
+      const url = URL.createObjectURL(file);
+      preview.onload = () => URL.revokeObjectURL(url);
+      preview.src = url;
+      preview.style.display = 'block';
+    }
+
+    // handle file selection
+    if (input) {
+      input.addEventListener('change', async (ev) => {
+        const file = ev.target.files && ev.target.files[0];
+        if (!file) {
+          showPreview(null);
+          return;
+        }
+
+        // quick preview immediately (original file)
+        showPreview(file);
+
+        // resize if necessary and replace the input file with resized file (so server receives smaller image)
+        try {
+          const resized = await resizeImageFile(file);
+          // only replace if resized is different (size or name)
+          if (resized && (resized.size !== file.size || resized.name !== file.name)) {
+            setInputFile(resized);
+            showPreview(resized);
+          }
+        } catch (err) {
+          console.warn('Image resize failed, uploading original:', err);
+        }
+      });
+    }
+
+    // If you have a form element, clear preview on reset & after submit
+    // try to guess containing form
+    const f = input ? input.closest('form') : null;
+    if (f) {
+      f.addEventListener('reset', () => {
         preview.src = '';
         preview.style.display = 'none';
-        input.value = ''; // reset file input
-      }, 500);
-    });
-  }
-})();
+      });
+
+      // Clear preview after successful submit (if you submit via JS, call this manually)
+      f.addEventListener('submit', () => {
+        setTimeout(() => {
+          preview.src = '';
+          preview.style.display = 'none';
+          if (input) input.value = ''; // reset file input
+        }, 500);
+      });
+    }
+  })();
 
 
   // ensure resetPhotoPreview runs on native form reset event too
@@ -558,186 +568,167 @@ if (idType) idType.addEventListener('change', updateIdValidation);
     el.classList.remove('valid', 'invalid');
   }
 
- function updateIdValidation() {
-  const val = idType.value;
-
-  // If there is a recognized ID type, enable the requirements for idNumber
-  if (ID_PATTERNS[val]) {
-    idNumber.required = true;
-    idNumber.placeholder = ID_PATTERNS[val].placeholder;
-    idNumber.title = ID_PATTERNS[val].title;
-    idNumber.setAttribute('pattern', ID_PATTERNS[val].regex.source);
-    // clear any old custom validity so browser starts fresh
-    idNumber.setCustomValidity('');
-  } else {
-    // NO id type selected -> ensure idNumber is NOT required and no pattern
-    idNumber.required = false;
-    idNumber.removeAttribute('pattern');
-    idNumber.placeholder = 'Enter ID Number';
-    idNumber.title = '';
-    // clear any previous custom validity so browser won't mark it invalid
-    idNumber.setCustomValidity('');
-    // also clear invalid/valid mark classes (optional for UI cleanliness)
-    clearMarks(idNumber);
-  }
-}
-
   // ID number live validation (sanitizes and tests with regex)
-  idNumber.addEventListener('input', () => {
-    const type = idType.value;
-    const raw = idNumber.value;
-    const sanitized = sanitizeForType(raw, type);
+  if (idNumber) {
+    idNumber.addEventListener('input', () => {
+      const type = idType ? idType.value : '';
+      const raw = idNumber.value;
+      const sanitized = sanitizeForType(raw, type);
 
-    // update the visible value for PAN/passport/Aadhaar (helps users)
-    if (type === 'PAN' || type === 'Passport' || type === 'Aadhaar') {
-      if (idNumber.value !== sanitized) idNumber.value = sanitized;
-    }
-
-    if (ID_PATTERNS[type]) {
-      const ok = ID_PATTERNS[type].regex.test(sanitized);
-      if (ok) {
-        showError(idError, '');
-        idNumber.setCustomValidity('');       // ✅ clear browser invalid state
-        markValid(idNumber);
-      } else {
-        showError(idError, 'ID number does not match expected format for selected ID type.');
-        // set a friendly custom validity message (so browser treats it invalid)
-        idNumber.setCustomValidity('ID number invalid for selected type');
-        markInvalid(idNumber);
+      // update the visible value for PAN/passport/Aadhaar (helps users)
+      if (type === 'PAN' || type === 'Passport' || type === 'Aadhaar') {
+        if (idNumber.value !== sanitized) idNumber.value = sanitized;
       }
-    } else {
-      showError(idError, '');
-      idNumber.setCustomValidity('');
-      clearMarks(idNumber);
-    }
-  });
+
+      if (ID_PATTERNS[type]) {
+        const ok = ID_PATTERNS[type].regex.test(sanitized);
+        if (ok) {
+          showError(idError, '');
+          idNumber.setCustomValidity('');       // ✅ clear browser invalid state
+          markValid(idNumber);
+        } else {
+          showError(idError, 'ID number does not match expected format for selected ID type.');
+          // set a friendly custom validity message (so browser treats it invalid)
+          idNumber.setCustomValidity('ID number invalid for selected type');
+          markInvalid(idNumber);
+        }
+      } else {
+        showError(idError, '');
+        idNumber.setCustomValidity('');
+        clearMarks(idNumber);
+      }
+    });
+  }
 
   // Email live validation
-email.addEventListener('input', () => {
-  const value = email.value.trim();
-  email.value = value; // remove accidental spaces
+  if (email) {
+    email.addEventListener('input', () => {
+      const value = email.value.trim();
+      email.value = value; // remove accidental spaces
 
-  if (value === "") {
-    showError(emailError, 'Email is required.');
-    email.setCustomValidity('Email is required.');
-    email.classList.add('invalid');
-    email.classList.remove('valid');
-    return;
+      if (value === "") {
+        showError(emailError, 'Email is required.');
+        email.setCustomValidity('Email is required.');
+        email.classList.add('invalid');
+        email.classList.remove('valid');
+        return;
+      }
+
+      // simple regex for email check (more reliable than only checkValidity)
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+      if (emailRegex.test(value)) {
+        showError(emailError, '');
+        email.setCustomValidity('');   // ✅ clears stuck invalid state
+        email.classList.add('valid');
+        email.classList.remove('invalid');
+      } else {
+        showError(emailError, 'Enter a valid email address.');
+        email.setCustomValidity('Enter a valid email address.'); // mark invalid
+        email.classList.add('invalid');
+        email.classList.remove('valid');
+      }
+    });
   }
-
-  // simple regex for email check (more reliable than only checkValidity)
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-  if (emailRegex.test(value)) {
-    showError(emailError, '');
-    email.setCustomValidity('');   // ✅ clears stuck invalid state
-    email.classList.add('valid');
-    email.classList.remove('invalid');
-  } else {
-    showError(emailError, 'Enter a valid email address.');
-    email.setCustomValidity('Enter a valid email address.'); // mark invalid
-    email.classList.add('invalid');
-    email.classList.remove('valid');
-  }
-});
 
   // Final form submission check -> AJAX submit + popup
-form.addEventListener('submit', async (ev) => {
-  ev.preventDefault();
+  form.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
 
-  // run inline field validators first
-  updateIdValidation();
-  idNumber.dispatchEvent(new Event('input'));
-  email.dispatchEvent(new Event('input'));
+    // run inline field validators first
+    updateIdValidation();
+    if (idNumber) idNumber.dispatchEvent(new Event('input'));
+    if (email) email.dispatchEvent(new Event('input'));
 
-  // --- Ensure items-other is enabled if user checked "Others" so validation includes it ---
-  const itemsOtherCheckboxEl = document.getElementById('itemsOtherCheckbox');
-  const itemsOtherTextEl = document.getElementById('itemsOtherText');
-  if (itemsOtherCheckboxEl && itemsOtherTextEl) {
-    // enable only when checked (so validation will run); keep disabled when not needed
-    itemsOtherTextEl.disabled = !itemsOtherCheckboxEl.checked;
-  }
-
-  // --- START: temporarily remove required on hidden / non-focusable elements ---
-  // We will restore them immediately after checkValidity()
-  const hiddenRequired = Array.from(form.querySelectorAll('[required]')).filter(el => {
-    // ignore true hidden inputs which are never focusable but also not expected to be validated
-    if (el.type === 'hidden') return false;
-    const style = window.getComputedStyle(el);
-    // not rendered (display:none or inside display:none ancestor) or not visible
-    const notRendered = (el.offsetParent === null) || (el.getClientRects().length === 0);
-    const notVisible = style.visibility === 'hidden' || style.display === 'none' || style.opacity === '0';
-    return notRendered || notVisible;
-  });
-  hiddenRequired.forEach(el => { el._required_was = true; el.required = false; });
-  // --- END temporary removal ---
-
-  // stop if invalid (use checkValidity on restored state)
-  const isValid = form.checkValidity();
-
-  // restore required attributes we temporarily removed
-  hiddenRequired.forEach(el => { if (el._required_was) { el.required = true; delete el._required_was; } });
-
-  if (!isValid) {
-    const firstInvalid = form.querySelector(':invalid');
-    if (firstInvalid) firstInvalid.focus();
-    return;
-  }
-
-  // --- before building FormData, make sure itemsOtherText is enabled if checked
-  // (defensive: previously we enabled before validation, re-ensure here)
-  if (itemsOtherCheckboxEl && itemsOtherTextEl) {
-    if (itemsOtherCheckboxEl.checked) itemsOtherTextEl.disabled = false;
-    else itemsOtherTextEl.disabled = true;
-  }
-
-  const submitBtn = form.querySelector('button[type="submit"]');
-  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Submitting...'; }
-
-  try {
-    const resp = await fetch(form.action, {
-      method: 'POST',
-      body: new FormData(form),
-      headers: {
-        'X-Requested-With': 'XMLHttpRequest',
-        'Accept': 'application/json'
-      },
-      credentials: 'same-origin'
-    });
-
-    let data = null;
-    try { data = await resp.json(); } catch (e) { /* invalid JSON */ }
-
-    if (resp.ok && data && data.success) {
-      // success popup and reset form (optional)
-      if (window.showModal) window.showModal(data.message || 'Saved successfully', 'success', true, 3000);
-
-      // reset the form fields
-      form.reset();
-
-      // explicitly clear photo input + preview so next visitor can add a new photo
-      resetPhotoPreview();
-
-      // also clear any dynamic UI that depends on state (optional)
-      // hide items-other text if present
-      const itemsOtherWrap = document.getElementById('itemsOtherWrap');
-      const itemsOtherCheckbox = document.getElementById('itemsOtherCheckbox');
-      const itemsOtherText = document.getElementById('itemsOtherText');
-      if (itemsOtherWrap && itemsOtherCheckbox && itemsOtherText) {
-        itemsOtherWrap.style.display = itemsOtherCheckbox.checked ? 'block' : 'none';
-        if (!itemsOtherCheckbox.checked) itemsOtherText.value = '';
-      }
-    } else {
-      const msg = (data && data.message) ? data.message : (resp.statusText || 'Save failed');
-      if (window.showModal) window.showModal(msg, 'error', true, 5000);
+    // --- Ensure items-other is enabled if user checked "Others" so validation includes it ---
+    const itemsOtherCheckboxEl = document.getElementById('itemsOtherCheckbox');
+    const itemsOtherTextEl = document.getElementById('itemsOtherText');
+    if (itemsOtherCheckboxEl && itemsOtherTextEl) {
+      // enable only when checked (so validation will run); keep disabled when not needed
+      itemsOtherTextEl.disabled = !itemsOtherCheckboxEl.checked;
+      itemsOtherTextEl.required = itemsOtherCheckboxEl.checked;
     }
-  } catch (err) {
-    console.error(err);
-    if (window.showModal) window.showModal('Network / server error. Try again.', 'error', true, 5000);
-  } finally {
-    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Submit'; }
-  }
-});
+
+    // --- START: temporarily remove required on hidden / non-focusable elements ---
+    // We will restore them immediately after checkValidity()
+    const hiddenRequired = Array.from(form.querySelectorAll('[required]')).filter(el => {
+      // ignore true hidden inputs which are never focusable but also not expected to be validated
+      if (el.type === 'hidden') return false;
+      const style = window.getComputedStyle(el);
+      // not rendered (display:none or inside display:none ancestor) or not visible
+      const notRendered = (el.offsetParent === null) || (el.getClientRects().length === 0);
+      const notVisible = style.visibility === 'hidden' || style.display === 'none' || style.opacity === '0';
+      return notRendered || notVisible;
+    });
+    hiddenRequired.forEach(el => { el._required_was = true; el.required = false; });
+    // --- END temporary removal ---
+
+    // stop if invalid (use checkValidity on restored state)
+    const isValid = form.checkValidity();
+
+    // restore required attributes we temporarily removed
+    hiddenRequired.forEach(el => { if (el._required_was) { el.required = true; delete el._required_was; } });
+
+    if (!isValid) {
+      const firstInvalid = form.querySelector(':invalid');
+      if (firstInvalid) firstInvalid.focus();
+      return;
+    }
+
+    // --- before building FormData, make sure itemsOtherText is enabled if checked
+    // (defensive: previously we enabled before validation, re-ensure here)
+    if (itemsOtherCheckboxEl && itemsOtherTextEl) {
+      if (itemsOtherCheckboxEl.checked) itemsOtherTextEl.disabled = false;
+      else itemsOtherTextEl.disabled = true;
+    }
+
+    const submitBtn = form.querySelector('button[type="submit"]');
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Submitting...'; }
+
+    try {
+      const resp = await fetch(form.action, {
+        method: 'POST',
+        body: new FormData(form),
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'Accept': 'application/json'
+        },
+        credentials: 'same-origin'
+      });
+
+      let data = null;
+      try { data = await resp.json(); } catch (e) { /* invalid JSON */ }
+
+      if (resp.ok && data && data.success) {
+        // success popup and reset form (optional)
+        if (window.showModal) window.showModal(data.message || 'Saved successfully', 'success', true, 3000);
+
+        // reset the form fields
+        form.reset();
+
+        // explicitly clear photo input + preview so next visitor can add a new photo
+        resetPhotoPreview();
+
+        // also clear any dynamic UI that depends on state (optional)
+        // hide items-other text if present
+        const itemsOtherWrap = document.getElementById('itemsOtherWrap');
+        const itemsOtherCheckbox = document.getElementById('itemsOtherCheckbox');
+        const itemsOtherText = document.getElementById('itemsOtherText');
+        if (itemsOtherWrap && itemsOtherCheckbox && itemsOtherText) {
+          itemsOtherWrap.style.display = itemsOtherCheckbox.checked ? 'block' : 'none';
+          if (!itemsOtherCheckbox.checked) itemsOtherText.value = '';
+        }
+      } else {
+        const msg = (data && data.message) ? data.message : (resp.statusText || 'Save failed');
+        if (window.showModal) window.showModal(msg, 'error', true, 5000);
+      }
+    } catch (err) {
+      console.error(err);
+      if (window.showModal) window.showModal('Network / server error. Try again.', 'error', true, 5000);
+    } finally {
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Submit'; }
+    }
+  });
 
 
   // init

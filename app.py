@@ -1169,7 +1169,11 @@ def send_email_to_it(visitor_obj_or_dict, contact_name, contact_email, visitor_i
             normalized.append(p.upper() if len(p) <= 3 else p.title())
         dept_display = ", ".join(normalized)
     else:
-        dept_display = (contact_name or "IT")  # final fallback
+          if dept_value:
+    # ... existing normalization ...
+            dept_display = ", ".join(normalized)
+          else:
+            dept_display = "IT" 
 
     # sanitize visitor name
     safe_name = " ".join((name or "Unknown").split())
