@@ -1178,7 +1178,7 @@ def send_email_to_it(visitor_obj_or_dict, contact_name, contact_email, visitor_i
     # sanitize visitor name
     safe_name = " ".join((name or "Unknown").split())
 
-    subject = f"IT Approval Required for {dept_display} — Visitor {safe_name} carrying electronic item(s)"
+    subject = f"IT Approval Required for {dept_display} — Visitor : {safe_name} carrying electronic item(s)"
 # -------------------------------------------------------------------------------
 
     # ----- end replacement -----

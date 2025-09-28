@@ -9,7 +9,7 @@
 </head>
 
 <body>
-    <nav class="navbar">
+  <nav class="navbar">
     <div class="logo">
       <a href="{{ url_for('vms') }}{{ auth_qs }}">
         <img src="{{ url_for('static', filename='images/Magnasoft.png') }}" alt="Company Logo">
@@ -17,12 +17,32 @@
     </div>
     <ul class="nav-links">
       <li><a href="{{ url_for('landing_page') }}{{ auth_qs }}" class="btn btn-outline-primary">Home</a></li>
-      <li><a href="{{ url_for('vms') }}{{ auth_qs }}" class="{% if active_page=='form' %}active{% endif %}">Add Visitor</a></li>
+      <li><a href="{{ url_for('vms') }}{{ auth_qs }}" class="{% if active_page=='form' %}active{% endif %}">Add
+          Visitor</a></li>
       <!-- <li><a href="{{ url_for('logout') }}">Logout</a></li> -->
     </ul>
-
   </nav>
+
   <h2>Visitors List</h2>
+
+  {# ---------- LOCATION FILTER + DOWNLOAD (visible to admins/superadmins) ---------- #}
+  {% if user_role in ['admin','superadmin'] %}
+    <div class="list-controls" style="display:flex;align-items:center;gap:12px;margin:12px 0;">
+      <label for="locationFilter" style="font-weight:600;margin-right:6px;">Filter by location:</label>
+      <select id="locationFilter" aria-label="Filter visitors by location">
+        <option value="ALL">ALL</option>
+        <option value="HYD">HYD</option>
+        <option value="BLR">BLR</option>
+        <option value="HSN">HSN</option>
+      </select>
+
+      <!-- Download icon / button -->
+      <button id="downloadFilteredCsv" title="Download filtered visitors" style="margin-left:8px; padding:6px 10px; cursor:pointer;">
+        ⬇️ Download
+      </button>
+    </div>
+  {% endif %}
+
   <div class="table-container">
     <table>
       <thead>
@@ -47,495 +67,608 @@
         </tr>
       </thead>
       <tbody>
-      {% if visitors %}
-        {% for v in visitors %}
+        {% if visitors %}
+          {% for v in visitors %}
 
-          {# Prefer server-provided cleaned list; fallback to v.items if missing. #}
-          {% set items_with_other = v.get('items_with_other') if v.get('items_with_other') is not none else (v.get('items') if v.get('items') is not none else []) %}
+            {# Prefer server-provided cleaned list; fallback to v.items if missing. #}
+            {% set items_with_other = v.get('items_with_other') if v.get('items_with_other') is not none else (v.get('items') if v.get('items') is not none else []) %}
 
-          {# If fallback produced a string, try to split it into a list and trim entries #}
-          {% if items_with_other is string %}
-            {% set items_with_other = (items_with_other
-              | replace('[','') | replace(']','') | replace('"','') | replace("'",'')
-              | split(',') | map('trim') | list) %}
-          {% endif %}
+            {# If fallback produced a string, try to split it into a list and trim entries #}
+            {% if items_with_other is string %}
+              {% set items_with_other = (items_with_other
+                | replace('[','') | replace(']','') | replace('"','') | replace("'",'')
+                | split(',') | map('trim') | list) %}
+            {% endif %}
 
-          <tr>
-            <td>{{ v.name }}</td>
-            <td>{{ v.company }}</td>
-            <td>{{ v.location }}</td>
+            {# ---------- ROW: add data-... attributes for JS to read ---------- #}
+            <tr
+              data-name="{{ v.name|e }}"
+              data-company="{{ v.company|e }}"
+              data-location="{{ v.location|e }}"
+              data-badge="{{ (v.badge_number or v.get('badge_number', '')) | e }}"
+              data-idnumber="{{ v.idNumber|e }}"
+              data-items="{{ (items_with_other | join(', ')) | e }}"
+              data-checkin="{{ v.check_in or '' }}"
+              data-checkout="{{ v.check_out or '' }}"
+              data-department="{{ (v.get('department') or '') | e }}"
+            >
+              <td>{{ v.name }}</td>
+              <td>{{ v.company }}</td>
+              <td>{{ v.location }}</td>
 
-            <td>{{ v.badge_number or v.get('badge_number', '—') }}</td>
-            <td>{{ v.idNumber }}</td>
-            <td>
-              {{ items_with_other | join(', ') if items_with_other else '—' }}
-            </td>
+              <td>{{ v.badge_number or v.get('badge_number', '—') }}</td>
+              <td>{{ v.idNumber }}</td>
+              <td>
+                {{ items_with_other | join(', ') if items_with_other else '—' }}
+              </td>
 
-            <td class="checkin-cell narrow">
-              {% if v.check_in %}
-              <!-- Already checked-in: show badge (if any) and check-in time -->
-              <div class="checked-compact">
-                <div class="checked-top">✅ Checked In</div>
-                <div class="checked-bottom">{{ v.check_in }}</div>
-              </div>
-              {% else %}
-              <!-- Not checked-in yet: show input + verify + checkin button (security only) -->
-              <div class="stacked">
-                <div class="stack-row">
-                  <label class="sr-only" for="badge-{{ v._id }}">Badge</label>
-                  <input type="text" id="badge-{{ v._id }}" name="badge_number" class="badge-input" placeholder="Badge #"
-                    maxlength="20" oninput="toggleCheckIn('{{ v._id }}')" {% if user_role !='security' %}disabled readonly{% endif %}>
+              <td class="checkin-cell narrow">
+                {% if v.check_in %}
+                <!-- Already checked-in: show badge (if any) and check-in time -->
+                <div class="checked-compact">
+                  <div class="checked-top">✅ Checked In</div>
+                  <div class="checked-bottom">{{ v.check_in }}</div>
                 </div>
-                <div class="stack-row">
-                  <label class="verify-label">
-                    <input type="checkbox" id="verify-{{ v._id }}" onchange="toggleCheckIn('{{ v._id }}')" {% if user_role !='security' %}disabled{% endif %} {{ 'checked' if v.get('verified') else '' }}>
-                    <span>Verified</span>
-                  </label>
-                </div>
-
-                {# check-in button logic: requires both approvals when electronics present #}
-                <div class="stack-row">
-                  {% set dept_ok = (v.get('approved') == True) %}
-                  {% set it_ok = (v.get('electronics_approved') == True) if v.get('has_electronics') else True %}
-                  {% set allowed = v.get('allowed_to_checkin') if v.get('allowed_to_checkin') is not none else (dept_ok and it_ok) %}
-                  {% set explicitly_denied = (v.get('approved') == False) or (v.get('electronics_approved') == False) %}
-
-                  {% if user_role == 'security' %}
-                    {% if allowed %}
-                      <button id="checkin-btn-{{ v._id }}" class="btn small primary" onclick="checkInVisitor('{{ v._id }}')">Check In</button>
-
-                    {% elif explicitly_denied %}
-                      <button class="btn small disabled" disabled title="Visitor not allowed (approval declined)">Not Allowed</button>
-
-                    {% else %}
-                      <button class="btn small disabled" disabled title="Awaiting approvals">Check In</button>
-                    {% endif %}
-                  {% else %}
-                    <button class="btn small disabled" disabled title="Only security can check in">Check In</button>
-                  {% endif %}
-                </div>
-
-              </div>
-              {% endif %}
-            </td>
-
-            <td class="checkout-cell narrow">
-              {% if v.check_out %}
-              <!-- Already checked out: show check-out time only -->
-              <div class="checked-compact">
-                <div class="checked-top">✅ Checked Out</div>
-                <div class="checked-bottom">{{ v.check_out }}</div>
-              </div>
-
-              {% elif v.check_in and not v.check_out %}
-              <!-- Visitor present and not yet checked out: show item checkboxes, remarks, checkout button (security only) -->
-              <div class="stacked checkout-stacked">
-                <div class="stack-row items-wrap">
-                  <strong style="font-size:13px;display:block;margin-bottom:6px;">Return Items</strong>
-                  {% for item in items_with_other %}
-                    <label class="checkout-item-row">
-                      <input type="checkbox"
-                            class="checkout-item-{{ v._id }}"
-                            {% if user_role != 'security' %} disabled{% endif %}
-                            {{ 'checked' if item in v.get('checked_items', []) else '' }}
-                            onchange="toggleCheckout('{{ v._id }}')">
-                      <span class="item-text">{{ item }}</span>
+                {% else %}
+                <!-- Not checked-in yet: show input + verify + checkin button (security only) -->
+                <div class="stacked">
+                  <div class="stack-row">
+                    <label class="sr-only" for="badge-{{ v._id }}">Badge</label>
+                    <input type="text" id="badge-{{ v._id }}" name="badge_number" class="badge-input" placeholder="Badge #"
+                      maxlength="20" oninput="toggleCheckIn('{{ v._id }}')" {% if user_role !='security' %}disabled readonly{% endif %}>
+                  </div>
+                  <div class="stack-row">
+                    <label class="verify-label">
+                      <input type="checkbox" id="verify-{{ v._id }}" onchange="toggleCheckIn('{{ v._id }}')" {% if user_role !='security' %}disabled{% endif %} {{ 'checked' if v.get('verified') else '' }}>
+                      <span>Verified</span>
                     </label>
-                  {% endfor %}
+                  </div>
+
+                  {# check-in button logic: requires both approvals when electronics present #}
+                  <div class="stack-row">
+                    {% set dept_ok = (v.get('approved') == True) %}
+                    {% set it_ok = (v.get('electronics_approved') == True) if v.get('has_electronics') else True %}
+                    {% set allowed = v.get('allowed_to_checkin') if v.get('allowed_to_checkin') is not none else (dept_ok and it_ok) %}
+                    {% set explicitly_denied = (v.get('approved') == False) or (v.get('electronics_approved') == False) %}
+
+                    {% if user_role == 'security' %}
+                      {% if allowed %}
+                        <button id="checkin-btn-{{ v._id }}" class="btn small primary" onclick="checkInVisitor('{{ v._id }}')">Check In</button>
+
+                      {% elif explicitly_denied %}
+                        <button class="btn small disabled" disabled title="Visitor not allowed (approval declined)">Not Allowed</button>
+
+                      {% else %}
+                        <button class="btn small disabled" disabled title="Awaiting approvals">Check In</button>
+                      {% endif %}
+                    {% else %}
+                      <button class="btn small disabled" disabled title="Only security can check in">Check In</button>
+                    {% endif %}
+                  </div>
+
+                </div>
+                {% endif %}
+              </td>
+
+              <td class="checkout-cell narrow">
+                {% if v.check_out %}
+                <!-- Already checked out: show check-out time only -->
+                <div class="checked-compact">
+                  <div class="checked-top">✅ Checked Out</div>
+                  <div class="checked-bottom">{{ v.check_out }}</div>
                 </div>
 
-                <div class="stack-row">
-                  <textarea id="remarks-{{ v._id }}" class="checkout-remarks" placeholder="Remarks (optional)"></textarea>
+                {% elif v.check_in and not v.check_out %}
+                <!-- Visitor present and not yet checked out: show item checkboxes, remarks, checkout button (security only) -->
+                <div class="stacked checkout-stacked">
+                  <div class="stack-row items-wrap">
+                    <strong style="font-size:13px;display:block;margin-bottom:6px;">Return Items</strong>
+                    {% for item in items_with_other %}
+                      <label class="checkout-item-row">
+                        <input type="checkbox"
+                              class="checkout-item-{{ v._id }}"
+                              {% if user_role != 'security' %} disabled{% endif %}
+                              {{ 'checked' if item in v.get('checked_items', []) else '' }}
+                              onchange="toggleCheckout('{{ v._id }}')">
+                        <span class="item-text">{{ item }}</span>
+                      </label>
+                    {% endfor %}
+                  </div>
+
+                  <div class="stack-row">
+                    <textarea id="remarks-{{ v._id }}" class="checkout-remarks" placeholder="Remarks (optional)"></textarea>
+                  </div>
+
+                  <div class="stack-row">
+                    <button id="checkout-btn-{{ v._id }}" class="btn small primary" onclick="checkOutVisitor('{{ v._id }}')" {% if user_role !='security' %} disabled {% endif %}>Check Out</button>
+                  </div>
                 </div>
 
-                <div class="stack-row">
-                  <button id="checkout-btn-{{ v._id }}" class="btn small primary" onclick="checkOutVisitor('{{ v._id }}')" {% if user_role !='security' %} disabled {% endif %}>Check Out</button>
-                </div>
-              </div>
+                {% else %}
+                —
+                {% endif %}
+              </td>
 
+              <td style="text-align:center;">
+                {% if v.photo_url %}
+                  <img src="{{ v.photo_url }}" alt="photo" style="width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid #e6e6e6;">
+                {% else %}
+                  <span class="placeholder">—</span>
+                {% endif %}
+              </td>
+
+              {# ---------- IT Approval (use server-computed boolean) ---------- #}
+              {% set has_electronics = v.get('has_electronics') if v.get('has_electronics') is not none else False %}
+              {% set e_approved = (v.get('electronics_approved') if v.get('electronics_approved') is not none else (v.electronics_approved if v.electronics_approved is defined else None)) %}
+
+              <td>
+                {% if has_electronics %}
+                  {% if e_approved == True %}
+                    <span style="color: green; font-weight: bold;">✅ Approved</span>
+                  {% elif e_approved == False %}
+                    <span style="color: red; font-weight: bold;">❌ Declined</span>
+                  {% else %}
+                    <span style="color: orange; font-weight: bold;">⏳ Pending</span>
+                  {% endif %}
+                {% else %}
+                  <span style="color:#6b7280;font-weight:600;">N/A</span>
+                {% endif %}
+              </td>
+
+              {# ---------- Department Approval column (unchanged behaviour) ---------- #}
+              {% if v.get('approved') is not none %}
+                {% set d_approved = v.get('approved') %}
+              {% elif v.approved is defined %}
+                {% set d_approved = v.approved %}
               {% else %}
-              —
+                {% set d_approved = None %}
               {% endif %}
-            </td>
 
-            <td style="text-align:center;">
-              {% if v.photo_url %}
-                <img src="{{ v.photo_url }}" alt="photo" style="width:64px;height:64px;object-fit:cover;border-radius:6px;border:1px solid #e6e6e6;">
-              {% else %}
-                <span class="placeholder">—</span>
-              {% endif %}
-            </td>
-
-            {# ---------- IT Approval (use server-computed boolean) ---------- #}
-            {% set has_electronics = v.get('has_electronics') if v.get('has_electronics') is not none else False %}
-            {% set e_approved = (v.get('electronics_approved') if v.get('electronics_approved') is not none else (v.electronics_approved if v.electronics_approved is defined else None)) %}
-
-            <td>
-              {% if has_electronics %}
-                {% if e_approved == True %}
+              <td>
+                {% if d_approved == True %}
                   <span style="color: green; font-weight: bold;">✅ Approved</span>
-                {% elif e_approved == False %}
+                {% elif d_approved == False %}
                   <span style="color: red; font-weight: bold;">❌ Declined</span>
                 {% else %}
                   <span style="color: orange; font-weight: bold;">⏳ Pending</span>
                 {% endif %}
-              {% else %}
-                <span style="color:#6b7280;font-weight:600;">N/A</span>
-              {% endif %}
-            </td>
+              </td>
+            </tr>
 
-            {# ---------- Department Approval column (unchanged behaviour) ---------- #}
-            {% if v.get('approved') is not none %}
-              {% set d_approved = v.get('approved') %}
-            {% elif v.approved is defined %}
-              {% set d_approved = v.approved %}
-            {% else %}
-              {% set d_approved = None %}
-            {% endif %}
-
-            <td>
-              {% if d_approved == True %}
-                <span style="color: green; font-weight: bold;">✅ Approved</span>
-              {% elif d_approved == False %}
-                <span style="color: red; font-weight: bold;">❌ Declined</span>
-              {% else %}
-                <span style="color: orange; font-weight: bold;">⏳ Pending</span>
-              {% endif %}
-            </td>
+          {% endfor %}
+        {% else %}
+          <tr class="empty-row">
+            <td colspan="11">No visitors found.</td>
           </tr>
-
-        {% endfor %}
-      {% else %}
-        <tr class="empty-row">
-          <td colspan="11">No visitors found.</td>
-        </tr>
-      {% endif %}
-    </tbody>
+        {% endif %}
+      </tbody>
 
     </table>
   </div>
-   <script id="auth-params" type="application/json">{{ auth_params_json | e }}</script>
+
+  <script id="auth-params" type="application/json">{{ auth_params_json | e }}</script>
   <script>
-  // Auth query-string passed into template by inject_user_role()
-   const AUTH_QS = "{{ auth_qs|e }}";
+    // Auth query-string passed into template by inject_user_role()
+    const AUTH_QS = "{{ auth_qs|e }}";
 
-  // Parse server-provided JSON (auth_params_json injected server-side).
-  // Defensive: fall back to {} if parsing fails.
-let AUTH_PARAMS = {};
-try {
-  const el = document.getElementById('auth-params');
-  if (el && el.textContent && el.textContent.trim()) {
-    AUTH_PARAMS = JSON.parse(el.textContent);
-    if (!AUTH_PARAMS || typeof AUTH_PARAMS !== 'object') AUTH_PARAMS = {};
-  } else {
-    AUTH_PARAMS = {};
-  }
-} catch (e) {
-  console.warn("AUTH_PARAMS parse fallback (invalid/missing JSON)", e);
-  AUTH_PARAMS = {};
-}
-
-const FALLBACK_ROLE = ("{{ user_role|e }}" || (AUTH_PARAMS.role || "")).toString().toLowerCase();
-
-function debugDump() {
-  console.groupCollapsed("VMS DEBUG: auth snapshot");
-  console.log("AUTH_QS (raw):", AUTH_QS);
-  console.log("AUTH_PARAMS (object):", AUTH_PARAMS);
-  console.log("FALLBACK_ROLE:", FALLBACK_ROLE);
-  console.groupEnd();
-}
-try { debugDump(); } catch(e) { console.error("debugDump failed", e); }
-function checkInVisitor(id) {
-  const badgeEl = document.getElementById(`badge-${id}`);
-  const badge = badgeEl?.value?.trim() || "";
-
-  // Defensive: always include role in payload (use AUTH_PARAMS.role or FALLBACK_ROLE)
-  const roleToSend = (AUTH_PARAMS?.role || FALLBACK_ROLE || "").toString().toLowerCase();
-
-  // Client-side guard: only allow security to attempt check-in
-  if (roleToSend !== "security") {
-    alert("Only security users can perform check-in.");
-    return;
-  }
-
-  // Try common verified id patterns first
-  const verifiedIdCandidates = [
-    `verified-${id}`, `id-verified-${id}`, `idverified-${id}`, `id_verified-${id}`, `verified_checkbox-${id}`
-  ];
-
-  let verifiedEl = null;
-  for (const vid of verifiedIdCandidates) {
-    const e = document.getElementById(vid);
-    if (e) { verifiedEl = e; break; }
-  }
-
-  // If not found, try name attributes or class selectors globally
-  if (!verifiedEl) {
-    verifiedEl = document.querySelector(`input[name="verified-${id}"], input[name="id_verified_${id}"], input.verified, input[name^="verified"]`);
-  }
-
-  // If still not found, try to find the nearest checkbox in the same row/container as the badge input
-  if (!verifiedEl && badgeEl) {
-    const row = badgeEl.closest('tr, .visitor-row, .visitor-row-item, .row, li, .visitor-card');
-    if (row) {
-      verifiedEl = row.querySelector('input[type="checkbox"].verified, input[type="checkbox"][data-verified], input[type="checkbox"]');
-    }
-  }
-
-  // If still not found, prompt user to mark verified (previous behavior)
-  if (!verifiedEl) {
-    alert("Please mark the visitor ID as verified before checking in.");
-    return;
-  }
-
-  // Determine verified boolean (works for checkbox or text input)
-  let verifiedBool = false;
-  if (verifiedEl.type === "checkbox") {
-    verifiedBool = verifiedEl.checked;
-  } else {
-    verifiedBool = String(verifiedEl.value || "").trim().toLowerCase() === "true" || Boolean(String(verifiedEl.value || "").trim());
-  }
-
-  // Basic validations
-  if (!badge) {
-    alert("Please enter the badge ID.");
-    return;
-  }
-  if (!verifiedBool) {
-    alert("Please tick 'verified' before checking in.");
-    return;
-  }
-
-  const payload = {
-    badge: badge,
-    role: roleToSend,
-    verified: true
-  };
-
-  console.info("CHECKIN: sending payload to", `/checkin/${id}${AUTH_QS}`, payload);
-
-  fetch(`/checkin/${id}${AUTH_QS}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'same-origin',
-    body: JSON.stringify(payload)
-  })
-  .then(async r => {
-    let bodyText;
-    try { bodyText = await r.text(); } catch(e) { bodyText = "<failed to read body>"; }
-    console.info("CHECKIN: response status", r.status, "body:", bodyText);
-    try { return JSON.parse(bodyText); } catch(e) { return { success: false, message: "Non-JSON response or parse error", raw: bodyText }; }
-  })
-  .then(data => {
-    if (data.success) location.reload();
-    else alert(data.message || "Check-in failed");
-  }).catch(err => {
-    console.error("CHECKIN: fetch error", err);
-    alert("Server error during check-in");
-  });
-}
-
- function checkOutVisitor(id) {
-  const remarks = document.getElementById(`remarks-${id}`)?.value || "";
-
-  // Defensive: always include role in payload (use AUTH_PARAMS.role or FALLBACK_ROLE)
-  const roleToSend = (AUTH_PARAMS?.role || FALLBACK_ROLE || "").toString().toLowerCase();
-
-  // Client-side guard: only allow security to attempt checkout
-  if (roleToSend !== "security") {
-    alert("Only security users can perform checkout.");
-    return;
-  }
-
-  // Try common item-checkbox id patterns first (multiple items)
-  const itemIdCandidates = [
-    `items-${id}`, `checkout-items-${id}`, `items_checked-${id}`, `items-checked-${id}`,
-    `item-list-${id}`, `items_list_${id}`
-  ];
-
-  let itemContainer = null;
-  for (const iid of itemIdCandidates) {
-    const e = document.getElementById(iid);
-    if (e) { itemContainer = e; break; }
-  }
-
-  // If not found, try to find checkboxes by name/class globally (but prefer row-local search below)
-  let globalItemBoxes = null;
-  if (!itemContainer) {
-    globalItemBoxes = document.querySelectorAll(`input[type="checkbox"].checkout-item, input[name^="item_"], input[name^="checkout_item"], input[name^="item-"]`);
-  }
-
-  // --- REPLACE FROM HERE: find row/container and search for checkboxes ---
-  let itemBoxes = [];
-  const remarksEl = document.getElementById(`remarks-${id}`);
-
-  // broaden selector patterns (more tolerant to different markup)
-  const possibleSelectors = [
-    'input[type="checkbox"].checkout-item',
-    'input[type="checkbox"].return-checkbox',
-    'input[type="checkbox"][data-item]',
-    'input[type="checkbox"][data-return]',
-    'input[type="checkbox"][name^="item_"]',
-    'input[type="checkbox"][name^="return_"]',
-    'input[type="checkbox"][id^="item-"]',
-    'input[type="checkbox"][id^="return-"]',
-    'input[type="checkbox"][class*="item"]',
-    'input[type="checkbox"][class*="return"]',
-    'input[type="checkbox"]' // last resort
-  ];
-
-  // if explicit itemContainer exists, prefer its checkboxes
-  if (itemContainer) {
-    itemBoxes = Array.from(itemContainer.querySelectorAll('input[type="checkbox"]'));
-  } else if (remarksEl) {
-    const row = remarksEl.closest('tr, .visitor-row, .visitor-row-item, .row, li, .visitor-card, .card');
-    if (row) {
-      // try the more specific selectors first inside the row
-      for (const sel of possibleSelectors) {
-        const found = Array.from(row.querySelectorAll(sel));
-        if (found.length) { itemBoxes = found; break; }
-      }
-    }
-  }
-
-  // global fallback (if still nothing found)
-  if ((!itemBoxes || itemBoxes.length === 0)) {
-    for (const sel of possibleSelectors) {
-      const found = Array.from(document.querySelectorAll(sel));
-      if (found.length) { itemBoxes = found; break; }
-    }
-  }
-
-  // DEBUG: show what we found (paste this to console if you want)
-  console.debug("CHECKOUT DEBUG: found itemBoxes count=", itemBoxes.length, itemBoxes.map(cb => ({
-    id: cb.id || null,
-    name: cb.name || null,
-    checked: !!cb.checked,
-    disabled: !!cb.disabled,
-    dataset: cb.dataset || {}
-  })));
-
-  // --- VALIDATION: treat disabled boxes as 'ignored' and require remaining ones to be checked ---
-  let itemsChecked = false;
-  let itemsList = [];
-
-  if (itemBoxes && itemBoxes.length > 0) {
-    // ignore disabled inputs (e.g., missing/irrelevant)
-    const relevantBoxes = itemBoxes.filter(cb => !cb.disabled);
-
-    // build items list for server logging
-    itemsList = relevantBoxes.map(cb => cb.dataset?.item || cb.name || cb.id || (cb.closest('label')?.textContent || '').trim()).filter(Boolean);
-
-    const unchecked = relevantBoxes.filter(cb => !cb.checked);
-    // DEBUG details about unchecked
-    if (unchecked.length) {
-      console.warn("CHECKOUT DEBUG: unchecked items:", unchecked.map(cb => cb.id || cb.name || cb.dataset?.item || '(no-id)'));
-    }
-
-    itemsChecked = unchecked.length === 0;
-
-    if (!itemsChecked) {
-      alert("Please mark all return items as returned before checkout."); // message you saw
-      return;
-    }
-  } else {
-    // fallback to single 'verified' checkbox like checkInVisitor
-    let verifiedEl = null;
-    const verifiedIdCandidates = [
-      `verified-${id}`, `id-verified-${id}`, `idverified-${id}`, `id_verified-${id}`, `verified_checkbox-${id}`
-    ];
-    for (const vid of verifiedIdCandidates) {
-      const e = document.getElementById(vid);
-      if (e) { verifiedEl = e; break; }
-    }
-    if (!verifiedEl) verifiedEl = document.querySelector(`input[name="verified-${id}"], input[name="id_verified_${id}"], input.verified, input[name^="verified"]`);
-    if (!verifiedEl && remarksEl) {
-      const row = remarksEl.closest('tr, .visitor-row, .visitor-row-item, .row, li, .visitor-card');
-      if (row) verifiedEl = row.querySelector('input[type="checkbox"].verified, input[type="checkbox"][data-verified], input[type="checkbox"]');
-    }
-
-    if (verifiedEl) {
-      if (verifiedEl.type === "checkbox") {
-        if (!verifiedEl.checked) {
-          alert("Please tick 'verified' before checking out this visitor.");
-          return;
-        }
-        itemsChecked = true;
-      } else {
-        const val = String(verifiedEl.value || "").trim().toLowerCase();
-        if (!(val === "true" || Boolean(val))) {
-          alert("Please mark the visitor as verified/returned before checkout.");
-          return;
-        }
-        itemsChecked = true;
-      }
-      // include verifier into itemsList for server
-      itemsList = [(verifiedEl.dataset?.verified || verifiedEl.name || verifiedEl.id || 'verified')];
-    } else {
-      alert("Please mark returned/verified items (or a 'verified' checkbox) before checking out.");
-      return;
-    }
-  }
-
-  // Build returned_items as a dict so server sees explicit truthy values
-  const returned_items = {};
-  if (itemsList && itemsList.length) {
-    itemsList.forEach((it, idx) => {
-      // prefer stable id-like token; fall back to index if not present
-      const key = (typeof it === 'string' && it.trim()) ? it.trim() : `item_${idx+1}`;
-      returned_items[key] = true;
-    });
-  } else {
-    // if we couldn't read item ids (rare), set a single 'verified' truthy flag
-    returned_items['verified'] = true;
-  }
-
-  const payload = {
-    remarks: remarks,
-    role: roleToSend,
-    itemsChecked: !!itemsChecked,   // kept for backward compatibility / logs
-    items: itemsList,               // kept for logs
-    all_returned: !!itemsChecked,   // server will accept this immediately
-    returned_items: returned_items // server will evaluate per-item truthiness
-  };
-
-
-  console.info("CHECKOUT: sending payload to", `/checkout/${id}${AUTH_QS}`, payload);
-
-  fetch(`/checkout/${id}${AUTH_QS}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'same-origin',
-    body: JSON.stringify(payload)
-  })
-  .then(async r => {
-    let bodyText;
-    try { bodyText = await r.text(); } catch(e) { bodyText = "<failed to read body>"; }
-    console.info("CHECKOUT: response status", r.status, "body:", bodyText);
+    // Parse server-provided JSON (auth_params_json injected server-side).
+    // Defensive: fall back to {} if parsing fails.
+    let AUTH_PARAMS = {};
     try {
-      return JSON.parse(bodyText);
-    } catch(e) {
-      return { success: false, message: "Non-JSON response or parse error", raw: bodyText };
+      const el = document.getElementById('auth-params');
+      if (el && el.textContent && el.textContent.trim()) {
+        AUTH_PARAMS = JSON.parse(el.textContent);
+        if (!AUTH_PARAMS || typeof AUTH_PARAMS !== 'object') AUTH_PARAMS = {};
+      } else {
+        AUTH_PARAMS = {};
+      }
+    } catch (e) {
+      console.warn("AUTH_PARAMS parse fallback (invalid/missing JSON)", e);
+      AUTH_PARAMS = {};
     }
-  })
-  .then(data => {
-    if (data.success) {
-      location.reload();
-    } else {
-      alert(data.message || "Checkout failed");
+
+    const FALLBACK_ROLE = ("{{ user_role|e }}" || (AUTH_PARAMS.role || "")).toString().toLowerCase();
+
+    function debugDump() {
+      console.groupCollapsed("VMS DEBUG: auth snapshot");
+      console.log("AUTH_QS (raw):", AUTH_QS);
+      console.log("AUTH_PARAMS (object):", AUTH_PARAMS);
+      console.log("FALLBACK_ROLE:", FALLBACK_ROLE);
+      console.groupEnd();
     }
-  }).catch(err => {
-    console.error("CHECKOUT: fetch error", err);
-    alert("Server error during checkout");
-  });
-}
+    try { debugDump(); } catch (e) { console.error("debugDump failed", e); }
 
-  // Expose for easy manual testing from DevTools console:
-  window.VMS_DEBUG = { debugDump, AUTH_QS, AUTH_PARAMS, FALLBACK_ROLE, checkInVisitor, checkOutVisitor }; 
+    function checkInVisitor(id) {
+      const badgeEl = document.getElementById(`badge-${id}`);
+      const badge = badgeEl?.value?.trim() || "";
 
-</script>
+      // Defensive: always include role in payload (use AUTH_PARAMS.role or FALLBACK_ROLE)
+      const roleToSend = (AUTH_PARAMS?.role || FALLBACK_ROLE || "").toString().toLowerCase();
+
+      // Client-side guard: only allow security to attempt check-in
+      if (roleToSend !== "security") {
+        alert("Only security users can perform check-in.");
+        return;
+      }
+
+      // Try common verified id patterns first
+      const verifiedIdCandidates = [
+        `verified-${id}`, `id-verified-${id}`, `idverified-${id}`, `id_verified-${id}`, `verified_checkbox-${id}`
+      ];
+
+      let verifiedEl = null;
+      for (const vid of verifiedIdCandidates) {
+        const e = document.getElementById(vid);
+        if (e) { verifiedEl = e; break; }
+      }
+
+      // If not found, try name attributes or class selectors globally
+      if (!verifiedEl) {
+        verifiedEl = document.querySelector(`input[name="verified-${id}"], input[name="id_verified_${id}"], input.verified, input[name^="verified"]`);
+      }
+
+      // If still not found, try to find the nearest checkbox in the same row/container as the badge input
+      if (!verifiedEl && badgeEl) {
+        const row = badgeEl.closest('tr, .visitor-row, .visitor-row-item, .row, li, .visitor-card');
+        if (row) {
+          verifiedEl = row.querySelector('input[type="checkbox"].verified, input[type="checkbox"][data-verified], input[type="checkbox"]');
+        }
+      }
+
+      // If still not found, prompt user to mark verified (previous behavior)
+      if (!verifiedEl) {
+        alert("Please mark the visitor ID as verified before checking in.");
+        return;
+      }
+
+      // Determine verified boolean (works for checkbox or text input)
+      let verifiedBool = false;
+      if (verifiedEl.type === "checkbox") {
+        verifiedBool = verifiedEl.checked;
+      } else {
+        verifiedBool = String(verifiedEl.value || "").trim().toLowerCase() === "true" || Boolean(String(verifiedEl.value || "").trim());
+      }
+
+      // Basic validations
+      if (!badge) {
+        alert("Please enter the badge ID.");
+        return;
+      }
+      if (!verifiedBool) {
+        alert("Please tick 'verified' before checking in.");
+        return;
+      }
+
+      const payload = {
+        badge: badge,
+        role: roleToSend,
+        verified: true
+      };
+
+      console.info("CHECKIN: sending payload to", `/checkin/${id}${AUTH_QS}`, payload);
+
+      fetch(`/checkin/${id}${AUTH_QS}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify(payload)
+        })
+        .then(async r => {
+          let bodyText;
+          try { bodyText = await r.text(); } catch (e) { bodyText = "<failed to read body>"; }
+          console.info("CHECKIN: response status", r.status, "body:", bodyText);
+          try { return JSON.parse(bodyText); } catch (e) { return { success: false, message: "Non-JSON response or parse error", raw: bodyText }; }
+        })
+        .then(data => {
+          if (data.success) location.reload();
+          else alert(data.message || "Check-in failed");
+        }).catch(err => {
+          console.error("CHECKIN: fetch error", err);
+          alert("Server error during check-in");
+        });
+    }
+
+    function checkOutVisitor(id) {
+      const remarks = document.getElementById(`remarks-${id}`)?.value || "";
+
+      // Defensive: always include role in payload (use AUTH_PARAMS.role or FALLBACK_ROLE)
+      const roleToSend = (AUTH_PARAMS?.role || FALLBACK_ROLE || "").toString().toLowerCase();
+
+      // Client-side guard: only allow security to attempt checkout
+      if (roleToSend !== "security") {
+        alert("Only security users can perform checkout.");
+        return;
+      }
+
+      // Try common item-checkbox id patterns first (multiple items)
+      const itemIdCandidates = [
+        `items-${id}`, `checkout-items-${id}`, `items_checked-${id}`, `items-checked-${id}`,
+        `item-list-${id}`, `items_list_${id}`
+      ];
+
+      let itemContainer = null;
+      for (const iid of itemIdCandidates) {
+        const e = document.getElementById(iid);
+        if (e) { itemContainer = e; break; }
+      }
+
+      // If not found, try to find checkboxes by name/class globally (but prefer row-local search below)
+      let globalItemBoxes = null;
+      if (!itemContainer) {
+        globalItemBoxes = document.querySelectorAll(`input[type="checkbox"].checkout-item, input[name^="item_"], input[name^="checkout_item"], input[name^="item-"]`);
+      }
+
+      // --- REPLACE FROM HERE: find row/container and search for checkboxes ---
+      let itemBoxes = [];
+      const remarksEl = document.getElementById(`remarks-${id}`);
+
+      // broaden selector patterns (more tolerant to different markup)
+      const possibleSelectors = [
+        'input[type="checkbox"].checkout-item',
+        'input[type="checkbox"].return-checkbox',
+        'input[type="checkbox"][data-item]',
+        'input[type="checkbox"][data-return]',
+        'input[type="checkbox"][name^="item_"]',
+        'input[type="checkbox"][name^="return_"]',
+        'input[type="checkbox"][id^="item-"]',
+        'input[type="checkbox"][id^="return-"]',
+        'input[type="checkbox"][class*="item"]',
+        'input[type="checkbox"][class*="return"]',
+        'input[type="checkbox"]' // last resort
+      ];
+
+      // if explicit itemContainer exists, prefer its checkboxes
+      if (itemContainer) {
+        itemBoxes = Array.from(itemContainer.querySelectorAll('input[type="checkbox"]'));
+      } else if (remarksEl) {
+        const row = remarksEl.closest('tr, .visitor-row, .visitor-row-item, .row, li, .visitor-card, .card');
+        if (row) {
+          // try the more specific selectors first inside the row
+          for (const sel of possibleSelectors) {
+            const found = Array.from(row.querySelectorAll(sel));
+            if (found.length) { itemBoxes = found; break; }
+          }
+        }
+      }
+
+      // global fallback (if still nothing found)
+      if ((!itemBoxes || itemBoxes.length === 0)) {
+        for (const sel of possibleSelectors) {
+          const found = Array.from(document.querySelectorAll(sel));
+          if (found.length) { itemBoxes = found; break; }
+        }
+      }
+
+      // DEBUG: show what we found (paste this to console if you want)
+      console.debug("CHECKOUT DEBUG: found itemBoxes count=", itemBoxes.length, itemBoxes.map(cb => ({
+        id: cb.id || null,
+        name: cb.name || null,
+        checked: !!cb.checked,
+        disabled: !!cb.disabled,
+        dataset: cb.dataset || {}
+      })));
+
+      // --- VALIDATION: treat disabled boxes as 'ignored' and require remaining ones to be checked ---
+      let itemsChecked = false;
+      let itemsList = [];
+
+      if (itemBoxes && itemBoxes.length > 0) {
+        // ignore disabled inputs (e.g., missing/irrelevant)
+        const relevantBoxes = itemBoxes.filter(cb => !cb.disabled);
+
+        // build items list for server logging
+        itemsList = relevantBoxes.map(cb => cb.dataset?.item || cb.name || cb.id || (cb.closest('label')?.textContent || '').trim()).filter(Boolean);
+
+        const unchecked = relevantBoxes.filter(cb => !cb.checked);
+        // DEBUG details about unchecked
+        if (unchecked.length) {
+          console.warn("CHECKOUT DEBUG: unchecked items:", unchecked.map(cb => cb.id || cb.name || cb.dataset?.item || '(no-id)'));
+        }
+
+        itemsChecked = unchecked.length === 0;
+
+        if (!itemsChecked) {
+          alert("Please mark all return items as returned before checkout."); // message you saw
+          return;
+        }
+      } else {
+        // fallback to single 'verified' checkbox like checkInVisitor
+        let verifiedEl = null;
+        const verifiedIdCandidates = [
+          `verified-${id}`, `id-verified-${id}`, `idverified-${id}`, `id_verified-${id}`, `verified_checkbox-${id}`
+        ];
+        for (const vid of verifiedIdCandidates) {
+          const e = document.getElementById(vid);
+          if (e) { verifiedEl = e; break; }
+        }
+        if (!verifiedEl) verifiedEl = document.querySelector(`input[name="verified-${id}"], input[name="id_verified_${id}"], input.verified, input[name^="verified"]`);
+        if (!verifiedEl && remarksEl) {
+          const row = remarksEl.closest('tr, .visitor-row, .visitor-row-item, .row, li, .visitor-card');
+          if (row) verifiedEl = row.querySelector('input[type="checkbox"].verified, input[type="checkbox"][data-verified], input[type="checkbox"]');
+        }
+
+        if (verifiedEl) {
+          if (verifiedEl.type === "checkbox") {
+            if (!verifiedEl.checked) {
+              alert("Please tick 'verified' before checking out this visitor.");
+              return;
+            }
+            itemsChecked = true;
+          } else {
+            const val = String(verifiedEl.value || "").trim().toLowerCase();
+            if (!(val === "true" || Boolean(val))) {
+              alert("Please mark the visitor as verified/returned before checkout.");
+              return;
+            }
+            itemsChecked = true;
+          }
+          // include verifier into itemsList for server
+          itemsList = [(verifiedEl.dataset?.verified || verifiedEl.name || verifiedEl.id || 'verified')];
+        } else {
+          alert("Please mark returned/verified items (or a 'verified' checkbox) before checking out.");
+          return;
+        }
+      }
+
+      // Build returned_items as a dict so server sees explicit truthy values
+      const returned_items = {};
+      if (itemsList && itemsList.length) {
+        itemsList.forEach((it, idx) => {
+          // prefer stable id-like token; fall back to index if not present
+          const key = (typeof it === 'string' && it.trim()) ? it.trim() : `item_${idx+1}`;
+          returned_items[key] = true;
+        });
+      } else {
+        // if we couldn't read item ids (rare), set a single 'verified' truthy flag
+        returned_items['verified'] = true;
+      }
+
+      const payload = {
+        remarks: remarks,
+        role: roleToSend,
+        itemsChecked: !!itemsChecked, // kept for backward compatibility / logs
+        items: itemsList, // kept for logs
+        all_returned: !!itemsChecked, // server will accept this immediately
+        returned_items: returned_items // server will evaluate per-item truthiness
+      };
 
 
+      console.info("CHECKOUT: sending payload to", `/checkout/${id}${AUTH_QS}`, payload);
+
+      fetch(`/checkout/${id}${AUTH_QS}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify(payload)
+        })
+        .then(async r => {
+          let bodyText;
+          try { bodyText = await r.text(); } catch (e) { bodyText = "<failed to read body>"; }
+          console.info("CHECKOUT: response status", r.status, "body:", bodyText);
+          try {
+            return JSON.parse(bodyText);
+          } catch (e) {
+            return { success: false, message: "Non-JSON response or parse error", raw: bodyText };
+          }
+        })
+        .then(data => {
+          if (data.success) {
+            location.reload();
+          } else {
+            alert(data.message || "Checkout failed");
+          }
+        }).catch(err => {
+          console.error("CHECKOUT: fetch error", err);
+          alert("Server error during checkout");
+        });
+    }
+
+    // Expose for easy manual testing from DevTools console:
+    window.VMS_DEBUG = { debugDump, AUTH_QS, AUTH_PARAMS, FALLBACK_ROLE, checkInVisitor, checkOutVisitor };
+  </script>
+
+  {# ---------- New: location filter + CSV download script ---------- #}
+  <script>
+    (function() {
+      // Utility: escape CSV fields
+      function csvEscape(val) {
+        if (val === null || val === undefined) return '';
+        const s = String(val);
+        // If contains double-quotes, commas, newline -> wrap and escape quotes
+        if (/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+        return s;
+      }
+
+      // Apply filter: show/hide table rows based on data-location
+      function applyLocationFilter(loc) {
+        const tbody = document.querySelector('.table-container table tbody');
+        if (!tbody) return;
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        rows.forEach(row => {
+          // skip empty-row or rows without data-location (like header fallback)
+          const rowLoc = (row.dataset.location || '').toString().trim();
+          if (!rowLoc && row.classList.contains('empty-row')) return;
+          if (!loc || loc === 'ALL') {
+            row.style.display = '';
+          } else {
+            row.style.display = (rowLoc.toUpperCase() === loc.toUpperCase()) ? '' : 'none';
+          }
+        });
+      }
+
+      // Build CSV from visible rows (reads data- attributes)
+      function downloadVisibleVisitorsCSV() {
+        const tbody = document.querySelector('.table-container table tbody');
+        if (!tbody) return alert('Table not found');
+
+        const visibleRows = Array.from(tbody.querySelectorAll('tr'))
+          .filter(r => r.style.display !== 'none' && r.dataset && (r.dataset.name || r.dataset.location));
+
+        if (visibleRows.length === 0) return alert('No visitors to download for the selected filter.');
+
+        // header columns you want in CSV (adjust if desired)
+        const headers = ['Name', 'Company', 'Location', 'Badge ID', 'ID Proof', 'Items', 'Check-in', 'Check-out', 'Department'];
+        const lines = [headers.map(csvEscape).join(',')];
+
+        visibleRows.forEach(r => {
+          const rowVals = [
+            r.dataset.name || '',
+            r.dataset.company || '',
+            r.dataset.location || '',
+            r.dataset.badge || '',
+            r.dataset.idnumber || '',
+            r.dataset.items || '',
+            r.dataset.checkin || '',
+            r.dataset.checkout || '',
+            r.dataset.department || ''
+          ];
+          lines.push(rowVals.map(csvEscape).join(','));
+        });
+
+        const csvBlob = new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+        const locFilter = (document.getElementById('locationFilter')?.value || 'ALL');
+        const filename = `visitors_${locFilter}_${new Date().toISOString().slice(0,10)}.csv`;
+
+        // trigger download
+        if (navigator.msSaveBlob) { // IE10+
+          navigator.msSaveBlob(csvBlob, filename);
+        } else {
+          const link = document.createElement("a");
+          link.href = URL.createObjectURL(csvBlob);
+          link.setAttribute('download', filename);
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(link.href);
+        }
+      }
+
+      // Init: wire events
+      document.addEventListener('DOMContentLoaded', function() {
+        const filterEl = document.getElementById('locationFilter');
+        const downloadBtn = document.getElementById('downloadFilteredCsv');
+
+        if (filterEl) {
+          // initially apply default filter
+          applyLocationFilter(filterEl.value || 'ALL');
+
+          filterEl.addEventListener('change', function(e) {
+            applyLocationFilter(e.target.value);
+          });
+        }
+
+        if (downloadBtn) {
+          downloadBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            downloadVisibleVisitorsCSV();
+          });
+        }
+
+        // expose helpers for debugging
+        window.VMS_FILTER = { applyLocationFilter, downloadVisibleVisitorsCSV };
+      });
+    })();
+  </script>
 
 </body>
 
