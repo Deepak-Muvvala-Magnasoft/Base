@@ -3,6 +3,7 @@ import pandas as pd
 import json
 import smtplib
 import traceback 
+import re
 from flask import g
 from urllib.parse import urlencode
 from functools import wraps
@@ -532,6 +533,7 @@ class Visitor(db.Model):
     contact_person = db.Column(db.String(200))
     contact_email = db.Column(db.String(200))
     notes = db.Column(db.Text)
+    dept = db.Column(db.String(100), nullable=True)
     items = db.Column(db.Text)        # store as JSON string
     otherItems = db.Column(db.String(200))
     check_in = db.Column(db.DateTime, nullable=True)
@@ -882,6 +884,7 @@ def add_visitor():
         contact_person=form.get("contact_person"),
         contact_email=form.get("contact_email"),
         notes=form.get("notes"),
+        dept = form.get("dept"),
         items=json.dumps(normalized_items),
         otherItems=other_text,
         check_in=None,
@@ -889,7 +892,7 @@ def add_visitor():
         remarks=None,
         verified=False,
         approved=None,
-        electronics_approved=None   # new field to be set by IT approve/decline
+        electronics_approved=None   
     )
 
     # helper to decide JSON vs redirect response
@@ -1007,10 +1010,7 @@ def add_visitor():
                 try:
                     v.contact_person = it_user["username"]
                     v.contact_email = it_user["email"]
-                    try:
-                        send_email_to_it(v, it_user["username"], it_user["email"], visitor_id=new_id)
-                    except TypeError:
-                        send_email_to_it(v, visitor_id=new_id, to_email=it_user["email"])
+                    send_email_to_it(v, it_user["username"], it_user["email"], visitor_id=new_id)
                 except Exception:
                     app.logger.exception("Failed sending IT email for visitor %s to %s", new_id, it_user.get("email"))
                 finally:
@@ -1148,14 +1148,35 @@ def send_email_to_it(visitor_obj_or_dict, contact_name, contact_email, visitor_i
 
     dept = (dept or "").strip()
 
-    # friendly display: uppercase short acronyms (IT, HR) else Title Case
-    if not dept:
-        dept_display = (contact_name or "IT")
-    else:
-        dept_display = dept.upper() if len(dept) <= 3 else dept.title()
+    dept_value = ""
+    try:
+        if hasattr(v, "__table__"):
+            dept_value = (getattr(v, "dept", None) or "").strip()
+        else:
+            dept_value = (v.get("dept") or "").strip()
+    except Exception:
+        dept_value = ""
 
-    # final subject uses the requested format
-    subject = f"IT Approval Required for {dept_display} — Visitor carrying electronic item(s)"
+    # fallback: if still empty, try contact_person or contact_name
+    if not dept_value:
+        dept_value = (getattr(v, "contact_person", None) or v.get("contact_person") or "").strip() or ""
+
+    # process list-style values and normalize display
+    if dept_value:
+        parts = [p.strip() for p in re.split(r'[;,|]', dept_value) if p.strip()]
+        normalized = []
+        for p in parts:
+            normalized.append(p.upper() if len(p) <= 3 else p.title())
+        dept_display = ", ".join(normalized)
+    else:
+        dept_display = (contact_name or "IT")  # final fallback
+
+    # sanitize visitor name
+    safe_name = " ".join((name or "Unknown").split())
+
+    subject = f"IT Approval Required for {dept_display} — Visitor {safe_name} carrying electronic item(s)"
+# -------------------------------------------------------------------------------
+
     # ----- end replacement -----
 
     body = f"""
@@ -1444,6 +1465,7 @@ def visitors_list():
             "check_in": v.check_in.strftime("%Y-%m-%d %H:%M:%S") if v.check_in else None,
             "check_out": v.check_out.strftime("%Y-%m-%d %H:%M:%S") if v.check_out else None,
             "verified": bool(v.verified),
+            "dept": v.dept or "",  
             "approved": v.approved,
             "electronics_approved": getattr(v, "electronics_approved", None),
             "has_electronics": has_electronics_flag,       # <-- NEW boolean flag

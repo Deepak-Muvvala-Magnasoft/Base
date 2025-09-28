@@ -41,7 +41,7 @@
     clearTimeout(modal._timer);
   };
 
-  modalClose.addEventListener('click', window.hideModal);
+  if (modalClose) modalClose.addEventListener('click', window.hideModal);
   backdrop.addEventListener('click', window.hideModal);
 })();
 </script>
@@ -323,8 +323,11 @@ if (contactPersonEl) {
       if (!itemsOtherCheckbox) return;
       const checked = itemsOtherCheckbox.checked;
       itemsOtherWrap.style.display = checked ? 'block' : 'none';
+
       if (itemsOtherText) {
+        // keep required for UX, but disable when hidden so browser won't validate it
         itemsOtherText.required = checked;
+        itemsOtherText.disabled = !checked;   // <- important: disabled fields are not validated
         if (!checked) itemsOtherText.value = '';
       }
     }
@@ -397,6 +400,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function showError(el, msg) { if (el) el.textContent = msg || ''; }
 
+if (idType) idType.addEventListener('change', updateIdValidation);
 
 (function () {
   const input = document.getElementById('photo');
@@ -554,25 +558,29 @@ document.addEventListener('DOMContentLoaded', () => {
     el.classList.remove('valid', 'invalid');
   }
 
-  function updateIdValidation() {
-    const val = idType.value;
-    if (ID_PATTERNS[val]) {
-      idNumber.required = true;
-      idNumber.placeholder = ID_PATTERNS[val].placeholder;
-      idNumber.title = ID_PATTERNS[val].title;
-      // set HTML pattern too (optional)
-      idNumber.setAttribute('pattern', ID_PATTERNS[val].regex.source);
-    } else {
-      idNumber.required = false;
-      idNumber.removeAttribute('pattern');
-      idNumber.placeholder = 'Enter ID Number';
-      idNumber.title = '';
-      showError(idError, '');
-      clearMarks(idNumber);
-    }
-    // Always clear custom validity initially
+ function updateIdValidation() {
+  const val = idType.value;
+
+  // If there is a recognized ID type, enable the requirements for idNumber
+  if (ID_PATTERNS[val]) {
+    idNumber.required = true;
+    idNumber.placeholder = ID_PATTERNS[val].placeholder;
+    idNumber.title = ID_PATTERNS[val].title;
+    idNumber.setAttribute('pattern', ID_PATTERNS[val].regex.source);
+    // clear any old custom validity so browser starts fresh
     idNumber.setCustomValidity('');
+  } else {
+    // NO id type selected -> ensure idNumber is NOT required and no pattern
+    idNumber.required = false;
+    idNumber.removeAttribute('pattern');
+    idNumber.placeholder = 'Enter ID Number';
+    idNumber.title = '';
+    // clear any previous custom validity so browser won't mark it invalid
+    idNumber.setCustomValidity('');
+    // also clear invalid/valid mark classes (optional for UI cleanliness)
+    clearMarks(idNumber);
   }
+}
 
   // ID number live validation (sanitizes and tests with regex)
   idNumber.addEventListener('input', () => {
@@ -605,7 +613,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Email live validation
-  // Email live validation
 email.addEventListener('input', () => {
   const value = email.value.trim();
   email.value = value; // remove accidental spaces
@@ -634,19 +641,54 @@ email.addEventListener('input', () => {
   }
 });
 
-  // Final form submission check
   // Final form submission check -> AJAX submit + popup
 form.addEventListener('submit', async (ev) => {
-  ev.preventDefault();              
-  updateIdValidation();                
+  ev.preventDefault();
+
+  // run inline field validators first
+  updateIdValidation();
   idNumber.dispatchEvent(new Event('input'));
   email.dispatchEvent(new Event('input'));
 
-  // stop if invalid
-  if (!form.checkValidity()) {
+  // --- Ensure items-other is enabled if user checked "Others" so validation includes it ---
+  const itemsOtherCheckboxEl = document.getElementById('itemsOtherCheckbox');
+  const itemsOtherTextEl = document.getElementById('itemsOtherText');
+  if (itemsOtherCheckboxEl && itemsOtherTextEl) {
+    // enable only when checked (so validation will run); keep disabled when not needed
+    itemsOtherTextEl.disabled = !itemsOtherCheckboxEl.checked;
+  }
+
+  // --- START: temporarily remove required on hidden / non-focusable elements ---
+  // We will restore them immediately after checkValidity()
+  const hiddenRequired = Array.from(form.querySelectorAll('[required]')).filter(el => {
+    // ignore true hidden inputs which are never focusable but also not expected to be validated
+    if (el.type === 'hidden') return false;
+    const style = window.getComputedStyle(el);
+    // not rendered (display:none or inside display:none ancestor) or not visible
+    const notRendered = (el.offsetParent === null) || (el.getClientRects().length === 0);
+    const notVisible = style.visibility === 'hidden' || style.display === 'none' || style.opacity === '0';
+    return notRendered || notVisible;
+  });
+  hiddenRequired.forEach(el => { el._required_was = true; el.required = false; });
+  // --- END temporary removal ---
+
+  // stop if invalid (use checkValidity on restored state)
+  const isValid = form.checkValidity();
+
+  // restore required attributes we temporarily removed
+  hiddenRequired.forEach(el => { if (el._required_was) { el.required = true; delete el._required_was; } });
+
+  if (!isValid) {
     const firstInvalid = form.querySelector(':invalid');
     if (firstInvalid) firstInvalid.focus();
     return;
+  }
+
+  // --- before building FormData, make sure itemsOtherText is enabled if checked
+  // (defensive: previously we enabled before validation, re-ensure here)
+  if (itemsOtherCheckboxEl && itemsOtherTextEl) {
+    if (itemsOtherCheckboxEl.checked) itemsOtherTextEl.disabled = false;
+    else itemsOtherTextEl.disabled = true;
   }
 
   const submitBtn = form.querySelector('button[type="submit"]');
@@ -696,6 +738,7 @@ form.addEventListener('submit', async (ev) => {
     if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Submit'; }
   }
 });
+
 
   // init
   updateIdValidation();
