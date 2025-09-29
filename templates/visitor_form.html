@@ -172,20 +172,20 @@
   </div>
 </div> -->
 
+<!-- add required attribute to the hidden input and keep the label shown with the required marker -->
 <div class="col-label"><label for="photo" class="required">Photo (Selfie)</label></div>
 <div class="col-field">
-  <!-- hidden real file input (keeps form submission working) -->
   <input
-    type="file"
-    id="photo"
-    name="photo"
-    accept="image/*"
-    capture="user"
-    aria-label="Take or choose a selfie"
-    style="display:none"
-  >
+  type="file"
+  id="photo"
+  name="photo"
+  accept="image/*"
+  capture="user"
+  aria-label="Take or choose a selfie"
+  class="visually-hidden"
+  required
+>
 
-  <!-- styled camera UI matching your form -->
   <div class="photo-capture" id="photoCapture">
     <div class="photo-preview-wrap" id="photoPreviewWrap" aria-hidden="true">
       <img id="photoPreview" alt="photo preview"
@@ -193,13 +193,11 @@
     </div>
 
     <div class="photo-buttons">
-      <button type="button" class="btn-photo" id="btnTakePhoto" aria-controls="photoPreview">Capture Photo</button>
+      <button type="button" class="btn-photo" id="btnTakePhoto" aria-controls="photoPreview">Take Photo</button>
       <button type="button" class="btn-photo btn-ghost" id="btnRetake" style="display:none">Retake</button>
     </div>
   </div>
 </div>
-
-
 
 <!-- Email -->
 <div class="col-label"><label for="email" class="required" >Email</label></div>
@@ -836,6 +834,79 @@ document.getElementById('photo')?.addEventListener('change', function(e){
   })();
 
 
+document.addEventListener('DOMContentLoaded', () => {
+  const form = document.getElementById('visitorForm');
+  const photoInput = document.getElementById('photo');
+  const photoError = document.getElementById('photoError');
+  // defensive guards
+  if (!form || !photoInput) return;
+
+  // helper to show/hide inline error
+  function showPhotoError(msg) {
+    if (!photoError) return;
+    photoError.textContent = msg || 'Please take or choose a selfie before submitting.';
+    photoError.style.display = 'block';
+  }
+  function hidePhotoError() {
+    if (!photoError) return;
+    photoError.style.display = 'none';
+    photoError.textContent = '';
+  }
+
+  // set custom validity if no file is present
+    function validatePhotoField() {
+      const customMsg = 'Please add photo'; // <-- your new message
+      if (!photoInput.files || photoInput.files.length === 0) {
+        // set custom validity so form.checkValidity() fails
+        photoInput.setCustomValidity(customMsg);
+        showPhotoError(customMsg);
+        return false;
+      } else {
+        photoInput.setCustomValidity(''); // clears any earlier message
+        hidePhotoError();
+        return true;
+      }
+    }
+
+// it will call the 'invalid' handler — set your custom message here.
+photoInput.addEventListener('invalid', function (e) {
+  // only set if no file present
+  if (!this.files || this.files.length === 0) {
+    this.setCustomValidity('Please add photo'); // <-- same message
+    if (photoError) { photoError.textContent = 'Please add photo'; photoError.style.display = 'block'; }
+  } else {
+    this.setCustomValidity('');
+  }
+});
+
+// clear custom validity when user changes input (so the next validity run is fresh)
+photoInput.addEventListener('input', function () {
+  this.setCustomValidity('');
+  if (photoError) { photoError.style.display = 'none'; photoError.textContent = ''; }
+});
+
+
+  // also validate on form submit (before AJAX submit block)
+  form.addEventListener('submit', function (ev) {
+    // run other validators you've set up already
+    // (run the photo check before letting native checkValidity pass)
+    const ok = validatePhotoField();
+    if (!ok) {
+      // prevent submit and focus the photo UI
+      ev.preventDefault();
+      ev.stopPropagation();
+      // scroll photo into view (consider fixed navbar height)
+      const rect = photoInput.getBoundingClientRect();
+      const top = window.scrollY + rect.top - 80;
+      window.scrollTo({ top, behavior: 'smooth' });
+      // focus the visible "Take Photo" button for accessibility
+      const takeBtn = document.getElementById('btnTakePhoto');
+      if (takeBtn) takeBtn.focus();
+      return false;
+    }
+    // if ok, proceed (your other submit handler will run)
+  }, { passive: false, capture: true });
+});
 
 function resetPhotoPreview() {
   try {
