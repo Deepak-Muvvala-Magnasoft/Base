@@ -230,34 +230,6 @@ body {
     font-weight: 600;
 }
 
-/* camera style */
-
-/* Capture button style (tweak to match your site) */
-.btn-capture {
-  padding: 6px 12px;
-  border-radius: 4px;
-  border: 1px solid #ccc;
-  background: #fff;
-  cursor: pointer;
-}
-
-/* Camera modal basic styling */
-.camera-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000; }
-
-.camera-dialog {
-  position: fixed;
-  left: 50%; top: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 1001;
-  background: #fff;
-  padding: 12px;
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
-  text-align: center;
-}
-#cameraVideo { max-width: 90vw; height: auto; border-radius:6px; }
-#photoPreview { max-width:120px; max-height:120px; border-radius:6px; border:1px solid #eee; display:none; }
-
 
 /* keep the rest of your form styles (labels, grid, fields, buttons) -- paste or keep existing below */
 /* ---------- Form grid: labels | fields ---------- */
@@ -499,6 +471,62 @@ input:invalid {
     z-index: 1050;
     display: none;
 }
+
+/* ===== Photo capture UI (matches form look) ===== */
+.photo-capture {
+    display:flex;
+    gap:12px;
+    align-items:center;
+    flex-wrap:wrap;
+}
+
+.photo-preview-wrap {
+    min-width:160px;
+    min-height:160px;
+    background:#f4f7f9;
+    border-radius:8px;
+    border:1px solid #e6edf3;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    overflow:hidden;
+    padding:6px;
+}
+
+.photo-preview-wrap img {
+    display:block;
+    width:100%;
+    height:auto;
+    object-fit:cover;
+    border-radius:6px;
+}
+
+/* Button that visually matches your form inputs */
+.btn-photo {
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid #e6edf3;
+    background: #fff;
+    min-height:44px;
+    font-weight:600;
+    cursor:pointer;
+    box-shadow: 0 4px 10px rgba(14,30,37,0.04);
+}
+
+.btn-photo:hover { box-shadow: 0 8px 18px rgba(14,30,37,0.06); transform: translateY(-2px); }
+
+/* Ghost / secondary */
+.btn-ghost {
+    background: transparent;
+    color: #374151;
+}
+
+/* small helper text alignment */
+.photo-buttons { display:flex; flex-direction:column; gap:8px; }
+@media (min-width:880px) {
+  .photo-buttons { align-items:flex-start; }
+}
+
 
 /* responsive */
 @media (max-width: 880px) {
