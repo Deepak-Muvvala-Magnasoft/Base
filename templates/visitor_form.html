@@ -156,7 +156,9 @@
   <small id="idError" class="error" aria-live="polite"></small>
 </div>
 
-<div class="col-label"><label for="photo">Photo (Selfie)</label></div>
+<!-- <div class="col-label">
+  <label for="photo" class="required">Photo (Selfie)</label>
+</div>
 <div class="col-field">
   <input
     type="file"
@@ -165,16 +167,72 @@
     accept="image/*"
     capture="user"
     aria-label="Take or choose a selfie"
+    required                            
+    aria-required="true" 
   >
+
+  <div id="photoError" role="alert" style="color:#b00020; font-size:0.95rem; display:none; margin-top:6px;">
+  Please provide a selfie photo.
+  </div>
+
   <div id="photoPreviewWrap" style="margin-top:8px;">
     <img id="photoPreview" alt="photo preview"
          style="max-width:160px; max-height:160px; display:none; border-radius:6px; border:1px solid #eee;">
+  </div>
+</div> -->
+
+
+<div class="col-label">
+  <label for="photo" class="required">Photo (Selfie)</label>
+</div>
+<div class="col-field">
+  <!-- Hidden native file input (keeps mobile capture behavior) -->
+  <input
+    type="file"
+    id="photo"
+    name="photo"
+    accept="image/*"
+    capture="user"
+    aria-label="Take or choose a selfie"
+    style="display:none;"                
+    required
+    aria-required="true"
+  >
+
+  <!-- Visible capture button used on desktop/mobile -->
+  <div style="display:flex; gap:8px; align-items:center;">
+    <button type="button" id="captureBtn" class="btn-capture">Capture photo</button>
+    <span id="photoFilename" style="font-size:0.95rem;color:#444;"></span>
+  </div>
+
+  <div id="photoError" role="alert" style="color:#b00020; font-size:0.95rem; display:none; margin-top:6px;">
+    Please provide a selfie photo.
+  </div>
+
+  <div id="photoPreviewWrap" style="margin-top:8px;">
+    <img id="photoPreview" alt="photo preview"
+         style="max-width:100px; max-height:100px; display:none; border-radius:6px; border:1px solid #eee;">
+  </div>
+</div>
+
+<!-- Camera modal (insert once near end of body) -->
+<div id="cameraModal" aria-hidden="true" style="display:none;">
+  <div class="camera-backdrop"></div>
+  <div class="camera-dialog" role="dialog" aria-modal="true" aria-label="Use webcam to capture photo">
+    <video id="cameraVideo" autoplay playsinline style="width:320px; height:auto; background:#000;"></video>
+    <canvas id="cameraCanvas" style="display:none;"></canvas>
+    <div style="margin-top:8px;">
+      <button type="button" id="takePhotoBtn">Take photo</button>
+      <button type="button" id="cameraCancelBtn">Cancel</button>
+    </div>
   </div>
 </div>
 
 
 <!-- Email -->
-<div class="col-label"><label for="email">Email</label></div>
+<div class="col-label">
+  <label for="email" class="required">Email</label>
+</div>
 <div class="col-field">
   <input type="email" id="email" name="email" required placeholder="Enter email address" aria-describedby="emailError">
   <small id="emailError" class="error" aria-live="polite"></small>
@@ -244,7 +302,7 @@
   </div>
 </form>
   </div>
-  <script>
+<script>
     function fetchUsers() {
     const dept = document.getElementById('dept').value;
     const location = document.querySelector('select[name="location"]').value;
@@ -350,6 +408,13 @@ if (contactPersonEl) {
 
 document.addEventListener('DOMContentLoaded', () => {
   const form = document.getElementById('visitorForm');
+  const photo = document.getElementById('photo');
+  const photoError = document.getElementById('photoError'); 
+
+  if (photo) {
+    photo.required = true;
+    photo.setAttribute('aria-required', 'true');
+  }
   if (!form) return;
 
   const idType = document.getElementById('idType');
@@ -417,6 +482,38 @@ document.addEventListener('DOMContentLoaded', () => {
     const previewWrap = document.getElementById('photoPreviewWrap');
     // adjust max dimension (px) for resizing before upload
     const MAX_DIM = 1280;
+
+     async function captureFrameAndSetFile() {
+    if (!cameraVideo || !cameraCanvas) return;
+    const v = cameraVideo;
+    const srcW = v.videoWidth || 1280;
+    const srcH = v.videoHeight || 720;
+
+    // compute scale to fit into CAPTURE_MAX while preserving aspect ratio
+    const scale = Math.min(1, CAPTURE_MAX / Math.max(srcW, srcH));
+    const outW = Math.round(srcW * scale);
+    const outH = Math.round(srcH * scale);
+
+    cameraCanvas.width = outW;
+    cameraCanvas.height = outH;
+    const ctx = cameraCanvas.getContext('2d');
+    ctx.drawImage(v, 0, 0, outW, outH);
+
+    // convert canvas to blob and create a File to put into input.files
+    cameraCanvas.toBlob((blob) => {
+      if (!blob) { closeCameraModal(); return; }
+      const filename = `visitor_photo_${Date.now()}.jpg`;
+      let file;
+      try {
+        file = new File([blob], filename, { type: 'image/jpeg', lastModified: Date.now() });
+      } catch (e) {
+        blob.name = filename;
+        file = blob;
+      }
+      setFileOnInput(file);
+      closeCameraModal();
+    }, 'image/jpeg', 0.9);
+  }
 
     // helper to create File from Blob (preserve original name if possible)
     function blobToFile(blob, fileName, mimeType) {
@@ -629,6 +726,173 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+// --- Camera / Capture integration ---
+// Requires elements: #photo (hidden file input), #captureBtn, #photoPreview, #photoFilename
+(() => {
+  const hiddenFileInput = document.getElementById('photo');
+  const captureBtn = document.getElementById('captureBtn');
+  const previewImg = document.getElementById('photoPreview');
+  const photoFilenameEl = document.getElementById('photoFilename');
+  const cameraModal = document.getElementById('cameraModal');
+  const cameraVideo = document.getElementById('cameraVideo');
+  const cameraCanvas = document.getElementById('cameraCanvas');
+  const takePhotoBtn = document.getElementById('takePhotoBtn');
+  const cameraCancelBtn = document.getElementById('cameraCancelBtn');
+
+  let stream = null;
+
+    // --- body scroll lock helpers to avoid layout shift when modal opens ---
+  function getScrollbarWidth() {
+    return window.innerWidth - document.documentElement.clientWidth;
+  }
+
+  function lockBodyScroll() {
+    // add padding to compensate for the disappearing scrollbar
+    const sbw = getScrollbarWidth();
+    if (sbw > 0) {
+      document.body.style.paddingRight = sbw + 'px';
+    }
+    // disable scrolling
+    document.body.style.overflow = 'hidden';
+    document.body.classList.add('modal-open');
+  }
+
+  function unlockBodyScroll() {
+    document.body.style.overflow = '';
+    document.body.style.paddingRight = '';
+    document.body.classList.remove('modal-open');
+  }
+
+  // Ensure the modal is a direct child of <body> (prevents layout reflow inside form)
+  if (cameraModal && cameraModal.parentElement !== document.body) {
+    document.body.appendChild(cameraModal);
+  }
+
+
+  // Utility: set a File object as the input.files (so server receives it)
+  function setFileOnInput(file) {
+    try {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      hiddenFileInput.files = dt.files;
+      // show filename and preview
+      photoFilenameEl.textContent = file.name || 'photo.jpg';
+      const url = URL.createObjectURL(file);
+      previewImg.onload = () => URL.revokeObjectURL(url);
+      previewImg.src = url;
+      previewImg.style.display = 'block';
+    } catch (e) {
+      console.warn('Could not set input.files programmatically', e);
+      // fallback: cannot set programmatically — offer download link? skip
+    }
+  }
+
+  // If browser supports getUserMedia -> open modal and stream webcam
+    async function openCameraModal() {
+    // prefer user-facing camera by default; desktop will give front camera/webcam
+    const constraints = { video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' } };
+    try {
+      stream = await navigator.mediaDevices.getUserMedia(constraints);
+      cameraVideo.srcObject = stream;
+
+      // lock body scroll BEFORE showing modal to prevent layout shift
+      lockBodyScroll();
+
+      // show modal (fixed positioning in CSS prevents reflow)
+      cameraModal.style.display = 'block';
+      cameraModal.setAttribute('aria-hidden', 'false');
+
+      // focus video element for accessibility
+      cameraVideo.focus && cameraVideo.focus();
+    } catch (err) {
+      console.warn('getUserMedia failed, falling back to file input', err);
+      // fallback: trigger native file chooser (mobile will use camera)
+      hiddenFileInput.click();
+    }
+  }
+
+  function closeCameraModal() {
+    // hide modal first
+    cameraModal.style.display = 'none';
+    cameraModal.setAttribute('aria-hidden', 'true');
+
+    // stop stream tracks
+    if (stream) {
+      stream.getTracks().forEach(t => t.stop());
+      stream = null;
+    }
+
+    // unlock body scroll after closing
+    unlockBodyScroll();
+  }
+
+
+  async function captureFrameAndSetFile() {
+    if (!cameraVideo || !cameraCanvas) return;
+    const v = cameraVideo;
+    cameraCanvas.width = v.videoWidth || 1280;
+    cameraCanvas.height = v.videoHeight || 720;
+    const ctx = cameraCanvas.getContext('2d');
+    ctx.drawImage(v, 0, 0, cameraCanvas.width, cameraCanvas.height);
+
+    // Convert canvas to blob and create a File to put into input.files
+    cameraCanvas.toBlob((blob) => {
+      if (!blob) { closeCameraModal(); return; }
+      // create filename with timestamp
+      const filename = `visitor_photo_${Date.now()}.jpg`;
+      let file;
+      try {
+        file = new File([blob], filename, { type: 'image/jpeg', lastModified: Date.now() });
+      } catch (e) {
+        // Some older browsers don't support File constructor — try setting name property
+        blob.name = filename;
+        file = blob;
+      }
+      setFileOnInput(file);
+      closeCameraModal();
+    }, 'image/jpeg', 0.9);
+  }
+
+  // Click handler for Capture button
+  captureBtn.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    // If getUserMedia available and host is secure (https or localhost), prefer webcam modal on desktop
+    const canUseCameraAPI = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+    const isSecure = (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1');
+    // On mobile, it's often nicer to let the native camera UI open (via file input & capture attribute)
+    const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+    if (canUseCameraAPI && !isMobile && isSecure) {
+      // open webcam modal for staff on desktop
+      openCameraModal();
+    } else {
+      // mobile or not supporting getUserMedia -> open native file chooser (capture attr will open camera on mobile)
+      hiddenFileInput.click();
+    }
+  });
+
+  // If user picks file via native chooser (mobile or manual), show preview+filename
+  hiddenFileInput.addEventListener('change', (ev) => {
+    const f = ev.target.files && ev.target.files[0];
+    if (!f) {
+      previewImg.style.display = 'none';
+      photoFilenameEl.textContent = '';
+      return;
+    }
+    photoFilenameEl.textContent = f.name || '';
+    const url = URL.createObjectURL(f);
+    previewImg.onload = () => URL.revokeObjectURL(url);
+    previewImg.src = url;
+    previewImg.style.display = 'block';
+  });
+
+  // Take photo button in modal
+  takePhotoBtn.addEventListener('click', captureFrameAndSetFile);
+  cameraCancelBtn.addEventListener('click', (ev) => { ev.preventDefault(); closeCameraModal(); });
+
+  // close modal if backdrop clicked (optional)
+  cameraModal.querySelector('.camera-backdrop').addEventListener('click', closeCameraModal);
+})();
 
   // Final form submission check -> AJAX submit + popup
   form.addEventListener('submit', async (ev) => {
@@ -648,7 +912,27 @@ document.addEventListener('DOMContentLoaded', () => {
       itemsOtherTextEl.required = itemsOtherCheckboxEl.checked;
     }
 
-    // --- START: temporarily remove required on hidden / non-focusable elements ---
+        // --- Enforce photo present (prevent submit if missing) ---
+    if (photo) {
+      if (!photo.files || photo.files.length === 0) {
+        // show inline error
+        if (photoError) {
+          photoError.textContent = 'Please attach a selfie photo.';
+          photoError.style.display = 'block';
+        } else {
+          alert('Please attach a selfie photo.'); // fallback
+        }
+        try { photo.focus(); } catch (e) {}
+        // restore submit button state (if we disabled it earlier)
+        const submitBtn = form.querySelector('button[type="submit"]');
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Submit'; }
+        return; // stop submission
+      } else {
+        // clear any previous error
+        if (photoError) { photoError.textContent = ''; photoError.style.display = 'none'; }
+      }
+    }
+
     // We will restore them immediately after checkValidity()
     const hiddenRequired = Array.from(form.querySelectorAll('[required]')).filter(el => {
       // ignore true hidden inputs which are never focusable but also not expected to be validated
