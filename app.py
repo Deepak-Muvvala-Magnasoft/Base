@@ -23,7 +23,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from config import (
     MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DB, MYSQL_PORT,
     SMTP_SERVER, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_MAIL,
-    VISITOR_BASE_URL, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+    VISITOR_BASE_URL, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET,
+    SMTP_FROM_NAME
 )
 from flask_dance.contrib.google import make_google_blueprint, google
 from email.mime.multipart import MIMEMultipart
@@ -33,6 +34,8 @@ from werkzeug.exceptions import BadRequest
 from datetime import timedelta
 from functools import wraps
 from flask import session, request, redirect, url_for, flash, jsonify
+from email.header import Header
+from email.utils import formataddr
 
 
 app = Flask(__name__)
@@ -1100,7 +1103,7 @@ def send_email_to_it(visitor_obj_or_dict, contact_name, contact_email, visitor_i
         <li><strong>Items:</strong> {html.escape(items_line)}</li>
       </ul> 
       <p>
-        <a href="{approve_link}">✅ Approve electronics</a>&nbsp;&nbsp;
+        <a href="{approve_link}">✅ Approve </a>&nbsp;&nbsp;
         <a href="{decline_link}">❌ Decline</a>
       </p>
       <p>Regards,<br>VMS System</p>
@@ -1108,7 +1111,7 @@ def send_email_to_it(visitor_obj_or_dict, contact_name, contact_email, visitor_i
     """
 
     message = MIMEMultipart()
-    message["From"] = SMTP_MAIL
+    message["From"] = formataddr((str(Header(SMTP_FROM_NAME, 'utf-8')), SMTP_MAIL))
     message["To"] = contact_email
     message["Subject"] = subject
     message.attach(MIMEText(body, "html"))
@@ -1183,7 +1186,7 @@ def send_email_to_contact(visitor_obj_or_dict, visitor_id=None):
     """
 
     message = MIMEMultipart()
-    message["From"] = SMTP_MAIL
+    message["From"] = formataddr((str(Header(SMTP_FROM_NAME, 'utf-8')), SMTP_MAIL))
     message["To"] = contact_email
     message["Subject"] = subject
     message.attach(MIMEText(body, "html"))
