@@ -448,6 +448,7 @@ class Visitor(db.Model):
     photo_filename = db.Column(db.String(255), nullable=True)
     photo_mime = db.Column(db.String(100), nullable=True)
     photo_data = db.Column(db.LargeBinary, nullable=True)
+    asset_number = db.Column(db.String(100), nullable=True)
 
 
 class User(db.Model):
@@ -789,6 +790,7 @@ def add_visitor():
         dept = form.get("dept"),
         items=json.dumps(normalized_items),
         otherItems=other_text,
+        asset_number = form.get("asset_number") or None,
         check_in=None,
         check_out=None,
         remarks=None,
@@ -1364,7 +1366,8 @@ def visitors_list():
             "contact_person": v.contact_person,
             "contact_email": v.contact_email,
             "purpose": v.purpose,
-            "items": items_list,                           # raw list
+            "items": items_list,    
+            "asset_number": getattr(v, "asset_number", "") or "",                
             "otherItems": other_text,                      # typed other text
             "items_with_other": items_with_other_for_pass, # canonical cleaned list for template
             "checked_items": checked_items,
@@ -1456,6 +1459,16 @@ def checkin(visitor_id):
         else:
             override = str(ov_raw).strip().lower() in ("true", "1", "yes")
 
+        # --- normalize explicit handed_over flag (accept bools or strings) ---
+        ho_raw = data.get('handed_over', None)
+        if isinstance(ho_raw, bool):
+            handed_over = ho_raw
+        elif ho_raw is None:
+            # fallback to override if explicit handed_over not provided
+            handed_over = override
+        else:
+            handed_over = str(ho_raw).strip().lower() in ("true", "1", "yes")
+
         if not badge:
             return jsonify(success=False, message="Missing badge"), 400
 
@@ -1497,6 +1510,18 @@ def checkin(visitor_id):
             # fallback: store the string representation (keeps old behaviour)
             app.logger.exception("Could not assign boolean to v.verified; falling back to string assignment")
             v.verified = verified
+
+        # If security indicated a handover (or override used as fallback), append an audit remark
+        try:
+            if handed_over:
+                # try to determine actor (session username or auth cookie)
+                actor = session.get("username") or request.cookies.get("auth_user") or "security"
+                ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+                note = f"Handed over electronics to security (checked-in by {actor}) at {ts}."
+                v.remarks = (v.remarks or "") + ("\n" + note if v.remarks else note)
+                app.logger.info("CHECKIN: recorded handed_over remark for visitor_id=%s by=%s", visitor_id, actor)
+        except Exception:
+            app.logger.exception("Failed to append handed_over remark for visitor id=%s", visitor_id)
 
         v.check_in = datetime.utcnow()
         db.session.commit()
@@ -1568,22 +1593,18 @@ def checkout(visitor_id):
         elif "returned_items" in data:
             ri = data.get("returned_items")
             if isinstance(ri, list):
-                # treat each element as truthy if it's checkbox-like ("on") or boolean/dict with returned field
                 def item_ok(it):
                     if isinstance(it, bool):
                         return it
                     if isinstance(it, dict):
-                        # check common keys
                         return is_truthy(it.get("returned") or it.get("checked") or next(iter(it.values()), None))
                     return is_truthy(it)
                 all_returned = (len(ri) == 0) or all(item_ok(x) for x in ri)
             elif isinstance(ri, dict):
-                # dict of id -> bool-like
-                all_returned = all(is_truthy(v) for v in ri.values())
+                all_returned = all(is_truthy(vv) for vv in ri.values())
             else:
                 all_returned = is_truthy(ri)
         else:
-            # no explicit info from client: treat as NOT all returned (force explicit client signal)
             all_returned = False
 
         app.logger.info("CHECKOUT: all_returned=%s override=%s payload=%s", all_returned, override, data)
@@ -1604,10 +1625,46 @@ def checkout(visitor_id):
         if not all_returned and not override:
             return jsonify({"success": False, "message": "Please mark all return items as returned before checkout."}), 400
 
+        # --- ASSET VERIFICATION (do NOT treat IT approval as blocker) ---
+        # Accept asset_verified and asset_number from client; only enforce match if stored asset exists.
+        asset_verified_raw = data.get("asset_verified", False)
+        asset_verified = is_truthy(asset_verified_raw)
+        asset_number = (data.get("asset_number") or "").strip()
+        stored_asset = (getattr(v, "asset_number", None) or "").strip()
+
+        # If a stored asset exists, require verification (match) unless security used override.
+        if stored_asset:
+            if not (asset_verified or override):
+                return jsonify({"success": False, "message": "Please verify asset number before completing checkout (or use override)."}), 400
+
+            if asset_verified and asset_number and asset_number.lower() != stored_asset.lower() and not override:
+                return jsonify({"success": False, "message": "Asset number mismatch. Checkout aborted."}), 400
+
+        # If no stored asset exists:
+        #   - do not block checkout for electronics_approved == False.
+        #   - accept optional asset_number for audit (no hard validation available).
+        # (This lets security manually check physical asset without IT approval blocking the flow.)
+
         # record check-out time and append optional remarks
         v.check_out = datetime.utcnow()
         if remarks:
             v.remarks = (v.remarks or "") + ("\n" + remarks if v.remarks else remarks)
+
+        # append asset audit note if provided / verified / or override used
+        try:
+            actor = session.get("username") or request.cookies.get("auth_user") or "security"
+            ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+            if stored_asset and asset_verified and asset_number:
+                note = f"Asset {asset_number} returned to visitor (verified by {actor}) at {ts}."
+                v.remarks = (v.remarks or "") + ("\n" + note if v.remarks else note)
+            elif stored_asset and override:
+                note = f"Asset return override used by {actor} at {ts} (expected asset: {stored_asset}, provided: {asset_number or '—'})."
+                v.remarks = (v.remarks or "") + ("\n" + note if v.remarks else note)
+            elif (not stored_asset) and asset_number:
+                note = f"Asset {asset_number} recorded at checkout by {actor} at {ts}."
+                v.remarks = (v.remarks or "") + ("\n" + note if v.remarks else note)
+        except Exception:
+            app.logger.exception("Failed to append asset_verified remark for visitor id=%s", visitor_id)
 
         db.session.commit()
         return jsonify({"success": True, "message": "Visitor checked out successfully", "check_out": v.check_out.isoformat()}), 200
@@ -1615,7 +1672,6 @@ def checkout(visitor_id):
     except Exception:
         app.logger.exception("Checkout error")
         return jsonify({"success": False, "message": "Server error"}), 500
-
 
 # --- Ensure a default admin user exists (run once on startup) ---
 def ensure_default_admin():
