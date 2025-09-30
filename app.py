@@ -790,7 +790,7 @@ def add_visitor():
         dept = form.get("dept"),
         items=json.dumps(normalized_items),
         otherItems=other_text,
-        asset_number = form.get("asset_number") or None,
+        asset_number=(form.get("asset_number") or "").strip(),
         check_in=None,
         check_out=None,
         remarks=None,
@@ -1344,6 +1344,7 @@ def visitors_list():
         # Prepare other fields expected by the template
         checked_items = getattr(v, "checked_items", []) or []
         badge_number = getattr(v, "badge_number", "") or ""
+        asset_number = getattr(v, "asset_number", "") or ""
         idNumber = getattr(v, "idNumber", "") or ""
         photo_url = url_for('visitor_photo', visitor_id=v.id) if getattr(v, "photo_data", None) else None
 

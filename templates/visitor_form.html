@@ -228,9 +228,10 @@
 <div class="col-label"><label class="required">Items Carried</label></div>
 <div class="col-field">
   <div class="checkbox-inline" id="itemsCheckboxes">
-    <label><input type="checkbox" name="items[]" value="Laptop" id="item-laptop"> Laptop</label>
-    <label><input type="checkbox" name="items[]" value="Pendrive"> Pendrive</label>
-    <label><input type="checkbox" name="items[]" value="Ipad"> Ipad</label>
+    <label><input type="checkbox" name="items[]" value="Laptop" id="item-laptop" class="electronic-item"> Laptop</label>
+    <label><input type="checkbox" name="items[]" value="Pendrive" id="item-pendrive" class="electronic-item"> Pendrive</label>
+    <label><input type="checkbox" name="items[]" value="Ipad" id="item-ipad" class="electronic-item"> Ipad</label>
+    <!-- <label><input type="checkbox" name="items[]" value="Mobile" id="item-mobile" class="electronic-item"> Mobile</label> -->
     <label><input id="itemsOtherCheckbox" type="checkbox" name="items[]" value="Other"> Others</label>
   </div>
 
@@ -240,9 +241,9 @@
     <input id="itemsOtherText" type="text" name="otherItems" placeholder="Describe other items" disabled>
   </div>
 
-  <!-- Asset Number: enabled only when Laptop is selected -->
+  <!-- Asset Number: enabled only when any electronic item is selected -->
   <div id="assetWrap" style="margin-top:10px; display:flex; align-items:center; gap:10px;">
-    <label for="assetNumber" style="min-width:120px; margin:0;">Asset Number</label>
+    <label for="assetNumber" style="min-width:120px; margin:0;">Model/Brand</label>
     <input
       type="text"
       id="assetNumber"
@@ -845,20 +846,32 @@ document.getElementById('photo')?.addEventListener('change', function(e){
     });
   })();
 (function () {
-  const laptopCheckbox = document.getElementById('item-laptop');
+  const itemsContainer = document.getElementById('itemsCheckboxes');
   const assetInput = document.getElementById('assetNumber');
+  const electronicSelector = '.electronic-item';
 
   function toggleAssetInput() {
-    if (!assetInput || !laptopCheckbox) return;
-    const enabled = !!laptopCheckbox.checked;
-    assetInput.disabled = !enabled;
-    assetInput.required = enabled;
-    if (!enabled) assetInput.value = '';
+    if (!assetInput || !itemsContainer) return;
+    // check whether any electronic-item checkbox is checked
+    const anyElectronicChecked = Array.from(itemsContainer.querySelectorAll(electronicSelector))
+      .some(chk => chk.checked);
+
+    assetInput.disabled = !anyElectronicChecked;
+    assetInput.required = anyElectronicChecked;
+
+    // if disabled, clear value to avoid stale data
+    if (!anyElectronicChecked) assetInput.value = '';
   }
 
-  if (laptopCheckbox) {
-    laptopCheckbox.addEventListener('change', toggleAssetInput);
-    // initialize immediately (handles back/forward or server-populated state)
+  // attach listeners to all checkboxes inside itemsCheckboxes (including dynamic future ones)
+  if (itemsContainer) {
+    itemsContainer.addEventListener('change', function (ev) {
+      // only react when a checkbox changed (fast path)
+      if (ev.target && ev.target.type === 'checkbox') {
+        toggleAssetInput();
+      }
+    });
+    // init state on load (handles back/forward or server-populated state)
     toggleAssetInput();
   }
 })();
