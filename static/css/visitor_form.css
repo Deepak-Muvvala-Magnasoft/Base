@@ -199,12 +199,13 @@ body {
 /* center only this visitor header block without changing global .container */
 .visitor-center {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    flex-wrap: wrap;
     align-items: center;
     /* centers img and h2 horizontally */
     justify-content: center;
     /* centers vertically if container has height */
-    gap: 8px;
+    gap: 40px;
     /* space between logo and title */
     text-align: center;
     /* ensures multi-line headings are centered */
@@ -594,4 +595,42 @@ input:invalid {
     .col-label {
         font-size: 13px;
     }
+}
+/* keep header on one line on small screens (replace previous mobile rules) */
+@media (max-width: 780px) {
+  .visitor-center {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;        /* keep everything vertically centered in that row */
+    justify-items: center;
+    gap: 8px;
+    padding: 6px 8px;           /* smaller padding on mobile */
+    width: 100%;
+  }
+
+  /* reduce the logos so they fit on one line */
+  .visitor-center .logo-height {
+    max-width: 90px;            /* hard cap */
+    width: clamp(40px, 14vw, 90px); /* scale with viewport but stay small */
+    height: auto;
+    margin: 0;
+  }
+
+  /* make the title smaller and prevent wrapping */
+  .visitor-center h2 {
+    margin: 0;
+    font-size: clamp(0.95rem, 3.2vw, 1.05rem);
+    font-weight: 700;
+    white-space: nowrap;       
+    overflow: hidden;
+    /* text-overflow: ellipsis;    
+    padding: 0 6px;              */
+    justify-self: center;
+  }
+
+  /* keep logos visually anchored to left / right on small screens too */
+  .visitor-center > img:first-child { justify-self: start; }
+  .visitor-center > img:last-child  { justify-self: end; }
 }
