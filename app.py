@@ -13,7 +13,8 @@ from flask import (
 )
 from urllib.parse import urlencode
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import text
 from sqlalchemy import func, inspect
@@ -1517,17 +1518,23 @@ def checkin(visitor_id):
             if handed_over:
                 # try to determine actor (session username or auth cookie)
                 actor = session.get("username") or request.cookies.get("auth_user") or "security"
-                ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+                # use IST for human-readable remark timestamp
+                ts = datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S %Z")
                 note = f"Handed over electronics to security (checked-in by {actor}) at {ts}."
                 v.remarks = (v.remarks or "") + ("\n" + note if v.remarks else note)
                 app.logger.info("CHECKIN: recorded handed_over remark for visitor_id=%s by=%s", visitor_id, actor)
         except Exception:
             app.logger.exception("Failed to append handed_over remark for visitor id=%s", visitor_id)
 
-        v.check_in = datetime.utcnow()
+        # store UTC-aware datetime in DB
+        v.check_in = datetime.utcnow().replace(tzinfo=timezone.utc)
         db.session.commit()
 
-        return jsonify(success=True, message="Checked in", badge=badge, verified=verified , check_in=v.check_in.isoformat()), 200
+        # return both UTC (original) and IST for client convenience
+        checkin_utc = v.check_in.isoformat()
+        checkin_ist = v.check_in.astimezone(ZoneInfo("Asia/Kolkata")).isoformat()
+        return jsonify(success=True, message="Checked in", badge=badge, verified=verified,
+                       check_in_utc=checkin_utc, check_in_ist=checkin_ist), 200
 
     except Exception as e:
         # log full traceback for debugging
@@ -1540,6 +1547,7 @@ def checkin(visitor_id):
             return jsonify(success=False, message="Server error", error=str(e), traceback=tb), 500
         else:
             return jsonify(success=False, message="Server error"), 500
+
 
 @app.route("/checkout/<int:visitor_id>", methods=["POST"])
 def checkout(visitor_id):
@@ -1641,20 +1649,15 @@ def checkout(visitor_id):
             if asset_verified and asset_number and asset_number.lower() != stored_asset.lower() and not override:
                 return jsonify({"success": False, "message": "Asset number mismatch. Checkout aborted."}), 400
 
-        # If no stored asset exists:
-        #   - do not block checkout for electronics_approved == False.
-        #   - accept optional asset_number for audit (no hard validation available).
-        # (This lets security manually check physical asset without IT approval blocking the flow.)
-
-        # record check-out time and append optional remarks
-        v.check_out = datetime.utcnow()
+        # record UTC-aware check_out
+        v.check_out = datetime.utcnow().replace(tzinfo=timezone.utc)
         if remarks:
             v.remarks = (v.remarks or "") + ("\n" + remarks if v.remarks else remarks)
 
-        # append asset audit note if provided / verified / or override used
+        # append asset audit note if provided / verified / or override used (use IST timestamps in notes)
         try:
             actor = session.get("username") or request.cookies.get("auth_user") or "security"
-            ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+            ts = datetime.now(ZoneInfo("Asia/Kolkata")).strftime("%Y-%m-%d %H:%M:%S %Z")
             if stored_asset and asset_verified and asset_number:
                 note = f"Asset {asset_number} returned to visitor (verified by {actor}) at {ts}."
                 v.remarks = (v.remarks or "") + ("\n" + note if v.remarks else note)
@@ -1668,7 +1671,11 @@ def checkout(visitor_id):
             app.logger.exception("Failed to append asset_verified remark for visitor id=%s", visitor_id)
 
         db.session.commit()
-        return jsonify({"success": True, "message": "Visitor checked out successfully", "check_out": v.check_out.isoformat()}), 200
+        # return both UTC and IST timestamps
+        checkout_utc = v.check_out.isoformat()
+        checkout_ist = v.check_out.astimezone(ZoneInfo("Asia/Kolkata")).isoformat()
+        return jsonify({"success": True, "message": "Visitor checked out successfully",
+                        "check_out_utc": checkout_utc, "check_out_ist": checkout_ist}), 200
 
     except Exception:
         app.logger.exception("Checkout error")
