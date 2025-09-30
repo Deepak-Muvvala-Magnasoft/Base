@@ -13,7 +13,7 @@ from flask import (
 )
 from urllib.parse import urlencode
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime, timezone
+from datetime import datetime
 from zoneinfo import ZoneInfo
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import text
@@ -1527,7 +1527,7 @@ def checkin(visitor_id):
             app.logger.exception("Failed to append handed_over remark for visitor id=%s", visitor_id)
 
         # store UTC-aware datetime in DB
-        v.check_in = datetime.utcnow().replace(tzinfo=timezone.utc)
+        v.check_in = datetime.now(ZoneInfo("Asia/Kolkata")).replace(tzinfo=None)
         db.session.commit()
 
         return jsonify(success=True, message="Checked in", badge=badge, verified=verified,
@@ -1647,7 +1647,7 @@ def checkout(visitor_id):
                 return jsonify({"success": False, "message": "Asset number mismatch. Checkout aborted."}), 400
 
         # record UTC-aware check_out
-        v.check_out = datetime.utcnow().replace(tzinfo=timezone.utc)
+        v.check_out = datetime.now(ZoneInfo("Asia/Kolkata")).replace(tzinfo=None)
         if remarks:
             v.remarks = (v.remarks or "") + ("\n" + remarks if v.remarks else remarks)
 
