@@ -439,8 +439,8 @@ class Visitor(db.Model):
     dept = db.Column(db.String(100), nullable=True)
     items = db.Column(db.Text)        # store as JSON string
     otherItems = db.Column(db.String(200))
-    check_in = db.Column(db.DateTime, nullable=True)
-    check_out = db.Column(db.DateTime, nullable=True)
+    check_in = db.Column(db.DateTime(timezone=True), nullable=True)
+    check_out = db.Column(db.DateTime(timezone=True), nullable=True)
     remarks = db.Column(db.Text)
     verified = db.Column(db.Boolean, default=False)
     approved = db.Column(db.Boolean, nullable=True)
@@ -1530,11 +1530,8 @@ def checkin(visitor_id):
         v.check_in = datetime.utcnow().replace(tzinfo=timezone.utc)
         db.session.commit()
 
-        # return both UTC (original) and IST for client convenience
-        checkin_utc = v.check_in.isoformat()
-        checkin_ist = v.check_in.astimezone(ZoneInfo("Asia/Kolkata")).isoformat()
         return jsonify(success=True, message="Checked in", badge=badge, verified=verified,
-                       check_in_utc=checkin_utc, check_in_ist=checkin_ist), 200
+               check_in=v.check_in.isoformat()), 200
 
     except Exception as e:
         # log full traceback for debugging
@@ -1671,11 +1668,9 @@ def checkout(visitor_id):
             app.logger.exception("Failed to append asset_verified remark for visitor id=%s", visitor_id)
 
         db.session.commit()
-        # return both UTC and IST timestamps
-        checkout_utc = v.check_out.isoformat()
-        checkout_ist = v.check_out.astimezone(ZoneInfo("Asia/Kolkata")).isoformat()
+      
         return jsonify({"success": True, "message": "Visitor checked out successfully",
-                        "check_out_utc": checkout_utc, "check_out_ist": checkout_ist}), 200
+                "check_out": v.check_out.isoformat()}), 200
 
     except Exception:
         app.logger.exception("Checkout error")
