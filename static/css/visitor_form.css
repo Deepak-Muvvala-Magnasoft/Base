@@ -605,8 +605,8 @@ input:invalid {
     grid-template-columns: auto 1fr auto;
     align-items: center;        /* keep everything vertically centered in that row */
     justify-items: center;
-    gap: 10px;           
-    width: 90%;
+    gap: 6px;           
+    width: 95%;
   }
 
   /* reduce the logos so they fit on one line */
