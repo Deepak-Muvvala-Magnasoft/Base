@@ -272,13 +272,52 @@
     <textarea name="notes" rows="3" placeholder="Optional notes..."></textarea>
 </div>
 
+<!-- Consent block (place just above the Submit button) -->
+<div class="consent-block">
+  <label class="consent-label">
+    <input type="checkbox" id="consent_checkbox" name="consent_given" required>
+    I consent to Magnasoft collecting and processing my personal information for the purposes described.
+  </label>
+  <a href="#" id="consentReadMore" class="consent-link">Read full notice</a>
+</div>
+
+<!-- Full notice modal (hidden by default) -->
+<div id="consentModal" class="modal visually-hidden" role="dialog" aria-modal="true" aria-labelledby="consentTitle">
+  <div class="modal-content" role="document">
+    <h3 id="consentTitle">Visitor Data Consent</h3>
+    <p>By submitting your details, you consent to Magnasoft collecting and processing your personal information (Name, Contact Number, Organization, and Purpose of Visit) for the sole purpose of facilitating your entry, ensuring workplace security, and maintaining compliance records.</p>
+    <p>Your information will be stored securely and accessed only by authorized personnel. Data will not be shared with third parties and will be retained only for the duration required under company policy and applicable laws.</p>
+    <p>By clicking Submit, you confirm that you have read and understood this notice and agree to the processing of your data as described.</p>
+    <button id="consentClose">Close</button>
+  </div>
+</div>
   </div>
    <div class="submit-wrap">
     <button type="submit" class="btn-submit">Submit</button>
   </div>
 </form>
   </div>
+
+
   <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      // consent elements (optional — graceful if not present in DOM)
+      const consentCheckbox = document.getElementById('consent_checkbox');
+      const consentReadMore = document.getElementById('consentReadMore');
+      const consentModal = document.getElementById('consentModal');
+      const consentClose = document.getElementById('consentClose');
+
+      if (consentReadMore && consentModal) {
+        consentReadMore.addEventListener('click', function (e) {
+          e.preventDefault();
+          consentModal.classList.remove('visually-hidden');
+        });
+        if (consentClose) consentClose.addEventListener('click', () => consentModal.classList.add('visually-hidden'));
+        // close modal on Escape
+        document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') consentModal && consentModal.classList.add('visually-hidden'); });
+      }
+    });
+
     function fetchUsers() {
     const dept = document.getElementById('dept').value;
     const location = document.querySelector('select[name="location"]').value;
@@ -708,6 +747,25 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+     // --- CONSENT: Ensure consent checkbox is checked (if present) ---
+    const consentEl = document.getElementById('consent_checkbox');
+    if (consentEl && !consentEl.checked) {
+      // open modal if present to show full notice, otherwise alert user
+      const modal = document.getElementById('consentModal');
+      if (modal) {
+        modal.classList.remove('visually-hidden');
+        // focus the checkbox inside modal if exists after a short delay
+        setTimeout(() => {
+          const cb = document.getElementById('consent_checkbox');
+          if (cb) cb.focus();
+        }, 250);
+      } else {
+        alert('Please confirm you consent to data processing by checking the consent box before submitting.');
+        consentEl.focus();
+      }
+      return;
+    }
+
     // --- before building FormData, make sure itemsOtherText is enabled if checked
     // (defensive: previously we enabled before validation, re-ensure here)
     if (itemsOtherCheckboxEl && itemsOtherTextEl) {
@@ -715,7 +773,8 @@ document.addEventListener('DOMContentLoaded', () => {
       else itemsOtherTextEl.disabled = true;
     }
 
-    const submitBtn = form.querySelector('button[type="submit"]');
+        const submitBtn = form.querySelector('button[type="submit"]');
+    const originalBtnText = submitBtn ? submitBtn.textContent : 'Submit';
     if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Submitting...'; }
 
     try {
@@ -730,7 +789,12 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       let data = null;
-      try { data = await resp.json(); } catch (e) { /* invalid JSON */ }
+      try {
+        data = await resp.json();
+      } catch (e) {
+        // invalid JSON — fallback message
+        console.warn('Response was not JSON:', e);
+      }
 
       if (resp.ok && data && data.success) {
         // success popup and reset form (optional)
@@ -751,18 +815,37 @@ document.addEventListener('DOMContentLoaded', () => {
           itemsOtherWrap.style.display = itemsOtherCheckbox.checked ? 'block' : 'none';
           if (!itemsOtherCheckbox.checked) itemsOtherText.value = '';
         }
+
+        // move focus to first input for quick next entry (optional)
+        const firstInput = form.querySelector('input, select, textarea, button');
+        if (firstInput) firstInput.focus();
       } else {
-        const msg = (data && data.message) ? data.message : (resp.statusText || 'Save failed');
-        if (window.showModal) window.showModal(msg, 'error', true, 5000);
+        // prefer server-provided message, else REST status text
+        const msg = (data && (data.message || data.error)) ? (data.message || data.error) : (resp.statusText || 'Save failed');
+        // If server sent field errors, focus first field
+        if (data && data.errors && typeof data.errors === 'object') {
+          const firstField = Object.keys(data.errors)[0];
+          // try focus by name or id
+          const el = form.querySelector(`[name="${firstField}"]`) || document.getElementById(firstField);
+          if (el) {
+            el.focus();
+            // optionally show inline error if you have a convention (not added here)
+          }
+        }
+        if (window.showModal) {
+          window.showModal(msg, 'error', true, 5000);
+        } else {
+          alert(msg);
+        }
       }
     } catch (err) {
       console.error(err);
       if (window.showModal) window.showModal('Network / server error. Try again.', 'error', true, 5000);
+      else alert('Network / server error. Try again.');
     } finally {
-      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Submit'; }
+      if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = originalBtnText; }
     }
   });
-
 
   // init
   updateIdValidation();
