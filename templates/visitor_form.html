@@ -178,7 +178,6 @@
   capture="user"
   aria-label="Take or choose a selfie"
   class="visually-hidden"
-  required
 >
 
   <div class="photo-capture" id="photoCapture">
@@ -229,7 +228,7 @@
     <!-- <label><input type="checkbox" name="items[]" value="Mobile" id="item-mobile" class="electronic-item"> Mobile</label> -->
     <label><input id="itemsOtherCheckbox" type="checkbox" name="items[]" value="Other"> Others</label>
   </div>
-
+  <small id="itemsError" class="error" aria-live="polite" style="display:none; margin-top:6px;"></small>
   <!-- Other items text (hidden by default) -->
   <div id="itemsOtherWrap" style="display:none; margin-top:10px;">
     <!-- Important: disabled by default so it's not validated when hidden -->
@@ -417,8 +416,49 @@ if (contactPersonEl) {
       // call once on load
       toggleItemsOther();
     }
+    // Ensure otherItems input is only required when visible/enabled.
+// Place this in DOMContentLoaded (before form submit listener) and call when checkbox changes.
+function syncOtherItemsState() {
+  const itemsOtherCheckbox = document.getElementById('itemsOtherCheckbox');
+  const itemsOtherText = document.getElementById('itemsOtherText');
+  const itemsOtherWrap = document.getElementById('itemsOtherWrap');
 
-    // NOTE: removed the extra submit listener here (we have a single AJAX submit handler in DOMContentLoaded)
+  if (!itemsOtherText || !itemsOtherCheckbox) return;
+
+  const checked = itemsOtherCheckbox.checked;
+
+  // IMPORTANT: disabled fields are skipped by browser validation
+  itemsOtherText.disabled = !checked;
+
+  // Only make required when visible and enabled
+  itemsOtherText.required = !!checked;
+
+  // Keep the display/visibility in sync for UX/accessibility
+  if (itemsOtherWrap) {
+    itemsOtherWrap.style.display = checked ? 'block' : 'none';
+    itemsOtherWrap.setAttribute('aria-hidden', checked ? 'false' : 'true');
+  }
+
+  // Accessibility: if hidden, remove tabindex so it can't be focused inadvertently
+  if (!checked) {
+    itemsOtherText.tabIndex = -1;
+  } else {
+    itemsOtherText.removeAttribute('tabindex');
+  }
+}
+
+// call once to initialize state on page load
+syncOtherItemsState();
+
+// call whenever checkbox changes (if not already wired)
+document.getElementById('itemsCheckboxes')?.addEventListener('change', (ev) => {
+  const target = ev.target;
+  if (target && (target.id === 'itemsOtherCheckbox' || target.name === 'items[]')) {
+    syncOtherItemsState();
+  }
+});
+
+    
   })();
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -593,22 +633,13 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    // If you have a form element, clear preview on reset & after submit
-    // try to guess containing form
+    // If you have a form element, clear preview on reset (keep this)
     const f = input ? input.closest('form') : null;
     if (f) {
       f.addEventListener('reset', () => {
         preview.src = '';
         preview.style.display = 'none';
-      });
-
-      // Clear preview after successful submit (if you submit via JS, call this manually)
-      f.addEventListener('submit', () => {
-        setTimeout(() => {
-          preview.src = '';
-          preview.style.display = 'none';
-          if (input) input.value = ''; // reset file input
-        }, 500);
+        try { input.value = ''; } catch (e) {}
       });
     }
   })();
@@ -702,6 +733,62 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+  function validateItemsCarried() {
+  const container = document.getElementById('itemsCheckboxes');
+  const errEl = document.getElementById('itemsError');
+  if (!container || !errEl) return true; // defensive
+
+  const anyChecked = Array.from(container.querySelectorAll('input[type="checkbox"]'))
+                          .some(chk => chk.checked);
+
+  if (!anyChecked) {
+    errEl.textContent = 'Please select at least one item carried.';
+    errEl.style.display = 'block';
+    container.setAttribute('aria-invalid', 'true');
+    return false;
+  } else {
+    errEl.textContent = '';
+    errEl.style.display = 'none';
+    container.removeAttribute('aria-invalid');
+    return true;
+  }
+}
+  // Final form submission check -> AJAX submit + popup
+    // helper: keep otherItems input state in-sync (enable/disable + required + aria)
+  function syncOtherItemsState() {
+    const itemsOtherCheckbox = document.getElementById('itemsOtherCheckbox');
+    const itemsOtherText = document.getElementById('itemsOtherText');
+    const itemsOtherWrap = document.getElementById('itemsOtherWrap');
+    if (!itemsOtherText || !itemsOtherCheckbox) return;
+    const checked = !!itemsOtherCheckbox.checked;
+    itemsOtherText.disabled = !checked;
+    itemsOtherText.required = !!checked;
+    if (itemsOtherWrap) {
+      itemsOtherWrap.style.display = checked ? 'block' : 'none';
+      itemsOtherWrap.setAttribute('aria-hidden', checked ? 'false' : 'true');
+    }
+    if (!checked) itemsOtherText.tabIndex = -1;
+    else itemsOtherText.removeAttribute('tabindex');
+  }
+
+  // Validate at least one items[] checkbox is selected
+  function validateItemsCarried() {
+    const container = document.getElementById('itemsCheckboxes');
+    const errEl = document.getElementById('itemsError');
+    if (!container || !errEl) return true;
+    const anyChecked = Array.from(container.querySelectorAll('input[type="checkbox"]'))
+                            .some(chk => chk.checked);
+    if (!anyChecked) {
+      errEl.textContent = 'Please select at least one item carried.';
+      errEl.style.display = 'block';
+      container.setAttribute('aria-invalid', 'true');
+      return false;
+    }
+    errEl.textContent = '';
+    errEl.style.display = 'none';
+    container.removeAttribute('aria-invalid');
+    return true;
+  }
 
   // Final form submission check -> AJAX submit + popup
   form.addEventListener('submit', async (ev) => {
@@ -721,13 +808,14 @@ document.addEventListener('DOMContentLoaded', () => {
       itemsOtherTextEl.required = itemsOtherCheckboxEl.checked;
     }
 
+    // ensure our sync runs too (defensive) so hidden required controls are in correct state
+    syncOtherItemsState();
+
     // --- START: temporarily remove required on hidden / non-focusable elements ---
     // We will restore them immediately after checkValidity()
     const hiddenRequired = Array.from(form.querySelectorAll('[required]')).filter(el => {
-      // ignore true hidden inputs which are never focusable but also not expected to be validated
       if (el.type === 'hidden') return false;
       const style = window.getComputedStyle(el);
-      // not rendered (display:none or inside display:none ancestor) or not visible
       const notRendered = (el.offsetParent === null) || (el.getClientRects().length === 0);
       const notVisible = style.visibility === 'hidden' || style.display === 'none' || style.opacity === '0';
       return notRendered || notVisible;
@@ -747,14 +835,12 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-     // --- CONSENT: Ensure consent checkbox is checked (if present) ---
+    // --- CONSENT: Ensure consent checkbox is checked (if present) ---
     const consentEl = document.getElementById('consent_checkbox');
     if (consentEl && !consentEl.checked) {
-      // open modal if present to show full notice, otherwise alert user
       const modal = document.getElementById('consentModal');
       if (modal) {
         modal.classList.remove('visually-hidden');
-        // focus the checkbox inside modal if exists after a short delay
         setTimeout(() => {
           const cb = document.getElementById('consent_checkbox');
           if (cb) cb.focus();
@@ -766,14 +852,24 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    // --- before building FormData, make sure itemsOtherText is enabled if checked
-    // (defensive: previously we enabled before validation, re-ensure here)
+    // --- before building FormData, re-sync items-other state (defensive)
     if (itemsOtherCheckboxEl && itemsOtherTextEl) {
       if (itemsOtherCheckboxEl.checked) itemsOtherTextEl.disabled = false;
       else itemsOtherTextEl.disabled = true;
     }
+    syncOtherItemsState();
 
-        const submitBtn = form.querySelector('button[type="submit"]');
+    // --- ensure items validation (at least one checkbox) ---
+    if (!validateItemsCarried()) {
+      const itemsWrap = document.getElementById('itemsCheckboxes');
+      const top = window.scrollY + (itemsWrap ? itemsWrap.getBoundingClientRect().top - 80 : 0);
+      window.scrollTo({ top, behavior: 'smooth' });
+      const firstChk = itemsWrap && itemsWrap.querySelector('input[type="checkbox"]');
+      if (firstChk) firstChk.focus();
+      return; // stop submit — do not clear photo or reset form
+    }
+
+    const submitBtn = form.querySelector('button[type="submit"]');
     const originalBtnText = submitBtn ? submitBtn.textContent : 'Submit';
     if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Submitting...'; }
 
@@ -792,45 +888,26 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         data = await resp.json();
       } catch (e) {
-        // invalid JSON — fallback message
         console.warn('Response was not JSON:', e);
       }
 
       if (resp.ok && data && data.success) {
-        // success popup and reset form (optional)
-        if (window.showModal) window.showModal(data.message || 'Saved successfully', 'success', true, 3000);
+        // show success feedback briefly
+        if (window.showModal) window.showModal(data.message || 'Saved successfully', 'success', true, 800);
 
-        // reset the form fields
-        form.reset();
+        // FULL PAGE RELOAD so the page is completely fresh for the next entry
+        setTimeout(() => {
+          window.location.reload();
+        }, 850);
 
-        // explicitly clear photo input + preview so next visitor can add a new photo
-        resetPhotoPreview();
-
-        // also clear any dynamic UI that depends on state (optional)
-        // hide items-other text if present
-        const itemsOtherWrap = document.getElementById('itemsOtherWrap');
-        const itemsOtherCheckbox = document.getElementById('itemsOtherCheckbox');
-        const itemsOtherText = document.getElementById('itemsOtherText');
-        if (itemsOtherWrap && itemsOtherCheckbox && itemsOtherText) {
-          itemsOtherWrap.style.display = itemsOtherCheckbox.checked ? 'block' : 'none';
-          if (!itemsOtherCheckbox.checked) itemsOtherText.value = '';
-        }
-
-        // move focus to first input for quick next entry (optional)
-        const firstInput = form.querySelector('input, select, textarea, button');
-        if (firstInput) firstInput.focus();
+        return;
       } else {
         // prefer server-provided message, else REST status text
         const msg = (data && (data.message || data.error)) ? (data.message || data.error) : (resp.statusText || 'Save failed');
-        // If server sent field errors, focus first field
         if (data && data.errors && typeof data.errors === 'object') {
           const firstField = Object.keys(data.errors)[0];
-          // try focus by name or id
           const el = form.querySelector(`[name="${firstField}"]`) || document.getElementById(firstField);
-          if (el) {
-            el.focus();
-            // optionally show inline error if you have a convention (not added here)
-          }
+          if (el) { el.focus(); }
         }
         if (window.showModal) {
           window.showModal(msg, 'error', true, 5000);
@@ -972,6 +1049,31 @@ document.addEventListener('DOMContentLoaded', () => {
     photoError.style.display = 'none';
     photoError.textContent = '';
   }
+
+  // Validate that at least one "items[]" checkbox is selected.
+function validateItemsCarried() {
+  const container = document.getElementById('itemsCheckboxes');
+  const errEl = document.getElementById('itemsError');
+  if (!container || !errEl) return true; // defensive
+
+  // count checked checkboxes within the container
+  const anyChecked = Array.from(container.querySelectorAll('input[type="checkbox"]'))
+                          .some(chk => chk.checked);
+
+  if (!anyChecked) {
+    errEl.textContent = 'Please select at least one item carried.';
+    errEl.style.display = 'block';
+    // add a visual focus cue if desired
+    container.setAttribute('aria-invalid', 'true');
+    return false;
+  } else {
+    errEl.textContent = '';
+    errEl.style.display = 'none';
+    container.removeAttribute('aria-invalid');
+    return true;
+  }
+}
+
 
   // set custom validity if no file is present
     function validatePhotoField() {

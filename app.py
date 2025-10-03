@@ -772,7 +772,17 @@ def add_visitor():
             seen.add(key)
     # use the deduped list from here on
     normalized_items = normalized_items_unique
-    # -----------------------------------------------------------------------------------------------------
+
+        # ------------------ POST-DEDUPE VALIDATION (INSERT HERE) ------------------
+    # ensure at least one item is present (server-side enforcement of the client rule)
+    if not normalized_items:
+        # No items selected (or user checked "Other" but didn't type anything)
+        return respond_error("Please select at least one item carried.", status=400)
+
+    # defensive: if the form contained the literal "Other" but user didn't type text
+    # (this is optional because the check above captures it, but keeps the message specific)
+    if ("Other" in items_raw) and (not other_text):
+        return respond_error('You checked "Others" — please describe the other items in the text box.', status=400)
 
     # Finally create visitor record (store items as JSON string; keep otherItems too)
     visitor = Visitor(
