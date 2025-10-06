@@ -530,15 +530,29 @@ def verify_password(stored_password: str, provided_password: str) -> bool:
         pass
 
     return False
-# -------------------------------------------------------------------------------
-
 
 # --- Authorization helpers (place near other utilities) ---
 ELECTRONICS_KEYWORDS = {
     "laptop", "pendrive", "usb", "usb-drive", "usb drive",
-    "ipad", "tablet", "mobile", "phone", "charger", "powerbank",
-    "notebook", "macbook"
+    "ipad", "tablet", "macbook"
 }
+
+# Robust whole-word matcher helper (precompile once)
+_ELECTRONICS_REGEX = [re.compile(r"\b" + re.escape(k) + r"\b", re.IGNORECASE) for k in ELECTRONICS_KEYWORDS]
+
+def matches_electronics(text: str) -> bool:
+    """
+    Return True only when any ELECTRONICS_KEYWORD appears as a whole word
+    inside `text`. This avoids accidental substring matches (e.g. 'lap' in
+    some unrelated word).
+    """
+    if not text:
+        return False
+    s = str(text)
+    for rx in _ELECTRONICS_REGEX:
+        if rx.search(s):
+            return True
+    return False
 
 def visitor_has_electronics(visitor):
     """Return True if visitor.items (or otherItems) contains an electronics keyword."""
@@ -889,10 +903,7 @@ def add_visitor():
     # --- send separate IT approval email if visitor carried electronics ---
     try:
         # electronics keywords (extend if needed)
-        electronics_keywords = {
-            "laptop", "pendrive", "usb", "usb-drive", "usb drive",
-            "ipad", "tablet", "mobile", "phone", "charger", "powerbank", "notebook", "macbook"
-        }
+        electronics_keywords = ELECTRONICS_KEYWORDS
 
         # we already built normalized_items above; fall back to parsing DB value if not available
         items_to_check = normalized_items
@@ -908,8 +919,7 @@ def add_visitor():
                 s = s.strip().strip("[]").replace('"', "").replace("'", "")
                 items_to_check = [x.strip() for x in s.split(",") if x.strip()]
 
-        items_lower = [str(it).strip().lower() for it in (items_to_check or []) if it and str(it).strip()]
-        has_electronics = any(any(k in it for k in electronics_keywords) for it in items_lower)
+        has_electronics = any(matches_electronics(it) for it in (items_to_check or []))
 
         if has_electronics:
             # query IT contacts for the same location
@@ -1032,12 +1042,7 @@ def send_email_to_it(visitor_obj_or_dict, contact_name, contact_email, visitor_i
             seen.add(key)
 
     # --- FILTER: keep only electronic items for IT email ---
-    electronics_keywords = {
-        "laptop", "pendrive", "usb", "usb-drive", "usb drive",
-        "ipad", "tablet", "mobile", "phone", "charger", "powerbank",
-        "notebook", "macbook"
-    }
-    items_electronic = [it for it in items_clean if any(k in it.lower() for k in electronics_keywords)]
+    items_electronic = [it for it in items_clean if matches_electronics(it)]
     items_line = ", ".join(items_electronic) if items_electronic else "—"
     # ----------------------------------------------------------------
 
@@ -1280,8 +1285,6 @@ def visitors_list():
     user_role = get_current_role() or current_role_authoritative()
 
     out = []
-    # keywords used server-side to detect electronics
-    keywords = ['laptop','pendrive','usb','notebook','macbook','ipad','tablet','mobile','phone','charger','powerbank']
 
     for v in all_visitors:
         # --- normalize items (robust) ---
@@ -1335,19 +1338,10 @@ def visitors_list():
                 seen.add(key)
 
 
-        # --- compute has_electronics server-side (reliable) ---
-        has_electronics_flag = False
-        for itm in items_with_other_for_pass:
-            itm_low = str(itm).strip().lower()
-            for kw in keywords:
-                if kw in itm_low:
-                    has_electronics_flag = True
-                    break
-            if has_electronics_flag:
-                break
+       # centralized whole-word check
+        has_electronics_flag = any(matches_electronics(itm) for itm in items_with_other_for_pass)
 
         # visitor is allowed to be checked-in only if department approved AND
-        # (no electronics OR electronics approved)
         dept_ok = bool(v.approved)   # True only if department approved (v.approved is True)
         it_ok = (v.electronics_approved is True) if has_electronics_flag else True
         allowed_to_checkin = dept_ok and it_ok
@@ -1689,7 +1683,7 @@ def checkout(visitor_id):
 # --- Ensure a default admin user exists (run once on startup) ---
 def ensure_default_admin():
     """
-    Creates a default admin user (username=admin, password=admin) if missing.
+    Creates a default admin user ,if missing.
     Only for development. Remove or change password in production.
     """
     try:
