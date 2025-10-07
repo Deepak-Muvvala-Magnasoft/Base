@@ -209,8 +209,7 @@ body {
     /* space between logo and title */
     text-align: center;
     /* ensures multi-line headings are centered */
-    padding-top: 30px;
-    /* optional — adjust spacing from top */
+    padding-top: 10px;
 }
 
 .visitor-center .logo-height {
