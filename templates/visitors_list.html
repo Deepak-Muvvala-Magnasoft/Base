@@ -5,6 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Visitors List</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/Magnasoft.png') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/visitor_list.css') }}">
 </head>
 
@@ -25,10 +26,31 @@
 
   <h2>Visitors List</h2>
 
-  {# ---------- LOCATION FILTER + DOWNLOAD (visible to admins/superadmins) ---------- #}
-  {% if user_role in ['admin','superadmin'] %}
-    <div class="list-controls" style="display:flex;align-items:center;gap:12px;margin:12px 0;">
-      <label for="locationFilter" style="font-weight:600;margin-right:6px;">Filter by location:</label>
+ {# ---------- LOCATION FILTER + DOWNLOAD (visible to admins/superadmins) ---------- #}
+{# Roles admin-BLR / admin-HYD / admin-HSN are *restricted* to one location and have no download #}
+{% set role_lc = (user_role or '')|lower %}
+{% if role_lc in ['admin','superadmin'] or role_lc.startswith('admin-') %}
+  {# determine if this is a location-restricted admin role (admin-blr/admin-hyd/admin-hsn) #}
+  {% if role_lc == 'admin-blr' %}
+    {% set role_loc = 'BLR' %}
+  {% elif role_lc == 'admin-hyd' %}
+    {% set role_loc = 'HYD' %}
+  {% elif role_lc == 'admin-hsn' %}
+    {% set role_loc = 'HSN' %}
+  {% else %}
+    {% set role_loc = None %}
+  {% endif %}
+
+  <div class="list-controls" style="display:flex;align-items:center;gap:12px;margin:12px 0;">
+    <label for="locationFilter" style="font-weight:600;margin-right:6px;">Filter by location:</label>
+
+    {% if role_loc %}
+      {# Restricted admin: only show their location, disable selection, hide download #}
+      <select id="locationFilter" aria-label="Filter visitors by location" disabled>
+        <option value="{{ role_loc }}" selected>{{ role_loc }}</option>
+      </select>
+    {% else %}
+      {# Full admin / superadmin: show all options and download button #}
       <select id="locationFilter" aria-label="Filter visitors by location">
         <option value="ALL">ALL</option>
         <option value="HYD">HYD</option>
@@ -40,8 +62,10 @@
       <button id="downloadFilteredCsv" title="Download filtered visitors" style="margin-left:8px; padding:6px 10px; cursor:pointer;">
         ⬇️ Download
       </button>
-    </div>
-  {% endif %}
+    {% endif %}
+  </div>
+{% endif %}
+
 
   <div class="table-container">
     <table>
@@ -270,8 +294,16 @@
 
     </table>
   </div>
-
+  
   <script id="auth-params" type="application/json">{{ auth_params_json | e }}</script>
+  <script>
+  // simple, safe rendering (no tojson necessary)
+  // role_location becomes a string (empty if none)
+  window.__ROLE_LOCATION = "{{ role_location or '' }}";
+  </script>
+  <script id="role-params" type="application/json">
+    {{ {'role_location': role_location, 'can_download': can_download}|tojson }}
+  </script>
   <script>
     // Auth query-string passed into template by inject_user_role()
     const AUTH_QS = "{{ auth_qs|e }}";
@@ -732,29 +764,73 @@
       }
 
       // Init: wire events
-      document.addEventListener('DOMContentLoaded', function() {
-        const filterEl = document.getElementById('locationFilter');
-        const downloadBtn = document.getElementById('downloadFilteredCsv');
+   document.addEventListener('DOMContentLoaded', function() {
+  const filterEl = document.getElementById('locationFilter');
+  const downloadBtn = document.getElementById('downloadFilteredCsv');
 
-        if (filterEl) {
-          // initially apply default filter
-          applyLocationFilter(filterEl.value || 'ALL');
+  // roleLoc + canDownload from server-rendered template
+  const roleLocRaw = (window.__ROLE_LOCATION === undefined) ? null : window.__ROLE_LOCATION;
+  const roleLoc = roleLocRaw ? String(roleLocRaw).toUpperCase() : null;
+  const canDownload = !!window.__CAN_DOWNLOAD;
 
-          filterEl.addEventListener('change', function(e) {
-            applyLocationFilter(e.target.value);
-          });
-        }
-
-        if (downloadBtn) {
-          downloadBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            downloadVisibleVisitorsCSV();
-          });
-        }
-
-        // expose helpers for debugging
-        window.VMS_FILTER = { applyLocationFilter, downloadVisibleVisitorsCSV };
+  if (filterEl) {
+    if (roleLoc) {
+      try { filterEl.value = roleLoc; } catch (e) {}
+      filterEl.setAttribute('disabled', 'disabled');
+      applyLocationFilter(roleLoc);
+    } else {
+      applyLocationFilter(filterEl.value || 'ALL');
+      filterEl.addEventListener('change', function(e) {
+        applyLocationFilter(e.target.value);
       });
+    }
+  }
+
+  if (downloadBtn) {
+    if (!canDownload) {
+      // hide or disable button for restricted admins
+      downloadBtn.style.display = 'none';
+    } else {
+      // server-based download is allowed — call endpoint and stream file
+      downloadBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        // pick the active location from the filter (or roleLoc)
+        const loc = (filterEl && filterEl.value) ? filterEl.value : (roleLoc || 'ALL');
+        const url = `/download_visitors_csv?location=${encodeURIComponent(loc)}`;
+
+        // fetch the CSV as blob and force download (keeps filename from Content-Disposition if provided)
+        fetch(url, { credentials: 'same-origin' })
+          .then(resp => {
+            if (!resp.ok) throw new Error('Download failed: ' + resp.status);
+            const cd = resp.headers.get('Content-Disposition') || '';
+            // try to detect filename
+            let filename = `visitors_${loc}_${new Date().toISOString().slice(0,10)}.csv`;
+            const m = /filename="?(.*?)"?($|;)/i.exec(cd);
+            if (m && m[1]) filename = m[1];
+
+            return resp.blob().then(blob => ({ blob, filename }));
+          })
+          .then(({ blob, filename }) => {
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(link.href);
+          })
+          .catch(err => {
+            console.error('CSV download error', err);
+            alert('Failed to download CSV.'); // simple fallback notice
+          });
+      });
+    }
+  }
+
+  // expose for debugging
+  window.VMS_FILTER = { applyLocationFilter, downloadVisibleVisitorsCSV, roleLoc, canDownload };
+});
+
     })();
   </script>
 

@@ -4,6 +4,8 @@ import json
 import smtplib
 import traceback 
 import re
+import csv
+
 from flask import g
 from urllib.parse import urlencode
 from functools import wraps
@@ -13,6 +15,8 @@ from flask import (
 )
 from urllib.parse import urlencode
 from flask_sqlalchemy import SQLAlchemy
+from io import StringIO
+from flask import Response, g, request
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from sqlalchemy.exc import SQLAlchemyError
@@ -1279,10 +1283,27 @@ def get_users():
 @login_required_strict
 def visitors_list():
     import json as _json
-    all_visitors = Visitor.query.order_by(Visitor.created_at.desc()).all()
+    # determine user role (prefer query param / UI-driven role if present)
+    user_role = (get_current_role() or current_role_authoritative() or "").strip()
+    user_role_lc = user_role.lower()
 
-    # IMPORTANT: prefer query param role when present so the UI matches query-param-based logins
-    user_role = get_current_role() or current_role_authoritative()
+    # default: no role-location restriction, allow download
+    role_location = None
+    can_download = True
+
+    # If role is a restricted admin (admin-blr/admin-hyd/admin-hsn), enforce server-side location filter
+    if user_role_lc.startswith("admin-") and user_role_lc not in ("admin", "superadmin"):
+        parts = user_role_lc.split("-", 1)
+        if len(parts) == 2 and parts[1]:
+            role_location = parts[1].upper()
+            can_download = False
+
+    # Build base query, apply role_location filter early to avoid loading all rows
+    q = Visitor.query
+    if role_location:
+        q = q.filter(Visitor.location == role_location)
+
+    all_visitors = q.order_by(Visitor.created_at.desc()).all()
 
     out = []
 
@@ -1292,7 +1313,7 @@ def visitors_list():
         items_list = []
         try:
             if isinstance(items_value, str):
-                # try JSON first (handles '['"Laptop","Pendrive"]')
+                # try JSON first (handles '["Laptop","Pendrive"]')
                 try:
                     parsed = _json.loads(items_value)
                     if isinstance(parsed, (list, tuple, set)):
@@ -1313,7 +1334,7 @@ def visitors_list():
             app.logger.exception("Failed to parse items for visitor id %s", getattr(v, "id", None))
             items_list = []
 
-                # typed "Other" text (if any)
+        # typed "Other" text (if any)
         other_text = getattr(v, "otherItems", "") or ""
         other_text = other_text.strip() if isinstance(other_text, str) else ""
 
@@ -1337,8 +1358,7 @@ def visitors_list():
                 items_with_other_for_pass.append(it.strip())
                 seen.add(key)
 
-
-       # centralized whole-word check
+        # centralized whole-word check
         has_electronics_flag = any(matches_electronics(itm) for itm in items_with_other_for_pass)
 
         # visitor is allowed to be checked-in only if department approved AND
@@ -1372,25 +1392,80 @@ def visitors_list():
             "contact_person": v.contact_person,
             "contact_email": v.contact_email,
             "purpose": v.purpose,
-            "items": items_list,    
-            "asset_number": getattr(v, "asset_number", "") or "",                
+            "items": items_list,
+            "asset_number": asset_number,
             "otherItems": other_text,                      # typed other text
             "items_with_other": items_with_other_for_pass, # canonical cleaned list for template
             "checked_items": checked_items,
             "check_in": v.check_in.strftime("%Y-%m-%d %H:%M:%S") if v.check_in else None,
             "check_out": v.check_out.strftime("%Y-%m-%d %H:%M:%S") if v.check_out else None,
             "verified": bool(v.verified),
-            "dept": v.dept or "",  
+            "dept": v.dept or "",
             "approved": v.approved,
             "electronics_approved": getattr(v, "electronics_approved", None),
-            "has_electronics": has_electronics_flag,       # <-- NEW boolean flag
-             "allowed_to_checkin": allowed_to_checkin,
+            "has_electronics": has_electronics_flag,
+            "allowed_to_checkin": allowed_to_checkin,
             "remarks": v.remarks or "",
             "photo_url": photo_url,
         })
 
-    return render_template("visitors_list.html", visitors=out, user_role=user_role)
+    # Pass role_location and can_download to template so client can enforce UI changes too
+    return render_template(
+        "visitors_list.html",
+        visitors=out,
+        user_role=user_role,
+        role_location=(role_location or None),
+        can_download=bool(can_download)
+        )
 
+
+@app.route('/download_visitors_csv')
+def download_visitors_csv():
+    # role check
+    user_role = (g.user_role or "").lower()
+    requested_loc = request.args.get('location', 'ALL').upper()
+
+    # restricted admins cannot download
+    if user_role in ('admin-blr', 'admin-hyd', 'admin-hsn'):
+        return ("Not allowed", 403)
+
+    # Build query (same filtering logic you used in visitors_list)
+    q = Visitor.query
+    if requested_loc and requested_loc != 'ALL':
+        q = q.filter(Visitor.location == requested_loc)
+
+    rows = q.order_by(Visitor.created_at.desc()).all()
+
+    # Build CSV in memory
+    sio = StringIO()
+    writer = csv.writer(sio)
+    headers = ['Name', 'Company', 'Location', 'Badge ID', 'ID Proof', 'Items', 'Check-in', 'Check-out', 'Department']
+    writer.writerow(headers)
+
+    for v in rows:
+        # use same normalization / fields as your visitors_list output (keep minimal)
+        badge = getattr(v, "badge_number", "") or ""
+        idnum = getattr(v, "idNumber", "") or ""
+        # items: if stored as JSON or string, you can reuse existing parsing helper.
+        items_val = getattr(v, "items", "") or ""
+        # simple fallback: if list -> join else string
+        if isinstance(items_val, (list, tuple, set)):
+            items_str = ", ".join(str(x) for x in items_val)
+        else:
+            items_str = str(items_val)
+        checkin = v.check_in.strftime("%Y-%m-%d %H:%M:%S") if v.check_in else ""
+        checkout = v.check_out.strftime("%Y-%m-%d %H:%M:%S") if v.check_out else ""
+        dept = v.dept or ""
+        writer.writerow([v.name or "", v.company or "", v.location or "", badge, idnum, items_str, checkin, checkout, dept])
+
+    csv_body = sio.getvalue()
+    sio.close()
+
+    # Response with proper headers so browser downloads file
+    filename = f"visitors_{requested_loc}_{datetime.utcnow().strftime('%Y-%m-%d')}.csv"
+    resp = Response(csv_body, mimetype='text/csv; charset=utf-8')
+    resp.headers.set("Content-Disposition", "attachment", filename=filename)
+    return resp
 
 @app.route("/api/visitors")
 def visitors_api():

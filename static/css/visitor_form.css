@@ -209,18 +209,23 @@ body {
     /* space between logo and title */
     text-align: center;
     /* ensures multi-line headings are centered */
-    padding-top: 10px;
+    padding-top: 30px;
     /* optional — adjust spacing from top */
 }
 
-/* keep logo responsive and remove unexpected margins */
 .visitor-center .logo-height {
-    display: block;
-    margin: 0;
-    /* centering handled by flex */
-    max-width: 85px;
-    width: clamp(120px, 20vw, 200px);
-    height: auto;
+  display: block;
+  margin: 0;
+  max-width: 260px;
+  width: clamp(160px, 22vw, 260px);
+  height: auto;
+  object-fit: contain;
+}
+
+.visitor-center .logo-small {
+  max-width: 64px;
+  width: 64px;
+  height: auto;
 }
 
 /* tidy up the heading */
@@ -668,15 +673,22 @@ input:invalid {
     justify-items: center;
     gap: 6px;           
     width: 95%;
+    justify-content:space-evenly;
   }
 
   /* reduce the logos so they fit on one line */
   .visitor-center .logo-height {
-    max-width: 75px;            /* hard cap */
-    width: clamp(40px, 14vw, 75px); /* scale with viewport but stay small */
+    max-width: 150px;            
+    width: clamp(64px, 20vw, 150px); 
     height: auto;
     margin: 0;
   }
+
+  .visitor-center .logo-small {
+  max-width: 32px;
+  width: 32px;
+  height: auto;
+}
 
 /* Desktop: keep inline (no change needed normally) */
 .visitor-center h2 .mobile-break { display: inline; }

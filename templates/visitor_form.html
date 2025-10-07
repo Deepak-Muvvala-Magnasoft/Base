@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <img>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/Magnasoft.png') }}">
   <title>Visitor Registration</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/visitor_form.css') }}">
 </head>
@@ -81,9 +81,9 @@
 {% endif %}
   <div class="container visitor-center">
     <div class="visitor-center">
-  <img src="{{ url_for('static', filename='images/Magnasoft.png') }}" alt="Magnasoft Logo" class="logo-height">
+  <img src="{{ url_for('static', filename='images/MGlogo.png') }}" alt="Magnasoft Logo" class="logo-height">
   <h2>Visitor <span class="mobile-break">Registration</span></h2>
-  <img src="{{ url_for('static', filename='images/Mpass.png') }}" alt="Mpass Logo" class="logo-height" loading="lazy" width="200" height="60">
+  <img src="{{ url_for('static', filename='images/Mpass.png') }}" alt="Mpass Logo" class="logo-height logo-small" loading="lazy">
     </div>
   
    <!-- change the form tag to include enctype -->
