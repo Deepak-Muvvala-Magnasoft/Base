@@ -1105,8 +1105,6 @@ def send_email_to_it(visitor_obj_or_dict, contact_name, contact_email, visitor_i
     subject = f"IT Approval Required for {dept_display} — Visitor : {safe_name} carrying electronic item(s)"
 # -------------------------------------------------------------------------------
 
-    # ----- end replacement -----
-
     body = f"""
     <html><body>
       <p>Hello {html.escape(str(contact_name or ''))},</p>
@@ -1162,6 +1160,8 @@ def send_email_to_contact(visitor_obj_or_dict, visitor_id=None):
         company = v.company
         phone = v.phone
         purpose = v.purpose
+        location = getattr(v, "location", None) if hasattr(v, "__table__") else v.get("location")
+
     else:
         v = visitor_obj_or_dict
         vid = visitor_id or v.get("id") or v.get("_id")
@@ -1197,6 +1197,7 @@ def send_email_to_contact(visitor_obj_or_dict, visitor_id=None):
         <li><strong>Company:</strong> {company}</li>
         <li><strong>Phone:</strong> {phone}</li>
         <li><strong>Purpose:</strong> {purpose}</li>
+        <li><strong>Location:</strong> {location or 'N/A'}</li>
       </ul>
       <p>Please choose an option below:</p>
       <p>
