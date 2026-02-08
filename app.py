@@ -392,6 +392,34 @@ app.config["SQLALCHEMY_DATABASE_URI"] = (
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 
+def validate_db_schema():
+    """
+    Fail fast if connected to a wrong / empty database.
+    READ-ONLY check. No schema or data modification.
+    """
+    required_tables = {"visitors", "users"}
+
+    try:
+        result = db.session.execute(text("SHOW TABLES")).fetchall()
+        existing_tables = {row[0] for row in result}
+
+        missing = required_tables - existing_tables
+        if missing:
+            raise RuntimeError(
+                f"FATAL: Invalid database schema. Missing tables: {missing}"
+            )
+
+        app.logger.info("✅ Database schema validation passed")
+
+    except Exception as e:
+        app.logger.critical("❌ Database schema validation failed: %s", e)
+        raise
+
+# 🔒 IMPORTANT: call it ONCE at startup
+with app.app_context():
+    validate_db_schema()
+
+
 
 @app.route("/__debug_oauth")
 def debug_oauth():
@@ -1757,27 +1785,27 @@ def checkout(visitor_id):
         return jsonify({"success": False, "message": "Server error"}), 500
 
 # --- Ensure a default admin user exists (run once on startup) ---
+# --- Ensure a default admin user exists (DEV ONLY) ---
 def ensure_default_admin():
     """
-    Creates a default admin user ,if missing.
-    Only for development. Remove or change password in production.
+    DEV ONLY.
+    Do NOT auto-create tables in production.
     """
     try:
-        # create tables if they don't exist (no-op if already created)
-        db.create_all()
-
         if not User.query.filter_by(username="admin").first():
             hashed = generate_password_hash("admin")
             admin_user = User(username="admin", password=hashed, role="Super Admin")
             db.session.add(admin_user)
             db.session.commit()
-            app.logger.info("✅ Created default admin user: admin / admin (development only)")
+            app.logger.info("✅ Created default admin user (DEV only)")
     except Exception:
         app.logger.exception("Failed to ensure default admin user")
 
-# call it under app context so SQLAlchemy works
-with app.app_context():
-    ensure_default_admin()
+# ⚠️ IMPORTANT: only run in development
+if app.config.get("ENV") == "development":
+    with app.app_context():
+        ensure_default_admin()
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
