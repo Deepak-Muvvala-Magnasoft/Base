@@ -253,18 +253,30 @@
               <td>
                 {% if has_electronics %}
                   {% if e_approved == True %}
-                    <span style="color: green; font-weight: bold;">✅ Approved</span>
+                    <span style="color:green;font-weight:bold;">✅ Approved</span>
+                    {% if v.get('electronics_approved_at') %}
+                      <br><span style="font-size:11px;color:#64748b;">{{ v.get('electronics_approved_at').strftime('%d-%m-%Y %H:%M') }}</span>
+                    {% endif %}
+                    {% if v.get('electronics_approved_by') %}
+                      <br><span style="font-size:11px;color:#0e7490;">by {{ v.get('electronics_approved_by') }}</span>
+                    {% endif %}
                   {% elif e_approved == False %}
-                    <span style="color: red; font-weight: bold;">❌ Declined</span>
+                    <span style="color:red;font-weight:bold;">❌ Declined</span>
+                    {% if v.get('electronics_declined_at') %}
+                      <br><span style="font-size:11px;color:#64748b;">{{ v.get('electronics_declined_at').strftime('%d-%m-%Y %H:%M') }}</span>
+                    {% endif %}
+                    {% if v.get('electronics_declined_by') %}
+                      <br><span style="font-size:11px;color:#dc2626;">by {{ v.get('electronics_declined_by') }}</span>
+                    {% endif %}
                   {% else %}
-                    <span style="color: orange; font-weight: bold;">⏳ Pending</span>
+                    <span style="color:orange;font-weight:bold;">⏳ Pending</span>
                   {% endif %}
                 {% else %}
                   <span style="color:#6b7280;font-weight:600;">N/A</span>
                 {% endif %}
               </td>
 
-              {# ---------- Department Approval column (unchanged behaviour) ---------- #}
+              {# ---------- Department Approval column ---------- #}
               {% if v.get('approved') is not none %}
                 {% set d_approved = v.get('approved') %}
               {% elif v.approved is defined %}
@@ -275,11 +287,23 @@
 
               <td>
                 {% if d_approved == True %}
-                  <span style="color: green; font-weight: bold;">✅ Approved</span>
+                  <span style="color:green;font-weight:bold;">✅ Approved</span>
+                  {% if v.get('approved_at') %}
+                    <br><span style="font-size:11px;color:#64748b;">{{ v.get('approved_at').strftime('%d-%m-%Y %H:%M') }}</span>
+                  {% endif %}
+                  {% if v.get('approved_by') %}
+                    <br><span style="font-size:11px;color:#0e7490;">by {{ v.get('approved_by') }}</span>
+                  {% endif %}
                 {% elif d_approved == False %}
-                  <span style="color: red; font-weight: bold;">❌ Declined</span>
+                  <span style="color:red;font-weight:bold;">❌ Declined</span>
+                  {% if v.get('declined_at') %}
+                    <br><span style="font-size:11px;color:#64748b;">{{ v.get('declined_at').strftime('%d-%m-%Y %H:%M') }}</span>
+                  {% endif %}
+                  {% if v.get('declined_by') %}
+                    <br><span style="font-size:11px;color:#dc2626;">by {{ v.get('declined_by') }}</span>
+                  {% endif %}
                 {% else %}
-                  <span style="color: orange; font-weight: bold;">⏳ Pending</span>
+                  <span style="color:orange;font-weight:bold;">⏳ Pending</span>
                 {% endif %}
               </td>
             </tr>

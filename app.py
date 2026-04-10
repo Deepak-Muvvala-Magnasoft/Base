@@ -483,6 +483,25 @@ class Visitor(db.Model):
     photo_data = db.Column(db.LargeBinary, nullable=True)
     asset_number = db.Column(db.String(100), nullable=True)
 
+    # ── Approval tracking ────────────────────────────────────────────────────
+    # Run once in MySQL:
+    # ALTER TABLE visitors ADD COLUMN approved_at              DATETIME     NULL;
+    # ALTER TABLE visitors ADD COLUMN approved_by              VARCHAR(150) NULL;
+    # ALTER TABLE visitors ADD COLUMN declined_at              DATETIME     NULL;
+    # ALTER TABLE visitors ADD COLUMN declined_by              VARCHAR(150) NULL;
+    # ALTER TABLE visitors ADD COLUMN electronics_approved_at  DATETIME     NULL;
+    # ALTER TABLE visitors ADD COLUMN electronics_approved_by  VARCHAR(150) NULL;
+    # ALTER TABLE visitors ADD COLUMN electronics_declined_at  DATETIME     NULL;
+    # ALTER TABLE visitors ADD COLUMN electronics_declined_by  VARCHAR(150) NULL;
+    approved_at             = db.Column(db.DateTime,     nullable=True)
+    approved_by             = db.Column(db.String(150),  nullable=True)
+    declined_at             = db.Column(db.DateTime,     nullable=True)
+    declined_by             = db.Column(db.String(150),  nullable=True)
+    electronics_approved_at = db.Column(db.DateTime,     nullable=True)
+    electronics_approved_by = db.Column(db.String(150),  nullable=True)
+    electronics_declined_at = db.Column(db.DateTime,     nullable=True)
+    electronics_declined_by = db.Column(db.String(150),  nullable=True)
+
 
 class User(db.Model):
     __tablename__ = "users"
@@ -1085,8 +1104,10 @@ def send_email_to_it(visitor_obj_or_dict, contact_name, contact_email, visitor_i
         base = VISITOR_BASE_URL or "http://myportal.magnasoft.com"
     base = base.rstrip('/')
 
-    approve_link = f"{base}/approve_electronics/{vid}"
-    decline_link = f"{base}/decline_electronics/{vid}"
+    from urllib.parse import quote as _quote
+    _it_actor = _quote(str(contact_name or ""), safe="")
+    approve_link = f"{base}/approve_electronics/{vid}?actor={_it_actor}"
+    decline_link = f"{base}/decline_electronics/{vid}?actor={_it_actor}"
 
     dept = ""
     try:
@@ -1208,8 +1229,10 @@ def send_email_to_contact(visitor_obj_or_dict, visitor_id=None):
         base = VISITOR_BASE_URL or "http://myportal.magnasoft.com"
     base = base.rstrip('/')
 
-    approve_link = f"{base}/approve_visitor/{vid}"
-    decline_link = f"{base}/decline_visitor/{vid}"
+    from urllib.parse import quote as _quote
+    _actor = _quote(str(contact_name or ""), safe="")
+    approve_link = f"{base}/approve_visitor/{vid}?actor={_actor}"
+    decline_link = f"{base}/decline_visitor/{vid}?actor={_actor}"
 
     # guard: if no email, nothing to send
     if not contact_email:
@@ -1250,14 +1273,60 @@ def send_email_to_contact(visitor_obj_or_dict, visitor_id=None):
     return True
 
 
+def _already_taken_page(visitor_name, action_word, action_by, action_time):
+    """Reusable 'already actioned' HTML response."""
+    time_str = action_time.strftime("%d-%m-%Y %H:%M") if action_time else "—"
+    return (
+        "<html><body style='font-family:Arial,sans-serif;padding:40px;max-width:520px;margin:auto;'>"
+        "<div style='border:1px solid #e2e8f0;border-radius:10px;padding:32px;text-align:center;'>"
+        "<div style='font-size:40px;margin-bottom:12px;'>ℹ️</div>"
+        "<h2 style='color:#1e3a5f;margin-bottom:8px;'>Action Already Taken</h2>"
+        f"<p style='color:#475569;font-size:15px;'>Visitor <strong>{visitor_name}</strong> "
+        f"has already been <strong>{action_word}</strong> by "
+        f"<strong>{action_by}</strong> on {time_str}.</p>"
+        "<p style='color:#94a3b8;font-size:13px;margin-top:16px;'>"
+        "No further action is needed. You may close this window.</p>"
+        "</div></body></html>"
+    )
+
+def _success_page(emoji, color, title, visitor_name, action_word, actor):
+    by_str = f" by <strong>{actor}</strong>" if actor else ""
+    return (
+        "<html><body style='font-family:Arial,sans-serif;padding:40px;max-width:520px;margin:auto;'>"
+        "<div style='border:1px solid #e2e8f0;border-radius:10px;padding:32px;text-align:center;'>"
+        f"<div style='font-size:40px;margin-bottom:12px;'>{emoji}</div>"
+        f"<h2 style='color:{color};margin-bottom:8px;'>{title}</h2>"
+        f"<p style='color:#475569;font-size:15px;'>Visitor <strong>{visitor_name}</strong> "
+        f"has been <strong>{action_word}</strong>{by_str}.</p>"
+        "<p style='color:#94a3b8;font-size:13px;margin-top:16px;'>You may close this window.</p>"
+        "</div></body></html>"
+    )
+
+
 @app.route("/approve_visitor/<int:visitor_id>")
 def approve_visitor(visitor_id):
     v = Visitor.query.get(visitor_id)
     if not v:
         return "Visitor not found", 404
-    v.approved = True
+
+    actor = (request.args.get("actor") or "").strip()
+    now   = datetime.now(ZoneInfo("Asia/Kolkata")).replace(tzinfo=None)
+
+    # Guard: already actioned?
+    if v.approved is not None:
+        action_word = "approved" if v.approved else "declined"
+        action_by   = getattr(v, "approved_by", None) or getattr(v, "declined_by", None) or "another approver"
+        action_time = getattr(v, "approved_at", None) or getattr(v, "declined_at", None)
+        return _already_taken_page(v.name, action_word, action_by, action_time)
+
+    v.approved    = True
+    if hasattr(v, "approved_at"):  v.approved_at = now
+    if hasattr(v, "approved_by"):  v.approved_by = actor or None
+    if hasattr(v, "declined_at"):  v.declined_at = None
+    if hasattr(v, "declined_by"):  v.declined_by = None
     db.session.commit()
-    return "Visitor approved ✅."
+    app.logger.info("Visitor approved id=%s by=%s", visitor_id, actor)
+    return _success_page("✅", "#166534", "Visitor Approved", v.name, "approved", actor)
 
 
 @app.route("/decline_visitor/<int:visitor_id>")
@@ -1265,9 +1334,25 @@ def decline_visitor(visitor_id):
     v = Visitor.query.get(visitor_id)
     if not v:
         return "Visitor not found", 404
-    v.approved = False
+
+    actor = (request.args.get("actor") or "").strip()
+    now   = datetime.now(ZoneInfo("Asia/Kolkata")).replace(tzinfo=None)
+
+    # Guard: already actioned?
+    if v.approved is not None:
+        action_word = "approved" if v.approved else "declined"
+        action_by   = getattr(v, "approved_by", None) or getattr(v, "declined_by", None) or "another approver"
+        action_time = getattr(v, "approved_at", None) or getattr(v, "declined_at", None)
+        return _already_taken_page(v.name, action_word, action_by, action_time)
+
+    v.approved    = False
+    if hasattr(v, "declined_at"):  v.declined_at = now
+    if hasattr(v, "declined_by"):  v.declined_by = actor or None
+    if hasattr(v, "approved_at"):  v.approved_at = None
+    if hasattr(v, "approved_by"):  v.approved_by = None
     db.session.commit()
-    return "Visitor declined ❌."
+    app.logger.info("Visitor declined id=%s by=%s", visitor_id, actor)
+    return _success_page("❌", "#991b1b", "Visitor Declined", v.name, "declined", actor)
 
 
 @app.route("/approve_electronics/<int:visitor_id>")
@@ -1275,10 +1360,25 @@ def approve_electronics(visitor_id):
     v = Visitor.query.get(visitor_id)
     if not v:
         return "Visitor not found", 404
+
+    actor = (request.args.get("actor") or "").strip()
+    now   = datetime.now(ZoneInfo("Asia/Kolkata")).replace(tzinfo=None)
+
+    # Guard: already actioned?
+    if v.electronics_approved is not None:
+        action_word = "approved" if v.electronics_approved else "declined"
+        action_by   = getattr(v, "electronics_approved_by", None) or getattr(v, "electronics_declined_by", None) or "another approver"
+        action_time = getattr(v, "electronics_approved_at", None) or getattr(v, "electronics_declined_at", None)
+        return _already_taken_page(v.name, action_word, action_by, action_time)
+
     v.electronics_approved = True
+    if hasattr(v, "electronics_approved_at"):  v.electronics_approved_at = now
+    if hasattr(v, "electronics_approved_by"):  v.electronics_approved_by = actor or None
+    if hasattr(v, "electronics_declined_at"):  v.electronics_declined_at = None
+    if hasattr(v, "electronics_declined_by"):  v.electronics_declined_by = None
     db.session.commit()
-    app.logger.info("Electronics approved via link for id=%s", visitor_id)
-    return "<html><body>Electronics approved. You can close this window.</body></html>"
+    app.logger.info("Electronics approved id=%s by=%s", visitor_id, actor)
+    return _success_page("✅", "#166534", "Electronics Approved", v.name, "approved", actor)
 
 
 @app.route("/decline_electronics/<int:visitor_id>")
@@ -1286,10 +1386,25 @@ def decline_electronics(visitor_id):
     v = Visitor.query.get(visitor_id)
     if not v:
         return "Visitor not found", 404
+
+    actor = (request.args.get("actor") or "").strip()
+    now   = datetime.now(ZoneInfo("Asia/Kolkata")).replace(tzinfo=None)
+
+    # Guard: already actioned?
+    if v.electronics_approved is not None:
+        action_word = "approved" if v.electronics_approved else "declined"
+        action_by   = getattr(v, "electronics_approved_by", None) or getattr(v, "electronics_declined_by", None) or "another approver"
+        action_time = getattr(v, "electronics_approved_at", None) or getattr(v, "electronics_declined_at", None)
+        return _already_taken_page(v.name, action_word, action_by, action_time)
+
     v.electronics_approved = False
+    if hasattr(v, "electronics_declined_at"):  v.electronics_declined_at = now
+    if hasattr(v, "electronics_declined_by"):  v.electronics_declined_by = actor or None
+    if hasattr(v, "electronics_approved_at"):  v.electronics_approved_at = None
+    if hasattr(v, "electronics_approved_by"):  v.electronics_approved_by = None
     db.session.commit()
-    app.logger.info("Electronics declined via link for id=%s", visitor_id)
-    return "<html><body>Electronics declined. You can close this window.</body></html>"
+    app.logger.info("Electronics declined id=%s by=%s", visitor_id, actor)
+    return _success_page("❌", "#991b1b", "Electronics Declined", v.name, "declined", actor)
 
 
 @app.route("/get_users")
@@ -1436,6 +1551,15 @@ def visitors_list():
             "allowed_to_checkin": allowed_to_checkin,
             "remarks": v.remarks or "",
             "photo_url": photo_url,
+            # ── approval tracking ──────────────────────────────────────────
+            "approved_at":             getattr(v, "approved_at",             None),
+            "approved_by":             getattr(v, "approved_by",             None),
+            "declined_at":             getattr(v, "declined_at",             None),
+            "declined_by":             getattr(v, "declined_by",             None),
+            "electronics_approved_at": getattr(v, "electronics_approved_at", None),
+            "electronics_approved_by": getattr(v, "electronics_approved_by", None),
+            "electronics_declined_at": getattr(v, "electronics_declined_at", None),
+            "electronics_declined_by": getattr(v, "electronics_declined_by", None),
         })
 
     # Pass role_location and can_download to template so client can enforce UI changes too
