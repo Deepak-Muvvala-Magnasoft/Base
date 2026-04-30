@@ -560,6 +560,17 @@ class Visitor(db.Model):
     photo_data = db.Column(db.LargeBinary, nullable=True)
     asset_number = db.Column(db.String(100), nullable=True)
 
+    # ── Approval tracking ────────────────────────────────────────────────
+    # These columns must already exist in MySQL (added via earlier migration).
+    approved_at             = db.Column(db.DateTime,    nullable=True)
+    approved_by             = db.Column(db.String(150), nullable=True)
+    declined_at             = db.Column(db.DateTime,    nullable=True)
+    declined_by             = db.Column(db.String(150), nullable=True)
+    electronics_approved_at = db.Column(db.DateTime,    nullable=True)
+    electronics_approved_by = db.Column(db.String(150), nullable=True)
+    electronics_declined_at = db.Column(db.DateTime,    nullable=True)
+    electronics_declined_by = db.Column(db.String(150), nullable=True)
+
 
 class User(db.Model):
     __tablename__ = "users"
@@ -1455,7 +1466,15 @@ def approve_visitor(visitor_id):
     v = Visitor.query.get(visitor_id)
     if not v:
         return "Visitor not found", 404
+    # Idempotency: if already actioned, don't overwrite the tracking
+    if v.approved is True and v.approved_at:
+        return "Visitor already approved ✅."
     v.approved = True
+    v.approved_at = datetime.now(IST).replace(tzinfo=None)
+    v.approved_by = (request.args.get("actor") or v.contact_person or "").strip() or None
+    # clear opposite action if it was previously declined
+    v.declined_at = None
+    v.declined_by = None
     db.session.commit()
     return "Visitor approved ✅."
 
@@ -1465,7 +1484,13 @@ def decline_visitor(visitor_id):
     v = Visitor.query.get(visitor_id)
     if not v:
         return "Visitor not found", 404
+    if v.approved is False and v.declined_at:
+        return "Visitor already declined ❌."
     v.approved = False
+    v.declined_at = datetime.now(IST).replace(tzinfo=None)
+    v.declined_by = (request.args.get("actor") or v.contact_person or "").strip() or None
+    v.approved_at = None
+    v.approved_by = None
     db.session.commit()
     return "Visitor declined ❌."
 
@@ -1475,7 +1500,13 @@ def approve_electronics(visitor_id):
     v = Visitor.query.get(visitor_id)
     if not v:
         return "Visitor not found", 404
+    if v.electronics_approved is True and v.electronics_approved_at:
+        return "<html><body>Electronics already approved. You can close this window.</body></html>"
     v.electronics_approved = True
+    v.electronics_approved_at = datetime.now(IST).replace(tzinfo=None)
+    v.electronics_approved_by = (request.args.get("actor") or "IT").strip() or None
+    v.electronics_declined_at = None
+    v.electronics_declined_by = None
     db.session.commit()
     app.logger.info("Electronics approved via link for id=%s", visitor_id)
     return "<html><body>Electronics approved. You can close this window.</body></html>"
@@ -1486,7 +1517,13 @@ def decline_electronics(visitor_id):
     v = Visitor.query.get(visitor_id)
     if not v:
         return "Visitor not found", 404
+    if v.electronics_approved is False and v.electronics_declined_at:
+        return "<html><body>Electronics already declined. You can close this window.</body></html>"
     v.electronics_approved = False
+    v.electronics_declined_at = datetime.now(IST).replace(tzinfo=None)
+    v.electronics_declined_by = (request.args.get("actor") or "IT").strip() or None
+    v.electronics_approved_at = None
+    v.electronics_approved_by = None
     db.session.commit()
     app.logger.info("Electronics declined via link for id=%s", visitor_id)
     return "<html><body>Electronics declined. You can close this window.</body></html>"
@@ -3821,15 +3858,14 @@ def send_gatepass_returned_notification(gp, returned_by: str, remarks: str, retu
         rows_html = ('<tr><td colspan="4" style="padding:14px;color:#94a3b8;font-size:13px;'
                      'font-family:Arial,sans-serif;text-align:center;">No items recorded.</td></tr>')
 
-    remarks_display = remarks if remarks else "<em style='color:#9ca3af;'>No remarks</em>"
     remarks_html = (
-        '<tr style="background-color:#f0fdf4;">'
-        '<td width="38%" style="padding:10px 16px;font-size:13px;font-family:Arial,sans-serif;'
-        'color:#64748b;border-bottom:1px solid #f1f5f9;">Received Remarks</td>'
-        '<td style="padding:10px 16px;font-size:13px;font-family:Arial,sans-serif;'
-        'color:#166534;font-weight:600;border-bottom:1px solid #f1f5f9;">'
-        f'{remarks_display}</td></tr>'
-    )
+        f'<tr style="background-color:#f0fdf4;">'
+        f'<td width="38%" style="padding:10px 16px;font-size:13px;font-family:Arial,sans-serif;'
+        f'color:#64748b;border-bottom:1px solid #f1f5f9;">Received Remarks</td>'
+        f'<td style="padding:10px 16px;font-size:13px;font-family:Arial,sans-serif;'
+        f'color:#166534;font-weight:600;border-bottom:1px solid #f1f5f9;">'
+        f'{remarks if remarks else "<em style=\'color:#9ca3af;\'>No remarks</em>"}</td></tr>'
+    ) if True else ""
 
     def _build_body(to_name):
         return f"""<!DOCTYPE html>
