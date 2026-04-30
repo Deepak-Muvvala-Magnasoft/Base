@@ -560,16 +560,6 @@ class Visitor(db.Model):
     photo_data = db.Column(db.LargeBinary, nullable=True)
     asset_number = db.Column(db.String(100), nullable=True)
 
-    # ── Approval tracking (who + when) ───────────────────────────────────────
-    approved_at             = db.Column(db.DateTime, nullable=True)
-    approved_by             = db.Column(db.String(150), nullable=True)
-    declined_at             = db.Column(db.DateTime, nullable=True)
-    declined_by             = db.Column(db.String(150), nullable=True)
-    electronics_approved_at = db.Column(db.DateTime, nullable=True)
-    electronics_approved_by = db.Column(db.String(150), nullable=True)
-    electronics_declined_at = db.Column(db.DateTime, nullable=True)
-    electronics_declined_by = db.Column(db.String(150), nullable=True)
-
 
 class User(db.Model):
     __tablename__ = "users"
@@ -1265,8 +1255,8 @@ def send_email_to_it(visitor_obj_or_dict, contact_name, contact_email, visitor_i
         base = VISITOR_BASE_URL or "http://myportal.magnasoft.com"
     base = base.rstrip('/')
 
-    approve_link = f"{base}/approve_electronics/{vid}?actor={contact_name or ''}"
-    decline_link = f"{base}/decline_electronics/{vid}?actor={contact_name or ''}"
+    approve_link = f"{base}/approve_electronics/{vid}"
+    decline_link = f"{base}/decline_electronics/{vid}"
 
     dept = ""
     try:
@@ -1388,8 +1378,8 @@ def send_email_to_contact(visitor_obj_or_dict, visitor_id=None):
         base = VISITOR_BASE_URL or "http://myportal.magnasoft.com"
     base = base.rstrip('/')
 
-    approve_link = f"{base}/approve_visitor/{vid}?actor={contact_name or ''}"
-    decline_link = f"{base}/decline_visitor/{vid}?actor={contact_name or ''}"
+    approve_link = f"{base}/approve_visitor/{vid}"
+    decline_link = f"{base}/decline_visitor/{vid}"
 
     # guard: if no email, nothing to send
     if not contact_email:
@@ -1430,48 +1420,44 @@ def send_email_to_contact(visitor_obj_or_dict, visitor_id=None):
     return True
 
 
+def _already_taken_page(visitor_name, action_word, action_by, action_time):
+    """Reusable 'already actioned' HTML response."""
+    time_str = action_time.strftime("%d-%m-%Y %H:%M") if action_time else "—"
+    return (
+        "<html><body style='font-family:Arial,sans-serif;padding:40px;max-width:520px;margin:auto;'>"
+        "<div style='border:1px solid #e2e8f0;border-radius:10px;padding:32px;text-align:center;'>"
+        "<div style='font-size:40px;margin-bottom:12px;'>ℹ️</div>"
+        "<h2 style='color:#1e3a5f;margin-bottom:8px;'>Action Already Taken</h2>"
+        f"<p style='color:#475569;font-size:15px;'>Visitor <strong>{visitor_name}</strong> "
+        f"has already been <strong>{action_word}</strong> by "
+        f"<strong>{action_by}</strong> on {time_str}.</p>"
+        "<p style='color:#94a3b8;font-size:13px;margin-top:16px;'>"
+        "No further action is needed. You may close this window.</p>"
+        "</div></body></html>"
+    )
+
+def _success_page(emoji, color, title, visitor_name, action_word, actor):
+    by_str = f" by <strong>{actor}</strong>" if actor else ""
+    return (
+        "<html><body style='font-family:Arial,sans-serif;padding:40px;max-width:520px;margin:auto;'>"
+        "<div style='border:1px solid #e2e8f0;border-radius:10px;padding:32px;text-align:center;'>"
+        f"<div style='font-size:40px;margin-bottom:12px;'>{emoji}</div>"
+        f"<h2 style='color:{color};margin-bottom:8px;'>{title}</h2>"
+        f"<p style='color:#475569;font-size:15px;'>Visitor <strong>{visitor_name}</strong> "
+        f"has been <strong>{action_word}</strong>{by_str}.</p>"
+        "<p style='color:#94a3b8;font-size:13px;margin-top:16px;'>You may close this window.</p>"
+        "</div></body></html>"
+    )
+
+
 @app.route("/approve_visitor/<int:visitor_id>")
 def approve_visitor(visitor_id):
     v = Visitor.query.get(visitor_id)
     if not v:
         return "Visitor not found", 404
-
-    actor = (request.args.get("actor") or "").strip()
-    now   = datetime.now(IST)
-
-    # Guard: already actioned?
-    if v.approved is not None:
-        action_word = "approved" if v.approved else "declined"
-        action_by   = v.approved_by or v.declined_by or "another approver"
-        action_time = (v.approved_at or v.declined_at)
-        time_str    = action_time.strftime("%d-%m-%Y %H:%M") if action_time else "—"
-        return (
-            f"<html><body style='font-family:Arial,sans-serif;padding:40px;max-width:520px;margin:auto;'>"
-            f"<div style='border:1px solid #e2e8f0;border-radius:10px;padding:32px;text-align:center;'>"
-            f"<div style='font-size:40px;margin-bottom:12px;'>ℹ️</div>"
-            f"<h2 style='color:#1e3a5f;margin-bottom:8px;'>Action Already Taken</h2>"
-            f"<p style='color:#475569;font-size:15px;'>Visitor <strong>{v.name}</strong> "
-            f"has already been <strong>{action_word}</strong> by <strong>{action_by}</strong> on {time_str}.</p>"
-            f"<p style='color:#94a3b8;font-size:13px;margin-top:16px;'>No further action is needed. You may close this window.</p>"
-            f"</div></body></html>"
-        )
-
-    v.approved    = True
-    v.approved_at = now
-    v.approved_by = actor or None
-    v.declined_at = None
-    v.declined_by = None
+    v.approved = True
     db.session.commit()
-    by_str = f" by {actor}" if actor else ""
-    return (
-        f"<html><body style='font-family:Arial,sans-serif;padding:40px;max-width:520px;margin:auto;'>"
-        f"<div style='border:1px solid #e2e8f0;border-radius:10px;padding:32px;text-align:center;'>"
-        f"<div style='font-size:40px;margin-bottom:12px;'>✅</div>"
-        f"<h2 style='color:#166534;margin-bottom:8px;'>Visitor Approved</h2>"
-        f"<p style='color:#475569;font-size:15px;'>Visitor <strong>{v.name}</strong> has been approved{by_str}.</p>"
-        f"<p style='color:#94a3b8;font-size:13px;margin-top:16px;'>You may close this window.</p>"
-        f"</div></body></html>"
-    )
+    return "Visitor approved ✅."
 
 
 @app.route("/decline_visitor/<int:visitor_id>")
@@ -1479,43 +1465,9 @@ def decline_visitor(visitor_id):
     v = Visitor.query.get(visitor_id)
     if not v:
         return "Visitor not found", 404
-
-    actor = (request.args.get("actor") or "").strip()
-    now   = datetime.now(IST)
-
-    # Guard: already actioned?
-    if v.approved is not None:
-        action_word = "approved" if v.approved else "declined"
-        action_by   = v.approved_by or v.declined_by or "another approver"
-        action_time = (v.approved_at or v.declined_at)
-        time_str    = action_time.strftime("%d-%m-%Y %H:%M") if action_time else "—"
-        return (
-            f"<html><body style='font-family:Arial,sans-serif;padding:40px;max-width:520px;margin:auto;'>"
-            f"<div style='border:1px solid #e2e8f0;border-radius:10px;padding:32px;text-align:center;'>"
-            f"<div style='font-size:40px;margin-bottom:12px;'>ℹ️</div>"
-            f"<h2 style='color:#1e3a5f;margin-bottom:8px;'>Action Already Taken</h2>"
-            f"<p style='color:#475569;font-size:15px;'>Visitor <strong>{v.name}</strong> "
-            f"has already been <strong>{action_word}</strong> by <strong>{action_by}</strong> on {time_str}.</p>"
-            f"<p style='color:#94a3b8;font-size:13px;margin-top:16px;'>No further action is needed. You may close this window.</p>"
-            f"</div></body></html>"
-        )
-
-    v.approved    = False
-    v.declined_at = now
-    v.declined_by = actor or None
-    v.approved_at = None
-    v.approved_by = None
+    v.approved = False
     db.session.commit()
-    by_str = f" by {actor}" if actor else ""
-    return (
-        f"<html><body style='font-family:Arial,sans-serif;padding:40px;max-width:520px;margin:auto;'>"
-        f"<div style='border:1px solid #e2e8f0;border-radius:10px;padding:32px;text-align:center;'>"
-        f"<div style='font-size:40px;margin-bottom:12px;'>❌</div>"
-        f"<h2 style='color:#991b1b;margin-bottom:8px;'>Visitor Declined</h2>"
-        f"<p style='color:#475569;font-size:15px;'>Visitor <strong>{v.name}</strong> has been declined{by_str}.</p>"
-        f"<p style='color:#94a3b8;font-size:13px;margin-top:16px;'>You may close this window.</p>"
-        f"</div></body></html>"
-    )
+    return "Visitor declined ❌."
 
 
 @app.route("/approve_electronics/<int:visitor_id>")
@@ -1523,44 +1475,10 @@ def approve_electronics(visitor_id):
     v = Visitor.query.get(visitor_id)
     if not v:
         return "Visitor not found", 404
-
-    actor = (request.args.get("actor") or "").strip()
-    now   = datetime.now(IST)
-
-    # Guard: already actioned?
-    if v.electronics_approved is not None:
-        action_word = "approved" if v.electronics_approved else "declined"
-        action_by   = v.electronics_approved_by or v.electronics_declined_by or "another approver"
-        action_time = (v.electronics_approved_at or v.electronics_declined_at)
-        time_str    = action_time.strftime("%d-%m-%Y %H:%M") if action_time else "—"
-        return (
-            f"<html><body style='font-family:Arial,sans-serif;padding:40px;max-width:520px;margin:auto;'>"
-            f"<div style='border:1px solid #e2e8f0;border-radius:10px;padding:32px;text-align:center;'>"
-            f"<div style='font-size:40px;margin-bottom:12px;'>ℹ️</div>"
-            f"<h2 style='color:#1e3a5f;margin-bottom:8px;'>Action Already Taken</h2>"
-            f"<p style='color:#475569;font-size:15px;'>Electronics for visitor <strong>{v.name}</strong> "
-            f"has already been <strong>{action_word}</strong> by <strong>{action_by}</strong> on {time_str}.</p>"
-            f"<p style='color:#94a3b8;font-size:13px;margin-top:16px;'>No further action is needed. You may close this window.</p>"
-            f"</div></body></html>"
-        )
-
-    v.electronics_approved    = True
-    v.electronics_approved_at = now
-    v.electronics_approved_by = actor or None
-    v.electronics_declined_at = None
-    v.electronics_declined_by = None
+    v.electronics_approved = True
     db.session.commit()
-    app.logger.info("Electronics approved via link for id=%s by=%s", visitor_id, actor)
-    by_str = f" by {actor}" if actor else ""
-    return (
-        f"<html><body style='font-family:Arial,sans-serif;padding:40px;max-width:520px;margin:auto;'>"
-        f"<div style='border:1px solid #e2e8f0;border-radius:10px;padding:32px;text-align:center;'>"
-        f"<div style='font-size:40px;margin-bottom:12px;'>✅</div>"
-        f"<h2 style='color:#166534;margin-bottom:8px;'>Electronics Approved</h2>"
-        f"<p style='color:#475569;font-size:15px;'>Electronics for visitor <strong>{v.name}</strong> approved{by_str}.</p>"
-        f"<p style='color:#94a3b8;font-size:13px;margin-top:16px;'>You may close this window.</p>"
-        f"</div></body></html>"
-    )
+    app.logger.info("Electronics approved via link for id=%s", visitor_id)
+    return "<html><body>Electronics approved. You can close this window.</body></html>"
 
 
 @app.route("/decline_electronics/<int:visitor_id>")
@@ -1568,44 +1486,10 @@ def decline_electronics(visitor_id):
     v = Visitor.query.get(visitor_id)
     if not v:
         return "Visitor not found", 404
-
-    actor = (request.args.get("actor") or "").strip()
-    now   = datetime.now(IST)
-
-    # Guard: already actioned?
-    if v.electronics_approved is not None:
-        action_word = "approved" if v.electronics_approved else "declined"
-        action_by   = v.electronics_approved_by or v.electronics_declined_by or "another approver"
-        action_time = (v.electronics_approved_at or v.electronics_declined_at)
-        time_str    = action_time.strftime("%d-%m-%Y %H:%M") if action_time else "—"
-        return (
-            f"<html><body style='font-family:Arial,sans-serif;padding:40px;max-width:520px;margin:auto;'>"
-            f"<div style='border:1px solid #e2e8f0;border-radius:10px;padding:32px;text-align:center;'>"
-            f"<div style='font-size:40px;margin-bottom:12px;'>ℹ️</div>"
-            f"<h2 style='color:#1e3a5f;margin-bottom:8px;'>Action Already Taken</h2>"
-            f"<p style='color:#475569;font-size:15px;'>Electronics for visitor <strong>{v.name}</strong> "
-            f"has already been <strong>{action_word}</strong> by <strong>{action_by}</strong> on {time_str}.</p>"
-            f"<p style='color:#94a3b8;font-size:13px;margin-top:16px;'>No further action is needed. You may close this window.</p>"
-            f"</div></body></html>"
-        )
-
-    v.electronics_approved    = False
-    v.electronics_declined_at = now
-    v.electronics_declined_by = actor or None
-    v.electronics_approved_at = None
-    v.electronics_approved_by = None
+    v.electronics_approved = False
     db.session.commit()
-    app.logger.info("Electronics declined via link for id=%s by=%s", visitor_id, actor)
-    by_str = f" by {actor}" if actor else ""
-    return (
-        f"<html><body style='font-family:Arial,sans-serif;padding:40px;max-width:520px;margin:auto;'>"
-        f"<div style='border:1px solid #e2e8f0;border-radius:10px;padding:32px;text-align:center;'>"
-        f"<div style='font-size:40px;margin-bottom:12px;'>❌</div>"
-        f"<h2 style='color:#991b1b;margin-bottom:8px;'>Electronics Declined</h2>"
-        f"<p style='color:#475569;font-size:15px;'>Electronics for visitor <strong>{v.name}</strong> declined{by_str}.</p>"
-        f"<p style='color:#94a3b8;font-size:13px;margin-top:16px;'>You may close this window.</p>"
-        f"</div></body></html>"
-    )
+    app.logger.info("Electronics declined via link for id=%s", visitor_id)
+    return "<html><body>Electronics declined. You can close this window.</body></html>"
 
 
 @app.route("/get_users")
@@ -1752,6 +1636,15 @@ def visitors_list():
             "allowed_to_checkin": allowed_to_checkin,
             "remarks": v.remarks or "",
             "photo_url": photo_url,
+            # ── approval tracking ──────────────────────────────────────────
+            "approved_at":             getattr(v, "approved_at",             None),
+            "approved_by":             getattr(v, "approved_by",             None),
+            "declined_at":             getattr(v, "declined_at",             None),
+            "declined_by":             getattr(v, "declined_by",             None),
+            "electronics_approved_at": getattr(v, "electronics_approved_at", None),
+            "electronics_approved_by": getattr(v, "electronics_approved_by", None),
+            "electronics_declined_at": getattr(v, "electronics_declined_at", None),
+            "electronics_declined_by": getattr(v, "electronics_declined_by", None),
         })
 
     # Pass role_location and can_download to template so client can enforce UI changes too
