@@ -1,0 +1,2455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GatePass List</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  --primary:       #1a56db;
+  --primary-dark:  #1341b0;
+  --primary-light: #e8f0fe;
+  --ret-color:     #0e7490;
+  --ret-light:     #e0f7fa;
+  --nonret-color:  #b45309;
+  --nonret-light:  #fef3c7;
+  --accent:        #0ea271;
+  --accent-light:  #e6f7f2;
+  --danger:        #dc2626;
+  --surface:       #ffffff;
+  --bg:            #f0f4f9;
+  --border:        #dde3ed;
+  --text:          #1a202c;
+  --text-muted:    #64748b;
+  --label:         #374151;
+  --radius:        10px;
+  --shadow:        0 1px 3px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.06);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── HEADER ── */
+.header {
+  background: linear-gradient(135deg, #1a56db 0%, #1341b0 60%, #0f2e80 100%);
+  padding: 0 20px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 2px 12px rgba(26,86,219,0.3);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.header-brand { display: flex; align-items: center; gap: 10px; }
+.header-icon {
+  width: 34px; height: 34px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; overflow: hidden;
+  background: transparent;
+}
+.header-icon img {
+  width: 34px; height: 34px;
+  object-fit: contain;
+}
+.header-title { color: white; font-size: 16px; font-weight: 600; line-height: 1.2; }
+.header-sub   { color: rgba(255,255,255,0.6); font-size: 11px; }
+
+.nav-btn {
+  background: rgba(255,255,255,0.12); color: white;
+  padding: 7px 14px; border-radius: 7px; text-decoration: none;
+  font-size: 12px; font-weight: 500; white-space: nowrap;
+  border: 1px solid rgba(255,255,255,0.2); transition: background 0.2s;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.nav-btn:hover { background: rgba(255,255,255,0.22); }
+.nav-btn.green {
+  background: rgba(14,162,113,0.25);
+  border-color: rgba(14,162,113,0.4);
+}
+.nav-btn.green:hover { background: rgba(14,162,113,0.38); }
+
+/* ── PAGE ── */
+.page { width: 100%; padding: 20px 20px 60px; }
+
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.page-title { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
+.page-sub   { color: var(--text-muted); font-size: 13px; margin-top: 3px; }
+.page-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* ── CARD ── */
+.card {
+  background: var(--surface);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+/* ── TOOLBAR ── */
+.toolbar {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: #fafbfd;
+}
+
+.search-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 180px;
+  max-width: 300px;
+}
+.search-icon {
+  position: absolute;
+  left: 11px; top: 50%;
+  transform: translateY(-50%);
+  color: #b0bac8; font-size: 14px; pointer-events: none;
+}
+.search-box {
+  width: 100%;
+  padding: 9px 12px 9px 34px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13.5px;
+  background: white;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.search-box:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(26,86,219,0.1);
+}
+.search-box::placeholder { color: #b0bac8; }
+
+/* ── FILTER TABS ── */
+.filter-tabs {
+  display: flex;
+  background: #eef1f8;
+  border-radius: 9px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.filter-tab {
+  padding: 8px 16px;
+  border: none; background: transparent;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: all 0.2s;
+  color: var(--text-muted); white-space: nowrap;
+  display: flex; align-items: center; gap: 5px;
+}
+.filter-tab.active        { background: var(--primary);      color: white; }
+.filter-tab.active-ret    { background: var(--ret-color);    color: white; }
+.filter-tab.active-nonret { background: var(--nonret-color); color: white; }
+.filter-tab.active-over   { background: var(--danger);       color: white; }
+.filter-tab.active-partial{ background: #b45309;             color: white; }
+.filter-tab.active-full   { background: #166534;             color: white; }
+
+/* ── BUTTONS ── */
+.btn-outline {
+  background: white; color: var(--primary);
+  border: 1.5px solid var(--primary);
+  padding: 8px 15px; border-radius: 8px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px; font-weight: 500;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  text-decoration: none; transition: all 0.2s; white-space: nowrap;
+}
+.btn-outline:hover { background: var(--primary-light); }
+
+.btn-primary {
+  background: var(--primary); color: white;
+  border: none; padding: 8px 16px; border-radius: 8px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px; font-weight: 600;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  text-decoration: none; transition: all 0.2s; white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(26,86,219,0.25);
+}
+.btn-primary:hover { background: var(--primary-dark); transform: translateY(-1px); }
+
+/* ── TABLE ── */
+.table-wrap { width: 100%; overflow-x: hidden; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;   /* columns respect assigned widths */
+}
+thead th {
+  background: #f4f6fb;
+  padding: 10px 6px;
+  text-align: left;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+  border-bottom: 1.5px solid var(--border);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+tbody td {
+  padding: 10px 6px;
+  border-bottom: 1px solid #f0f2f7;
+  font-size: 12px;
+  vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+tbody tr.main-row:last-child td { border-bottom: none; }
+tbody tr.main-row:hover { background: #f8faff; cursor: pointer; }
+tbody tr.main-row.expanded { background: #f0f5ff; }
+tbody tr.main-row.expanded:hover { background: #e8f0fe; }
+
+/* ── EXPAND ARROW ── */
+.expand-btn {
+  width: 26px; height: 26px;
+  border-radius: 6px;
+  background: var(--primary-light);
+  border: none; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--primary); font-size: 12px;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.expand-btn:hover { background: var(--primary); color: white; }
+.expand-btn svg { transition: transform 0.25s ease; }
+.expand-btn.open svg { transform: rotate(90deg); }
+
+/* ── DETAIL PANEL ROW ── */
+.detail-row { display: none; }
+.detail-row.open { display: table-row; }
+
+.detail-panel {
+  background: linear-gradient(135deg, #f8faff 0%, #f0f5ff 100%);
+  border-bottom: 2px solid #dde8ff;
+  padding: 0;
+  border-left: 4px solid var(--primary);
+}
+
+.detail-inner {
+  padding: 20px 24px 20px;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 20px;
+}
+
+.detail-section {
+  background: white;
+  border-radius: 10px;
+  padding: 16px;
+  border: 1px solid #e2e8f4;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+.detail-section.full-width {
+  grid-column: 1 / -1;
+}
+
+.detail-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: var(--primary);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1.5px solid var(--primary-light);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.detail-grid.cols-3 {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.detail-field { display: flex; flex-direction: column; gap: 2px; }
+.detail-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+.detail-value {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  word-break: break-word;
+}
+.detail-value.muted { color: #9ca3af; font-weight: 400; font-style: italic; }
+
+/* ── ITEMS TABLE ── */
+.items-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 6px;
+  font-size: 12.5px;
+}
+.items-table thead th {
+  background: #f0f4fb;
+  padding: 7px 10px;
+  text-align: left;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+.items-table tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #f0f2f7;
+  vertical-align: middle;
+  font-size: 12.5px;
+  color: var(--text);
+}
+.items-table tbody tr:last-child td { border-bottom: none; }
+.items-table tbody tr:hover { background: #f8faff; }
+
+.item-qty-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--primary-light);
+  color: var(--primary);
+  font-size: 11.5px;
+  font-weight: 700;
+  border-radius: 5px;
+  padding: 2px 8px;
+  min-width: 36px;
+}
+.item-serial {
+  font-family: monospace;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  background: #f4f6fb;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+/* ── BADGES ── */
+.badge {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 3px 7px; border-radius: 20px;
+  font-size: 10.5px; font-weight: 600; white-space: nowrap;
+}
+.badge-ret    { background: var(--ret-light);    color: var(--ret-color); }
+.badge-nonret { background: var(--nonret-light); color: var(--nonret-color); }
+.badge-approved { background: #dcfce7; color: #166534; }
+.badge-declined { background: #fee2e2; color: #991b1b; }
+.badge-pending  { background: #f1f5f9; color: #64748b; }
+.badge-na       { background: #f1f5f9; color: #b0bac8; }
+
+.time-label { font-size: 10px; color: #9ca3af; margin-top: 2px; display: block; }
+
+/* ── PASS NO CHIP ── */
+.pass-no-chip {
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── EMPTY STATE ── */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-muted);
+}
+.empty-state .empty-icon { font-size: 40px; margin-bottom: 12px; }
+.empty-state p { font-size: 14px; }
+
+/* ── MODAL ── */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 999;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.modal-overlay.open { display: flex; }
+
+.modal {
+  background: white;
+  border-radius: 14px;
+  padding: 28px;
+  width: 100%;
+  max-width: 460px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  position: relative;
+  animation: modalIn 0.22s ease;
+}
+@keyframes modalIn {
+  from { opacity: 0; transform: translateY(14px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+.modal-close {
+  position: absolute; top: 14px; right: 16px;
+  background: #f1f5f9; border: none;
+  width: 28px; height: 28px; border-radius: 6px;
+  font-size: 14px; cursor: pointer; color: var(--text-muted);
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.2s;
+}
+.modal-close:hover { background: #e2e8f0; color: var(--text); }
+
+.modal-title { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.modal-sub   { color: var(--text-muted); font-size: 13px; margin-bottom: 20px; }
+
+.range-tabs {
+  display: flex; background: #f0f4f9;
+  border-radius: 9px; overflow: hidden;
+  border: 1px solid var(--border); margin-bottom: 18px;
+}
+.range-tab {
+  flex: 1; padding: 9px 0; border: none; background: transparent;
+  font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: 0.2s; color: var(--text-muted);
+}
+.range-tab.active { background: var(--primary); color: white; border-radius: 8px; }
+
+.range-info {
+  background: var(--primary-light); color: #1a4fa8;
+  border-radius: 7px; padding: 9px 13px;
+  font-size: 12.5px; margin-bottom: 16px; display: none;
+  border-left: 3px solid var(--primary);
+}
+.range-info.show { display: block; }
+
+.mform-row   { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+.mform-group { display: flex; flex-direction: column; gap: 5px; }
+.mform-group label { font-size: 11.5px; font-weight: 600; color: var(--label); }
+.mform-group input,
+.mform-group select {
+  padding: 9px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13.5px; color: var(--text);
+  width: 100%; outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.mform-group input:focus,
+.mform-group select:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(26,86,219,0.1);
+}
+
+.modal-footer {
+  display: flex; justify-content: flex-end;
+  gap: 10px; margin-top: 22px; flex-wrap: wrap;
+}
+.btn-cancel {
+  background: white; color: var(--text-muted);
+  border: 1.5px solid var(--border);
+  padding: 9px 18px; border-radius: 8px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13.5px; font-weight: 500; cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-cancel:hover { background: #f1f5f9; color: var(--text); }
+
+.btn-download {
+  background: var(--primary); color: white; border: none;
+  padding: 9px 20px; border-radius: 8px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13.5px; font-weight: 600; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 7px;
+  box-shadow: 0 2px 6px rgba(26,86,219,0.3);
+  transition: all 0.2s;
+}
+.btn-download:hover { background: var(--primary-dark); transform: translateY(-1px); }
+
+/* ── SECURITY ACTION BUTTONS ── */
+.sec-btn {
+  padding: 4px 8px; border-radius: 5px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px; font-weight: 600;
+  cursor: pointer; border: none; white-space: nowrap;
+  transition: background 0.2s, transform 0.1s;
+}
+.sec-approve { background: #dcfce7; color: #166534; }
+.sec-approve:hover { background: #bbf7d0; }
+.sec-decline { background: #fee2e2; color: #991b1b; }
+.sec-decline:hover { background: #fecaca; }
+
+/* ── SECURITY MODAL ── */
+#securityModal {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 1000;
+  align-items: center; justify-content: center; padding: 16px;
+}
+#securityModal.open { display: flex; }
+.sec-modal-box {
+  background: white; border-radius: 14px;
+  padding: 28px; width: 100%; max-width: 420px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  position: relative; animation: modalIn 0.22s ease;
+}
+.sec-modal-title { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+.sec-modal-sub   { color: var(--text-muted); font-size: 13px; margin-bottom: 18px; }
+.sec-modal-label { font-size: 11.5px; font-weight: 600; color: var(--label); margin-bottom: 5px; display: block; }
+.sec-modal-textarea {
+  width: 100%; padding: 9px 12px;
+  border: 1.5px solid var(--border); border-radius: 8px;
+  font-family: 'DM Sans', sans-serif; font-size: 13.5px;
+  resize: vertical; min-height: 80px; outline: none;
+  transition: border-color 0.2s;
+}
+.sec-modal-textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(26,86,219,0.1); }
+.sec-modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+
+/* ── HINT ── */
+.expand-hint {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 20px;
+  background: #fafbfd;
+  border-top: 1px solid var(--border);
+}
+
+/* ── RESPONSIVE ── */
+@media (max-width: 900px) {
+  .detail-inner { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 640px) {
+  .header { height: auto; padding: 12px 14px; }
+  .header-sub { display: none; }
+  .page { padding: 14px 10px 50px; }
+  .page-title { font-size: 17px; }
+  .page-header { gap: 10px; }
+  .toolbar { padding: 10px 12px; gap: 8px; }
+  .filter-tab { padding: 7px 11px; font-size: 12px; }
+  .search-wrap { max-width: 100%; }
+  .mform-row { grid-template-columns: 1fr; }
+  .modal { padding: 20px; }
+  .modal-footer { justify-content: stretch; }
+  .btn-cancel, .btn-download { flex: 1; justify-content: center; }
+  .detail-inner { grid-template-columns: 1fr; }
+  .detail-grid { grid-template-columns: 1fr; }
+  .detail-grid.cols-3 { grid-template-columns: 1fr 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-brand">
+    <div class="header-icon"><img src="/static/images/Magnasoft.png" alt="Magnasoft Logo"></div>
+    <div>
+      <div class="header-title">GatePass Management</div>
+      <div class="header-sub">Material Movement Control System</div>
+    </div>
+  </div>
+  <a href="{{ url_for('landing_page') }}{{ auth_qs }}" class="nav-btn"> Home</a>
+  <a href="/gatepass" class="nav-btn green">＋ Create GatePass</a>
+</div>
+
+<!-- PAGE -->
+<div class="page">
+
+  <div class="page-header">
+    <div>
+      <div class="page-title">GatePass List</div>
+      <div class="page-sub">View and manage all gate pass records · Click any row to expand full details</div>
+    </div>
+    <div class="page-actions">
+      {% if page_role in ('admin', 'superadmin', 'super admin') %}
+      <button class="btn-outline" id="downloadReportBtn" onclick="openModal()">↓ Download Report</button>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+
+    <!-- TOOLBAR -->
+    <div class="toolbar">
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="searchInput" class="search-box" placeholder="Search pass no, requester, sender…">
+      </div>
+      <div class="filter-tabs">
+        <button class="filter-tab active"    id="allBtn"     onclick="filterPass('all')">All</button>
+        <button class="filter-tab"           id="retBtn"     onclick="filterPass('returnable')">↩ Returnable</button>
+        <button class="filter-tab"           id="nonRetBtn"  onclick="filterPass('nonreturnable')">✕ Non-Returnable</button>
+        <!-- Overdue tab: only visible to admin role -->
+        <button class="filter-tab"           id="overdueBtn" onclick="filterPass('overdue')" style="color:#dc2626;display:none;">⚠ Overdue</button>
+        <!-- Partially/Fully Returned tabs: admin + superadmin only -->
+        <button class="filter-tab"           id="partialBtn" onclick="filterPass('partial')" style="color:#b45309;display:none;">⚠ Partially Returned</button>
+        <button class="filter-tab"           id="fullBtn"    onclick="filterPass('fullyreturned')" style="color:#166534;display:none;">✓ Fully Returned</button>
+      </div>
+    </div>
+
+    <!-- TABLE -->
+    <div class="table-wrap">
+      <table id="gatepassTable">
+        <thead>
+          <tr>
+            <th style="width:34px;padding-left:10px;"></th>
+            <th style="width:7%;">Pass No</th>
+            <th style="width:8%;">Pass Type</th>
+            <th style="width:6%;">Requester</th>
+            <th style="width:5%;">Dept</th>
+            <th style="width:8%;">Sender / Vendor</th>
+            <th style="width:6%;">Purpose</th>
+            <th style="width:7%;">Exp. Return</th>
+            <th style="width:8%;">Created</th>
+            <th style="width:8%;">IT Status</th>
+            <th style="width:8%;">Admin Status</th>
+            <th style="width:9%;">Security Status</th>
+            <th style="width:8%;">Return Status</th>
+            <th style="width:8%;">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if rows %}
+            {% for r in rows %}
+
+            {# ── MAIN ROW ── #}
+            {# Use raised_by_role stored at creation time for accurate dept scoping #}
+            {% set _req_dept = (r.raised_by_role or '') | lower %}
+            <tr class="main-row"
+                data-passtype="{{ r.pass_type }}"
+                data-requester-dept="{{ _req_dept }}"
+                data-return-status="{{ r.return_status_overall or '' }}"
+                data-security-approved="{{ 'yes' if r.security_status == 'Approved' else 'no' }}"
+                data-overdue="{{ 'yes' if (
+                    (r.returnable == 'yes' or r.pass_type == 'returnable')
+                    and r.expected_return_date
+                    and r.expected_return_date < today
+                    and not r.returned_at
+                    and r.security_status != 'Declined'
+                    and not r.it_declined_at
+                    and not r.admin_declined_at
+                ) else 'no' }}"
+                data-it-done="{{ 'yes' if (not r.needs_it_approval or r.it_approved_at) else 'no' }}"
+                data-admin-done="{{ 'yes' if (not r.needs_admin_approval or r.admin_approved_at) else 'no' }}"
+                data-it-declined="{{ 'yes' if r.it_declined_at else 'no' }}"
+                data-admin-declined="{{ 'yes' if r.admin_declined_at else 'no' }}"
+                onclick="toggleDetail('detail-{{ r.id }}', this)">
+
+              <td onclick="event.stopPropagation();" style="text-align:center;padding-left:12px;">
+                <button class="expand-btn" id="btn-{{ r.id }}" onclick="toggleDetail('detail-{{ r.id }}', this.closest('tr'))">
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                    <path d="M3 1.5L7 5L3 8.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+              </td>
+
+              <td>
+                <span class="pass-no-chip">
+                  {{ r.pass_no }}
+                </span>
+                <span class="time-label">#{{ r.id }}</span>
+              </td>
+
+              <td>
+                {% if r.pass_type == "returnable" %}
+                  <span class="badge badge-ret">↩ Returnable</span>
+                {% else %}
+                  <span class="badge badge-nonret">✕ Non-Returnable</span>
+                {% endif %}
+              </td>
+
+              <td>{{ r.requester or '—' }}</td>
+
+              <td>{% set _p = r.item_description | from_json %}{{ (_p[0].department if _p and _p|length > 0) or '—' }}</td>
+
+              <td>
+                {% if r.sender_vendor %}
+                  <strong>{{ r.sender_vendor }}</strong>
+                {% else %}
+                  <span style="color:#b0bac8;">—</span>
+                {% endif %}
+              </td>
+
+              <td>{{ r.purpose or '—' }}</td>
+
+              <td>
+                {% if r.expected_return_date %}
+                  {{ r.expected_return_date.strftime('%d-%m-%Y') }}
+                {% else %}
+                  <span style="color:#b0bac8;">—</span>
+                {% endif %}
+              </td>
+
+              <td>{{ r.created_at.strftime('%d-%m-%Y %H:%M') if r.created_at else '-' }}</td>
+
+              <td>
+                {% if not r.needs_it_approval %}
+                  <span class="badge badge-na">N/A</span>
+                {% elif r.it_approved_at %}
+                  <span class="badge badge-approved">✓ Approved</span>
+                  <span class="time-label">{{ r.it_approved_at.strftime('%d-%m-%Y %H:%M') }}</span>
+                  {% if r.it_approved_by %}<span class="time-label" style="color:#0e7490;">by {{ r.it_approved_by }}</span>{% endif %}
+                {% elif r.it_declined_at %}
+                  <span class="badge badge-declined">✕ Declined</span>
+                  <span class="time-label">{{ r.it_declined_at.strftime('%d-%m-%Y %H:%M') }}</span>
+                  {% if r.it_declined_by %}<span class="time-label" style="color:#dc2626;">by {{ r.it_declined_by }}</span>{% endif %}
+                {% else %}
+                  <span class="badge badge-pending">Pending</span>
+                {% endif %}
+              </td>
+
+              <td>
+                {% if not r.needs_admin_approval %}
+                  <span class="badge badge-na">N/A</span>
+                {% elif r.admin_approved_at %}
+                  <span class="badge badge-approved">✓ Approved</span>
+                  <span class="time-label">{{ r.admin_approved_at.strftime('%d-%m-%Y %H:%M') }}</span>
+                  {% if r.admin_approved_by %}<span class="time-label" style="color:#0e7490;">by {{ r.admin_approved_by }}</span>{% endif %}
+                {% elif r.admin_declined_at %}
+                  <span class="badge badge-declined">✕ Declined</span>
+                  <span class="time-label">{{ r.admin_declined_at.strftime('%d-%m-%Y %H:%M') }}</span>
+                  {% if r.admin_declined_by %}<span class="time-label" style="color:#dc2626;">by {{ r.admin_declined_by }}</span>{% endif %}
+                {% else %}
+                  <span class="badge badge-pending">Pending</span>
+                {% endif %}
+              </td>
+
+              <td>
+                {% if r.it_declined_at or r.admin_declined_at %}
+                  <span class="badge badge-na">N/A</span>
+                {% elif r.security_status == "Approved" %}
+                  <span class="badge badge-approved">✓ Approved</span>
+                  {% if r.security_checked_at %}
+                    <span class="time-label">{{ r.security_checked_at.strftime('%d-%m-%Y %H:%M') }}</span>
+                  {% endif %}
+                {% elif r.security_status == "Declined" %}
+                  <span class="badge badge-declined">✕ Declined</span>
+                  {% if r.security_checked_at %}
+                    <span class="time-label">{{ r.security_checked_at.strftime('%d-%m-%Y %H:%M') }}</span>
+                  {% endif %}
+                {% else %}
+                  <span class="badge badge-pending">Pending</span>
+                {% endif %}
+              </td>
+
+        {# ── RETURN STATUS CELL ── #}
+        {# Use returnable='yes' OR pass_type='returnable' to cover old records not yet migrated #}
+        {% set _is_returnable = (r.returnable == 'yes' or r.pass_type == 'returnable') %}
+        {% set _any_declined  = (r.security_status == 'Declined' or r.it_declined_at or r.admin_declined_at) %}
+        <td>
+          {% if not _is_returnable or _any_declined %}
+            {# Non-returnable OR declined at any stage — item never left / won't return #}
+            <span class="badge badge-na">N/A</span>
+          {% elif r.returned_at %}
+            {% if r.expected_return_date and r.returned_at.date() <= r.expected_return_date %}
+              <span class="badge" style="background:#dcfce7;color:#166534;">✓ On Time</span>
+              <span class="time-label">{{ r.returned_at.strftime('%d-%m-%Y') }}</span>
+            {% else %}
+              <span class="badge" style="background:#fef3c7;color:#b45309;">⚠ Late Return</span>
+              <span class="time-label">{{ r.returned_at.strftime('%d-%m-%Y') }}</span>
+            {% endif %}
+          {% elif r.expected_return_date and r.expected_return_date < today %}
+            <span class="badge" style="background:#fee2e2;color:#991b1b;">🔴 Overdue</span>
+          {% else %}
+            <span class="badge badge-pending">Pending</span>
+          {% endif %}
+        </td>
+
+        <td onclick="event.stopPropagation();">
+        <div style="display:flex;flex-direction:column;gap:5px;">
+            {# Security buttons: enabled only when both IT and Admin have approved #}
+            {% if r.security_status == "Pending" %}
+            {% set _both_approved = (not r.needs_it_approval or r.it_approved_at) and (not r.needs_admin_approval or r.admin_approved_at) %}
+            {% set _any_declined  = r.it_declined_at or r.admin_declined_at %}
+            <div class="sec-action-btns" style="display:flex;gap:6px;flex-wrap:wrap;">
+                {% if _both_approved and not _any_declined %}
+                <button class="sec-btn sec-approve"
+                    data-id="{{ r.id }}"
+                    data-acknowledged="{{ 'true' if r.acknowledged_at else 'false' }}"
+                    data-ack-by="{{ r.acknowledged_by or '' }}"
+                    data-ack-company="{{ r.ack_company or '' }}"
+                    data-ack-sent="{{ 'true' if r.ack_token_sent_at else 'false' }}"
+                    data-handover-email="{{ r.handover_email or '' }}"
+                    onclick="openSecurityModal('{{ r.id }}', 'Approved', this)">
+                    &#10003; Approve
+                </button>
+                <button class="sec-btn sec-decline"
+                    data-id="{{ r.id }}"
+                    onclick="openSecurityModal('{{ r.id }}', 'Declined')">
+                    &#10005; Decline
+                </button>
+                {% else %}
+                <span title="{{ 'Declined by IT or Admin — cannot approve' if _any_declined else 'Waiting for IT &amp; Admin approval' }}"
+                      style="display:inline-flex;align-items:center;gap:5px;
+                             background:#f1f5f9;color:#94a3b8;font-size:11.5px;
+                             font-weight:500;padding:5px 10px;border-radius:6px;
+                             border:1px dashed #cbd5e1;cursor:not-allowed;white-space:nowrap;">
+                    {% if _any_declined %}
+                    &#128683; Approval Declined
+                    {% else %}
+                    &#128274; Awaiting Approvals
+                    {% endif %}
+                </span>
+                {% endif %}
+            </div>
+            {% else %}
+            <span class="sec-done-label" style="color:#9ca3af;font-size:12px;">Done</span>
+            {% endif %}
+            {# Overdue extend button — shown only to admin role via JS #}
+            {% if (r.returnable == 'yes' or r.pass_type == 'returnable') and r.expected_return_date and r.expected_return_date < today and not r.returned_at %}
+            <button
+                class="extend-date-btn"
+                data-id="{{ r.id }}"
+                data-passno="{{ r.pass_no }}"
+                data-dept="{{ _req_dept }}"
+                onclick="openOverdueModal(this.dataset.id, this.dataset.passno)"
+                style="display:none;background:#fef3c7;color:#b45309;border:none;padding:4px 9px;border-radius:6px;font-size:11.5px;font-weight:600;cursor:pointer;white-space:nowrap;">
+                📅 Extend Date
+            </button>
+            {% endif %}
+            {# Record Return button — Security only, for returnable passes not yet completed #}
+            {% if (r.returnable == 'yes' or r.pass_type == 'returnable')
+                  and r.return_status_overall != 'completed'
+                  and r.it_approved_at and r.admin_approved_at
+                  and r.security_status == 'Approved' %}
+            <button
+                class="mark-returned-btn"
+                data-id="{{ r.id }}"
+                data-passno="{{ r.pass_no }}"
+                onclick="openItemReturnModal(this.dataset.id, this.dataset.passno)"
+                style="display:none;background:#dcfce7;color:#166534;border:1.5px solid #86efac;padding:4px 9px;border-radius:6px;font-size:11.5px;font-weight:600;cursor:pointer;white-space:nowrap;">
+                ↩ Record Return
+            </button>
+            {% endif %}
+
+            {# Return status chip — visible to everyone for returnable passes,
+               only AFTER security has approved (i.e. material has physically gone out). #}
+            {% if (r.returnable == 'yes' or r.pass_type == 'returnable')
+                  and r.security_status == 'Approved' %}
+              {% set rs = r.return_status_overall or 'pending' %}
+              {% if rs == 'completed' %}
+                <span style="background:#dcfce7;color:#166534;font-size:11.5px;font-weight:600;
+                             padding:4px 9px;border-radius:6px;border:1px solid #86efac;
+                             display:inline-block;white-space:nowrap;">✓ Fully Returned</span>
+              {% elif rs == 'partial' %}
+                <span style="background:#fef3c7;color:#b45309;font-size:11.5px;font-weight:600;
+                             padding:4px 9px;border-radius:6px;border:1px solid #fcd34d;
+                             display:inline-block;white-space:nowrap;">⚠ Partially Returned</span>
+              {% else %}
+                <span style="background:#f1f5f9;color:#64748b;font-size:11.5px;font-weight:600;
+                             padding:4px 9px;border-radius:6px;border:1px solid #cbd5e1;
+                             display:inline-block;white-space:nowrap;">⏳ Return Pending</span>
+              {% endif %}
+            {% endif %}
+            {# Acknowledgement status + Print button #}
+            {% if r.security_status == 'Approved' and not r.it_declined_at and not r.admin_declined_at %}
+              {% if r.acknowledged_at %}
+                <span style="background:#dcfce7;color:#166534;font-size:11.5px;font-weight:600;
+                             padding:4px 9px;border-radius:6px;border:1px solid #86efac;
+                             display:inline-block;">✓ Acknowledged</span>
+                <a href="/gatepass/print/{{ r.id }}" target="_blank"
+                   style="display:inline-block;background:#1e3a5f;color:#fff;font-size:11.5px;
+                          font-weight:600;padding:4px 9px;border-radius:6px;text-decoration:none;
+                          white-space:nowrap;">🖨 Print</a>
+              {% else %}
+                <span style="background:#fef3c7;color:#b45309;font-size:11.5px;font-weight:600;
+                             padding:4px 9px;border-radius:6px;border:1px solid #fcd34d;
+                             display:inline-block;white-space:nowrap;">⏳ Awaiting Ack</span>
+              {% endif %}
+            {% endif %}
+        </div>
+        </td>
+            </tr>
+
+            {# ── DETAIL PANEL ROW ── #}
+            <tr class="detail-row" id="detail-{{ r.id }}">
+              <td colspan="14" class="detail-panel">
+                <div class="detail-inner">
+
+                  {# ── SENDER / REQUESTER INFO ── #}
+                  <div class="detail-section">
+                    <div class="detail-section-title">
+                      <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+                      Requester Details
+                    </div>
+                    <div class="detail-grid">
+                      <div class="detail-field">
+                        <span class="detail-label">Pass No</span>
+                        <span class="detail-value">{{ r.pass_no }}</span>
+                      </div>
+                      <div class="detail-field">
+                        <span class="detail-label">Record ID</span>
+                        <span class="detail-value">#{{ r.id }}</span>
+                      </div>
+                      <div class="detail-field">
+                        <span class="detail-label">Requester Name</span>
+                        <span class="detail-value">{{ r.requester or '—' }}</span>
+                      </div>
+                      <div class="detail-field">
+                        <span class="detail-label">Department</span>
+                        <span class="detail-value">{% set _pd = r.item_description | from_json %}{{ (_pd[0].department if _pd and _pd|length > 0) or '—' }}</span>
+                      </div>
+                      <div class="detail-field">
+                        <span class="detail-label">Location / Site</span>
+                        <span class="detail-value">{{ r.location or '—' }}</span>
+                      </div>
+                      <div class="detail-field">
+                        <span class="detail-label">Created At</span>
+                        <span class="detail-value">{{ r.created_at.strftime('%d-%m-%Y %H:%M') if r.created_at else '—' }}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {# ── SENDER / VENDOR INFO ── #}
+                  <div class="detail-section">
+                    <div class="detail-section-title">
+                      <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-2 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/></svg>
+                      Sender / Vendor Details
+                    </div>
+                    <div class="detail-grid">
+                      <div class="detail-field">
+                        <span class="detail-label">Sender / Vendor</span>
+                        <span class="detail-value">{{ r.sender_vendor or '—' }}</span>
+                      </div>
+                      <div class="detail-field">
+                        <span class="detail-label">Emp ID / Vendor ID</span>
+                        <span class="detail-value">{{ r.invoice_no or '—' }}</span>
+                      </div>
+                      <div class="detail-field">
+                        <span class="detail-label">Contact Details</span>
+                        <span class="detail-value">{{ r.contact_details or '—' }}</span>
+                      </div>
+                      <div class="detail-field">
+                        <span class="detail-label">Receiver Email</span>
+                        <span class="detail-value">{{ r.receiver_email or '—' }}</span>
+                      </div>
+                      <div class="detail-field">
+                        <span class="detail-label">Destination</span>
+                        <span class="detail-value">{{ r.destination or '—' }}</span>
+                      </div>
+                      <div class="detail-field" style="grid-column: 1 / -1;">
+                        <span class="detail-label">Purpose</span>
+                        <span class="detail-value">{{ r.purpose or '—' }}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {# ── APPROVAL STATUS ── #}
+                  <div class="detail-section">
+                    <div class="detail-section-title">
+                      <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                      Approval Status
+                    </div>
+                    <div class="detail-grid">
+                      <div class="detail-field">
+                        <span class="detail-label">IT Approval</span>
+                        <span class="detail-value">
+                          {% if not r.needs_it_approval %}
+                            <span class="badge badge-na">N/A</span>
+                          {% elif r.it_approved_at %}
+                            <span class="badge badge-approved">✓ Approved</span>
+                          {% elif r.it_declined_at %}
+                            <span class="badge badge-declined">✕ Declined</span>
+                          {% else %}
+                            <span class="badge badge-pending">Pending</span>
+                          {% endif %}
+                        </span>
+                        {% if r.it_approved_at %}<span class="time-label">{{ r.it_approved_at.strftime('%d-%m-%Y %H:%M') }}</span>{% endif %}
+                        {% if r.it_approved_by %}<span class="time-label" style="color:#0e7490;">by {{ r.it_approved_by }}</span>{% endif %}
+                        {% if r.it_declined_at %}<span class="time-label">{{ r.it_declined_at.strftime('%d-%m-%Y %H:%M') }}</span>{% endif %}
+                        {% if r.it_declined_by %}<span class="time-label" style="color:#dc2626;">by {{ r.it_declined_by }}</span>{% endif %}
+                      </div>
+                      <div class="detail-field">
+                        <span class="detail-label">Admin Approval</span>
+                        <span class="detail-value">
+                          {% if not r.needs_admin_approval %}
+                            <span class="badge badge-na">N/A</span>
+                          {% elif r.admin_approved_at %}
+                            <span class="badge badge-approved">✓ Approved</span>
+                          {% elif r.admin_declined_at %}
+                            <span class="badge badge-declined">✕ Declined</span>
+                          {% else %}
+                            <span class="badge badge-pending">Pending</span>
+                          {% endif %}
+                        </span>
+                        {% if r.admin_approved_at %}<span class="time-label">{{ r.admin_approved_at.strftime('%d-%m-%Y %H:%M') }}</span>{% endif %}
+                        {% if r.admin_approved_by %}<span class="time-label" style="color:#0e7490;">by {{ r.admin_approved_by }}</span>{% endif %}
+                        {% if r.admin_declined_at %}<span class="time-label">{{ r.admin_declined_at.strftime('%d-%m-%Y %H:%M') }}</span>{% endif %}
+                        {% if r.admin_declined_by %}<span class="time-label" style="color:#dc2626;">by {{ r.admin_declined_by }}</span>{% endif %}
+                      </div>
+                      <div class="detail-field">
+                        <span class="detail-label">Security Status</span>
+                        <span class="detail-value">
+                          {% if r.it_declined_at or r.admin_declined_at %}
+                            <span class="badge badge-na">N/A</span>
+                          {% elif r.security_status == "Approved" %}
+                            <span class="badge badge-approved">✓ Approved</span>
+                          {% elif r.security_status == "Declined" %}
+                            <span class="badge badge-declined">✕ Declined</span>
+                          {% else %}
+                            <span class="badge badge-pending">Pending</span>
+                          {% endif %}
+                        </span>
+                        {% if r.security_checked_at %}<span class="time-label">{{ r.security_checked_at.strftime('%d-%m-%Y %H:%M') }}</span>{% endif %}
+                      </div>
+                      <div class="detail-field">
+                        <span class="detail-label">🔐 Security Officer</span>
+                        <span class="detail-value">
+                          {% if r.security_name %}
+                            <span style="background:#eff6ff;color:#1d4ed8;font-size:12.5px;font-weight:600;padding:3px 10px;border-radius:20px;display:inline-block;">{{ r.security_name }}</span>
+                          {% else %}
+                            <span class="muted">—</span>
+                          {% endif %}
+                        </span>
+                      </div>
+                      {# ── Split security_remarks into guard notes vs requester extension reasons ── #}
+                      {% set _raw_sec = r.security_remarks or '' %}
+                      {% set _sec_lines = _raw_sec.split('\n') %}
+                      {% set _guard_lines = [] %}
+                      {% set _req_lines   = [] %}
+                      {% for _line in _sec_lines %}
+                        {% if '[Extended to' in _line %}
+                          {% set _ = _req_lines.append(_line) %}
+                        {% elif _line.strip() %}
+                          {% set _ = _guard_lines.append(_line) %}
+                        {% endif %}
+                      {% endfor %}
+                      <div class="detail-field" style="grid-column: 1 / -1;">
+                        <span class="detail-label">🔒 Security Remarks</span>
+                        {% if _guard_lines %}
+                        <div style="display:flex;flex-direction:column;gap:4px;margin-top:2px;">
+                          {% for _gl in _guard_lines %}
+                          <span style="background:#f0fdf4;color:#166534;font-size:12.5px;font-weight:500;padding:5px 10px;border-radius:6px;border-left:3px solid #22c55e;">{{ _gl }}</span>
+                          {% endfor %}
+                        </div>
+                        {% else %}
+                        <div style="display:flex;flex-direction:column;gap:4px;margin-top:2px;">
+                          <span style="background:#f8faff;color:#9ca3af;font-size:12.5px;font-weight:400;padding:5px 10px;border-radius:6px;border-left:3px solid #e2e8f0;font-style:italic;">No remarks</span>
+                        </div>
+                        {% endif %}
+                      </div>
+                      {% if _req_lines %}
+                      <div class="detail-field" style="grid-column: 1 / -1;">
+                        <span class="detail-label">👤 Requester Extension Remarks</span>
+                        <div style="display:flex;flex-direction:column;gap:4px;margin-top:2px;">
+                          {% for _rl in _req_lines %}
+                          <span style="background:#fef3c7;color:#92400e;font-size:12.5px;font-weight:500;padding:5px 10px;border-radius:6px;border-left:3px solid #f59e0b;">{{ _rl }}</span>
+                          {% endfor %}
+                        </div>
+                      </div>
+                      {% endif %}
+                      {% if r.pass_type == "returnable" %}
+                      <div class="detail-field" style="grid-column: 1 / -1;">
+                        <span class="detail-label">Expected Return Date</span>
+                        <span class="detail-value">
+                          {% if r.expected_return_date %}
+                            {{ r.expected_return_date.strftime('%d-%m-%Y') }}
+                            {% if r.returned_at %}
+                              {% if r.returned_at.date() <= r.expected_return_date %}
+                                <span style="background:#dcfce7;color:#166534;font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:12px;margin-left:6px;">✓ Returned On Time</span>
+                              {% else %}
+                                <span style="background:#fef3c7;color:#b45309;font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:12px;margin-left:6px;">⚠ Returned Late</span>
+                              {% endif %}
+                            {% elif r.expected_return_date < today %}
+                              <span style="color:#dc2626;font-size:11.5px;font-weight:600;margin-left:6px;">⚠ Overdue — Not Yet Returned</span>
+                            {% endif %}
+                          {% else %}
+                            <span class="muted">Not specified</span>
+                          {% endif %}
+                        </span>
+                      </div>
+                      {% if r.returned_at %}
+                      <div class="detail-field">
+                        <span class="detail-label">📦 Returned At</span>
+                        <span class="detail-value">{{ r.returned_at.strftime('%d-%m-%Y %H:%M') }}</span>
+                      </div>
+                      <div class="detail-field">
+                        <span class="detail-label">👤 Received By</span>
+                        <span class="detail-value">{{ r.returned_by or '—' }}</span>
+                      </div>
+                      {% endif %}
+                      {% endif %}
+                    </div>
+                  </div>
+
+                  {# ── ITEMS TABLE (full width) ── #}
+                  <div class="detail-section full-width">
+                    <div class="detail-section-title">
+                      <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                      Item Details
+                    </div>
+
+                    {% set items = r.items if r.items is iterable and r.items is not string else [] %}
+                    {% if r.item_description %}
+                      {# Try to parse JSON items if available #}
+                      {% set parsed = r.item_description | from_json %}
+                      {% if parsed and parsed | length > 0 %}
+                        <table class="items-table">
+                          <thead>
+                            <tr>
+                              <th>#</th>
+                              <th>Item Name</th>
+                              <th>Quantity</th>
+                              <th>Model Name</th>
+                              <th>FAMS ID</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {% for item in parsed %}
+                            <tr>
+                              <td style="color:#9ca3af;font-size:12px;">{{ loop.index }}</td>
+                              <td><strong>{{ item.item_name or item.name or '—' }}</strong></td>
+                              <td><span class="item-qty-badge">{{ item.qty or item.quantity or '1' }}</span></td>
+                              <td>
+                                {% if item.serial_no or item.serial %}
+                                  <span class="item-serial">{{ item.serial_no or item.serial }}</span>
+                                {% else %}
+                                  <span style="color:#b0bac8;">—</span>
+                                {% endif %}
+                              </td>
+                              <td>
+                                {% if item.fams_id %}
+                                  <span class="item-serial">{{ item.fams_id }}</span>
+                                {% else %}
+                                  <span style="color:#b0bac8;">—</span>
+                                {% endif %}
+                              </td>
+                            </tr>
+                            {% endfor %}
+                          </tbody>
+                        </table>
+                      {% else %}
+                        {# Plain text fallback #}
+                        <div style="font-size:13px;color:var(--text);line-height:1.6;padding:4px 0;">
+                          {{ r.item_description }}
+                        </div>
+                      {% endif %}
+                    {% elif r.gatepass_items %}
+                      {# Relational GatePassItem records #}
+                      <table class="items-table">
+                        <thead>
+                          <tr>
+                            <th>#</th>
+                            <th>Item Name</th>
+                            <th>Quantity</th>
+                            <th>Model Name</th>
+                            <th>FAMS ID</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {% for item in r.gatepass_items %}
+                          <tr>
+                            <td style="color:#9ca3af;font-size:12px;">{{ loop.index }}</td>
+                            <td><strong>{{ item.item_name or '—' }}</strong></td>
+                            <td><span class="item-qty-badge">{{ item.qty or '1' }}</span></td>
+                            <td>
+                              {% if item.serial_no %}
+                                <span class="item-serial">{{ item.serial_no }}</span>
+                              {% else %}
+                                <span style="color:#b0bac8;">—</span>
+                              {% endif %}
+                            </td>
+                            <td>
+                              {% if item.fams_id %}
+                                <span class="item-serial">{{ item.fams_id }}</span>
+                              {% else %}
+                                <span style="color:#b0bac8;">—</span>
+                              {% endif %}
+                            </td>
+                          </tr>
+                          {% endfor %}
+                        </tbody>
+                      </table>
+                    {% else %}
+                      <div style="color:#9ca3af;font-size:13px;padding:10px 0;text-align:center;">
+                        No item details recorded
+                      </div>
+                    {% endif %}
+                  </div>
+
+                </div>
+              </td>
+            </tr>
+
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="14">
+                <div class="empty-state">
+                  <div class="empty-icon">📋</div>
+                  <p>No GatePass records found</p>
+                </div>
+              </td>
+            </tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="expand-hint">
+      <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      Click any row to expand full sender details, ID, address &amp; item information
+    </div>
+
+  </div>
+</div>
+
+{# ── Item data map injected from Flask ── #}
+<script>
+const _GP_ITEMS_RAW = {{ items_map_json | safe }};
+const _GP_ITEMS = {};
+for (const id in _GP_ITEMS_RAW) {
+  try { _GP_ITEMS[id] = JSON.parse(_GP_ITEMS_RAW[id]); }
+  catch(e) { _GP_ITEMS[id] = []; }
+}
+// Role injected from Flask
+const PAGE_ROLE = {{ ('"' ~ page_role ~ '"') | safe }};
+
+// ── Loading overlay helpers ─────────────────────────────────────────────────
+function showLoading(msg) {
+  const ol = document.getElementById("loadingOverlay");
+  if (ol) {
+    document.getElementById("loadingMsg").textContent = msg || "Processing…";
+    ol.style.display = "flex";
+  }
+}
+function hideLoading() {
+  const ol = document.getElementById("loadingOverlay");
+  if (ol) ol.style.display = "none";
+}
+
+// ── Role-based UI on page load ──────────────────────────────────────────────
+document.addEventListener("DOMContentLoaded", function () {
+  const isAdmin    = (PAGE_ROLE === "admin" || PAGE_ROLE === "superadmin");
+  const isSecurity = (PAGE_ROLE === "security");
+
+  // Set min=today on overdue extend date input — no past dates allowed
+  const todayStr = new Date().toISOString().split("T")[0];
+  const overdueNewDate = document.getElementById("overdue_new_date");
+  if (overdueNewDate) overdueNewDate.min = todayStr;
+
+  // 1. Overdue tab — admin/superadmin/it/finance can see overdue tab
+  const isIT       = (PAGE_ROLE === "it");
+  const isFinance  = (PAGE_ROLE === "finance");
+  const overdueTab = document.getElementById("overdueBtn");
+  if (overdueTab) overdueTab.style.display = (isAdmin || isIT || isFinance) ? "" : "none";
+
+  // 1b. Partially Returned + Fully Returned tabs — admin + IT + finance + security + superadmin
+  //     Admin/IT/Finance see only their own dept's passes.
+  //     Security and Superadmin see ALL passes (security works at the gate for everyone).
+  //     Dept scoping happens inside filterPass().
+  const canSeeReturnTabs = (isAdmin || isIT || isFinance || isSecurity || PAGE_ROLE === "superadmin");
+  const partialTab = document.getElementById("partialBtn");
+  const fullTab    = document.getElementById("fullBtn");
+  if (partialTab) partialTab.style.display = canSeeReturnTabs ? "" : "none";
+  if (fullTab)    fullTab.style.display    = canSeeReturnTabs ? "" : "none";
+
+  // 2. Security Approve/Decline buttons — only security can see them
+  document.querySelectorAll(".sec-action-btns").forEach(el => {
+    el.style.display = isSecurity ? "" : "none";
+  });
+  document.querySelectorAll(".sec-done-label").forEach(el => {
+    el.style.display = "";  // always visible (just says "Done")
+  });
+
+  // 3. Extend Date buttons — ALWAYS hidden on load.
+  //    Revealed by filterPass() when overdue tab is active, scoped by role+dept.
+  document.querySelectorAll(".extend-date-btn").forEach(el => {
+    el.style.display = "none";
+  });
+
+  // 4. Mark Returned buttons — only security role can see them
+  document.querySelectorAll(".mark-returned-btn").forEach(el => {
+    el.style.display = isSecurity ? "" : "none";
+  });
+
+  // 5. Download Report button — only admin and superadmin can see it
+  const dlBtn = document.getElementById("downloadReportBtn");
+  if (dlBtn) dlBtn.style.display = isAdmin ? "" : "none";
+
+  // 6. Apply initial filter ("All" tab) so dept scoping is visible from load,
+  //    not just after the user clicks a tab.
+  filterPass('all');
+});
+</script>
+
+
+<!-- ── DOWNLOAD MODAL ── -->
+<div class="modal-overlay" id="downloadModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="modal-title">Download GatePass Report</div>
+    <p class="modal-sub">Select date range and pass type to export as CSV.</p>
+
+    <div class="range-tabs">
+      <button class="range-tab active" onclick="setRange('custom')">Custom Range</button>
+      <button class="range-tab"        onclick="setRange('weekly')">This Week</button>
+      <button class="range-tab"        onclick="setRange('monthly')">This Month</button>
+    </div>
+
+    <div class="range-info" id="rangeInfo"></div>
+
+    <div id="customDateFields">
+      <div class="mform-row">
+        <div class="mform-group">
+          <label>From Date</label>
+          <input type="date" id="fromDate">
+        </div>
+        <div class="mform-group">
+          <label>To Date</label>
+          <input type="date" id="toDate">
+        </div>
+      </div>
+    </div>
+
+    <div class="mform-group">
+      <label>Pass Type</label>
+      <select id="passTypeSelect">
+        <option value="all">All (Returnable + Non-Returnable)</option>
+        <option value="returnable">Returnable Only</option>
+        <option value="nonreturnable">Non-Returnable Only</option>
+        <option value="overdue">⚠ Overdue Returns</option>
+      </select>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-download" onclick="triggerDownload()">↓ Download CSV</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ── SECURITY MODAL ── -->
+<div id="securityModal">
+  <div class="sec-modal-box" style="max-width:500px;max-height:92vh;overflow-y:auto;">
+
+    <!-- Header -->
+    <button onclick="closeSecurityModal()" style="position:absolute;top:14px;right:14px;background:#f1f5f9;border:none;width:28px;height:28px;border-radius:6px;font-size:15px;cursor:pointer;color:#64748b;display:flex;align-items:center;justify-content:center;transition:background 0.2s;" onmouseenter="this.style.background='#e2e8f0'" onmouseleave="this.style.background='#f1f5f9'">✕</button>
+    <div class="sec-modal-title" id="secModalTitle">✓ Approve GatePass</div>
+    <div class="sec-modal-sub" id="secModalSub">Physically verify each item, tick the checklist, then submit.</div>
+
+    <input type="hidden" id="sec_gp_id">
+    <input type="hidden" id="sec_action">
+
+    <!-- Item checklist (Approve only) -->
+    <div id="sec_checklist_wrap" style="margin-bottom:16px;">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#374151;margin-bottom:8px;display:flex;align-items:center;gap:5px;">
+        <span>📋</span> Item Checklist
+      </div>
+      <div id="sec_items_list" style="border:1.5px solid #dde3ed;border-radius:8px;overflow:hidden;background:#fafbfd;min-height:44px;"></div>
+      <div id="sec_checklist_warn" style="display:none;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:7px 11px;color:#dc2626;font-size:12px;margin-top:8px;font-weight:500;">
+        ⚠ Please tick <strong>all items</strong> before approving.
+      </div>
+    </div>
+
+    <!-- Security Officer Name (mandatory) -->
+    <div style="margin-bottom:16px;">
+      <label class="sec-modal-label">
+        Security Officer Name <span style="color:#dc2626;">*</span>
+      </label>
+      <input type="text" id="sec_security_name"
+        class="sec-modal-textarea"
+        placeholder="Enter your full name (guard on duty)…"
+        oninput="document.getElementById('sec_name_warn').style.display='none'"
+        style="margin-top:4px;resize:none;min-height:unset;height:42px;padding:9px 12px;font-size:13.5px;">
+      <div id="sec_name_warn" style="display:none;color:#dc2626;font-size:12px;margin-top:5px;font-weight:500;">
+        ⚠ Security officer name is required.
+      </div>
+    </div>
+
+    <!-- Handover Person Email (mandatory for Approve) -->
+    <div id="sec_handover_wrap" style="margin-bottom:16px;">
+      <label class="sec-modal-label">
+        Handover Person Email <span style="color:#dc2626;">*</span>
+      </label>
+      <input type="email" id="sec_handover_email"
+        class="sec-modal-textarea"
+        placeholder="Email of person physically collecting the item…"
+        oninput="document.getElementById('sec_handover_warn').style.display='none'"
+        style="margin-top:4px;resize:none;min-height:unset;height:42px;padding:9px 12px;font-size:13.5px;">
+      <div id="sec_handover_warn" style="display:none;color:#dc2626;font-size:12px;margin-top:5px;font-weight:500;">
+        ⚠ Handover person email is required.
+      </div>
+      <div style="font-size:11.5px;color:#64748b;margin-top:4px;">
+        An acknowledgement link will be sent to this email after approval.
+      </div>
+    </div>
+
+    <!-- Remarks -->
+    <div style="margin-bottom:16px;">
+      <label class="sec-modal-label" id="sec_remarks_label">
+        Verification Remarks <span style="color:#9ca3af;font-weight:400;">(optional)</span>
+      </label>
+      <textarea class="sec-modal-textarea" id="sec_remarks"
+        placeholder="Enter physical verification notes, observations…"
+        oninput="document.getElementById('sec_remarks_warn').style.display='none'"
+        style="margin-top:4px;"></textarea>
+      <div id="sec_remarks_warn" style="display:none;color:#dc2626;font-size:12px;margin-top:5px;font-weight:500;">
+        ⚠ Please enter a reason for declining.
+      </div>
+    </div>
+
+    <!-- Ack status area (shown only for Approve action) -->
+    <div id="sec_ack_status_wrap" style="display:none;margin-bottom:14px;">
+      <!-- Acknowledged state -->
+      <div id="sec_ack_done" style="display:none;background:#dcfce7;color:#166534;
+           padding:10px 14px;border-radius:8px;font-size:13px;font-weight:600;
+           border:1px solid #86efac;">
+        ✓ Acknowledged by <span id="sec_ack_by_name">—</span>
+        <span id="sec_ack_company_txt" style="font-weight:400;font-size:12px;"></span>
+      </div>
+      <!-- Waiting state -->
+      <div id="sec_ack_waiting" style="display:none;background:#fef3c7;color:#b45309;
+          padding:10px 14px;border-radius:8px;font-size:13px;font-weight:500;
+          border:1px solid #fcd34d;">
+        <!-- Default view: link sent + action buttons -->
+        <div id="sec_ack_waiting_view" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+          <span>⏳ Ack link sent to <strong id="sec_ack_sent_email"></strong>. Waiting for collector…</span>
+          <div style="display:flex;gap:6px;flex-shrink:0;">
+            <button onclick="checkAckStatus()" id="secRefreshBtn"
+                    style="background:#b45309;color:#fff;border:none;padding:5px 10px;
+                          border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;
+                          white-space:nowrap;">
+              🔄 Refresh
+            </button>
+            <button onclick="openEditAckEmail()" id="secEditAckBtn"
+                    style="background:#fff;color:#b45309;border:1.5px solid #b45309;padding:4px 10px;
+                          border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;
+                          white-space:nowrap;">
+              ✉ Edit &amp; Resend
+            </button>
+          </div>
+        </div>
+
+        <!-- Inline edit form: shown when Edit & Resend is clicked -->
+        <div id="sec_ack_edit_view" style="display:none;">
+          <div style="margin-bottom:8px;font-size:12.5px;">
+            Currently sent to: <strong id="sec_ack_current_email">—</strong>
+          </div>
+          <div style="margin-bottom:8px;">
+            <label style="display:block;font-size:11.5px;font-weight:600;color:#78350f;margin-bottom:3px;">
+              Correct Collector Email <span style="color:#dc2626;">*</span>
+            </label>
+            <input type="email" id="sec_ack_new_email"
+                   placeholder="Enter correct email…"
+                   style="width:100%;padding:7px 10px;border:1.5px solid #fcd34d;border-radius:6px;
+                          font-size:13px;font-family:'DM Sans',sans-serif;outline:none;background:#fff;color:#1a202c;">
+          </div>
+          <div style="margin-bottom:8px;">
+            <label style="display:block;font-size:11.5px;font-weight:600;color:#78350f;margin-bottom:3px;">
+              Reason <span style="color:#9ca3af;font-weight:400;">(optional)</span>
+            </label>
+            <input type="text" id="sec_ack_reason"
+                   placeholder="e.g. typo, wrong person…"
+                   style="width:100%;padding:7px 10px;border:1.5px solid #fcd34d;border-radius:6px;
+                          font-size:13px;font-family:'DM Sans',sans-serif;outline:none;background:#fff;color:#1a202c;">
+          </div>
+          <div id="sec_ack_edit_alert"
+               style="display:none;background:#fee2e2;color:#991b1b;padding:6px 10px;
+                      border-radius:6px;font-size:12px;margin-bottom:8px;border:1px solid #fca5a5;"></div>
+          <div style="display:flex;gap:6px;justify-content:flex-end;">
+            <button onclick="cancelEditAckEmail()" id="secCancelEditBtn"
+                    style="background:#fff;color:#64748b;border:1.5px solid #cbd5e1;padding:5px 12px;
+                           border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">
+              Cancel
+            </button>
+            <button onclick="submitEditAckEmail()" id="secResendBtn"
+                    style="background:#0e7490;color:#fff;border:none;padding:5px 14px;
+                           border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">
+              ✉ Resend Link
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sec-modal-footer">
+      <button class="btn-cancel" onclick="closeSecurityModal()">Cancel</button>
+      <!-- Send Ack button — shown when ack not yet sent -->
+      <button id="secSendAckBtn" class="btn-download"
+              style="background:#0e7490;display:none;"
+              onclick="sendAckLink()">
+        ✉ Send Acknowledgement
+      </button>
+      <!-- Approve button — shown only after acknowledged -->
+      <button id="secConfirmBtn" class="btn-download"
+              onclick="submitSecurity()">
+        ✓ Approve
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── OVERDUE EXTEND MODAL ── -->
+<div id="overdueModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1001;align-items:center;justify-content:center;padding:16px;">
+  <div style="background:white;border-radius:14px;padding:28px;width:100%;max-width:460px;box-shadow:0 8px 32px rgba(0,0,0,0.2);animation:modalIn 0.2s ease;">
+    <div style="font-size:16px;font-weight:700;color:#b45309;margin-bottom:4px;">📅 Extend Return Date</div>
+    <div id="overdueModalSub" style="color:#64748b;font-size:13px;margin-bottom:18px;">Update the expected return date after confirming with requester.</div>
+    <input type="hidden" id="overdue_gp_id">
+
+    <div style="display:flex;flex-direction:column;gap:13px;">
+
+      <div>
+        <label style="font-size:11.5px;font-weight:600;color:#374151;display:block;margin-bottom:5px;">New Expected Return Date <span style="color:#dc2626;">*</span></label>
+        <input type="date" id="overdue_new_date" min="" style="width:100%;padding:9px 12px;border:1.5px solid #dde3ed;border-radius:8px;font-size:13.5px;font-family:'DM Sans',sans-serif;outline:none;transition:border-color 0.2s;" onfocus="this.style.borderColor='#1a56db'" onblur="this.style.borderColor='#dde3ed'">
+      </div>
+
+      <div>
+        <label style="font-size:11.5px;font-weight:600;color:#374151;display:block;margin-bottom:5px;">Reason for Non-Return <span style="color:#dc2626;">*</span></label>
+        <textarea id="overdue_reason" placeholder="Enter reason given by requester for not returning the item…" style="width:100%;padding:9px 12px;border:1.5px solid #dde3ed;border-radius:8px;font-size:13.5px;font-family:'DM Sans',sans-serif;resize:vertical;min-height:75px;outline:none;transition:border-color 0.2s;" onfocus="this.style.borderColor='#1a56db'" onblur="this.style.borderColor='#dde3ed'"></textarea>
+      </div>
+
+      <div>
+        <label style="font-size:11.5px;font-weight:600;color:#374151;display:block;margin-bottom:5px;">Internal Remarks <span style="color:#9ca3af;">(optional)</span></label>
+        <textarea id="overdue_internal_remarks" placeholder="Internal notes for the team — escalation status, follow-up actions…" style="width:100%;padding:9px 12px;border:1.5px solid #dde3ed;border-radius:8px;font-size:13.5px;font-family:'DM Sans',sans-serif;resize:vertical;min-height:60px;outline:none;transition:border-color 0.2s;" onfocus="this.style.borderColor='#1a56db'" onblur="this.style.borderColor='#dde3ed'"></textarea>
+      </div>
+
+      <div id="overdue_warn" style="display:none;color:#dc2626;font-size:12px;">⚠ New date and reason are required.</div>
+    </div>
+
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
+      <button class="btn-cancel" onclick="closeOverdueModal()">Cancel</button>
+      <button onclick="submitExtendReturn()" style="background:#b45309;color:white;border:none;padding:9px 20px;border-radius:8px;font-family:'DM Sans',sans-serif;font-size:13.5px;font-weight:600;cursor:pointer;box-shadow:0 2px 6px rgba(180,83,9,0.3);">📅 Update Return Date</button>
+    </div>
+  </div>
+</div>
+
+
+<script>
+/* ── EXPAND / COLLAPSE DETAIL ROW ── */
+function toggleDetail(detailId, rowEl) {
+  const detailRow = document.getElementById(detailId);
+  if (!detailRow) return;
+
+  const rowId = detailId.replace('detail-', '');
+  const btn   = document.getElementById('btn-' + rowId);
+  const isOpen = detailRow.classList.contains('open');
+
+  // Close all open panels first
+  document.querySelectorAll('.detail-row.open').forEach(d => d.classList.remove('open'));
+  document.querySelectorAll('.main-row.expanded').forEach(r => r.classList.remove('expanded'));
+  document.querySelectorAll('.expand-btn.open').forEach(b => b.classList.remove('open'));
+
+  if (!isOpen) {
+    detailRow.classList.add('open');
+    rowEl.classList.add('expanded');
+    if (btn) btn.classList.add('open');
+  }
+}
+
+/* ── FILTER TABS ── */
+function filterPass(type) {
+  document.querySelectorAll(".filter-tab").forEach(b => {
+    b.classList.remove("active","active-ret","active-nonret","active-over","active-partial","active-full");
+    b.style.color = "";
+  });
+
+  const map = { all:'allBtn', returnable:'retBtn', nonreturnable:'nonRetBtn', overdue:'overdueBtn', partial:'partialBtn', fullyreturned:'fullBtn' };
+  const btn = document.getElementById(map[type]);
+  if (type === 'all')                btn.classList.add("active");
+  else if (type === 'returnable')    btn.classList.add("active-ret");
+  else if (type === 'nonreturnable') btn.classList.add("active-nonret");
+  else if (type === 'overdue')       btn.classList.add("active-over");
+  else if (type === 'partial')       btn.classList.add("active-partial");
+  else if (type === 'fullyreturned') btn.classList.add("active-full");
+
+  document.querySelectorAll("#gatepassTable tbody tr.main-row").forEach(row => {
+    const pt           = (row.dataset.passtype || "").toLowerCase();
+    const overdue      = row.dataset.overdue === "yes";
+    const rowDept      = (row.dataset.requesterDept || "").toLowerCase();
+    const retStatus    = (row.dataset.returnStatus || "").toLowerCase();
+    const secApproved  = row.dataset.securityApproved === "yes";
+
+    // ── UNIFORM DEPT SCOPING (applies to every tab) ─────────────────────
+    //   superadmin / security -> see ALL passes regardless of dept
+    //   admin                 -> only passes raised by Admin dept
+    //   it                    -> only passes raised by IT dept
+    //   finance               -> only passes raised by Finance role
+    //   anyone else           -> see all (access is already gated by
+    //                            @gatepass_access_required server-side)
+    let deptOk = true;
+    if (PAGE_ROLE === "admin")        deptOk = (rowDept === "admin");
+    else if (PAGE_ROLE === "it")      deptOk = (rowDept === "it");
+    else if (PAGE_ROLE === "finance") deptOk = (rowDept === "finance");
+    // superadmin, security, and others: deptOk stays true
+
+    if      (type === "all")           row.style.display = deptOk ? "" : "none";
+    else if (type === "overdue")       row.style.display = (deptOk && overdue) ? "" : "none";
+    else if (type === "returnable")    row.style.display = (deptOk && pt === "returnable")    ? "" : "none";
+    else if (type === "nonreturnable") row.style.display = (deptOk && pt === "nonreturnable") ? "" : "none";
+    else if (type === "partial")       row.style.display = (deptOk && secApproved && retStatus === "partial")   ? "" : "none";
+    else if (type === "fullyreturned") row.style.display = (deptOk && secApproved && retStatus === "completed") ? "" : "none";
+  });
+
+  // Also hide detail rows when the main row is hidden
+  document.querySelectorAll("#gatepassTable tbody tr.detail-row").forEach(drow => {
+    const id = drow.id.replace('detail-', '');
+    const mainRow = document.querySelector(`tr[onclick*="'detail-${id}'"]`);
+    if (mainRow && mainRow.style.display === "none") {
+      drow.classList.remove('open');
+    }
+  });
+
+  // Extend Date buttons — visible on overdue tab for admin/superadmin/it, scoped by dept.
+  //   superadmin → sees extend on all overdue passes
+  //   admin      → sees extend only on passes raised by Admin dept
+  //   it         → sees extend only on passes raised by IT dept
+  document.querySelectorAll(".extend-date-btn").forEach(btn => {
+    if (type !== "overdue") { btn.style.display = "none"; return; }
+    const btnDept = (btn.dataset.dept || "").toLowerCase();
+    let canExtend = false;
+    if (PAGE_ROLE === "superadmin")     canExtend = true;
+    else if (PAGE_ROLE === "admin")     canExtend = (btnDept === "admin");
+    else if (PAGE_ROLE === "it")        canExtend = (btnDept === "it");
+    else if (PAGE_ROLE === "finance")   canExtend = (btnDept === "finance");
+    btn.style.display = canExtend ? "" : "none";
+  });
+
+  const s = document.getElementById("searchInput").value.toLowerCase();
+  if (s) applySearch(s);
+}
+
+function applySearch(filter) {
+  document.querySelectorAll("#gatepassTable tbody tr.main-row").forEach(row => {
+    if (row.style.display === "none") return;
+    row.style.display = row.innerText.toLowerCase().includes(filter) ? "" : "none";
+  });
+}
+
+document.getElementById("searchInput").addEventListener("keyup", function() {
+  const activeBtn = document.querySelector(".filter-tab.active, .filter-tab.active-ret, .filter-tab.active-nonret, .filter-tab.active-over, .filter-tab.active-partial, .filter-tab.active-full");
+  const id = activeBtn ? activeBtn.id : "allBtn";
+  const map = { allBtn:'all', retBtn:'returnable', nonRetBtn:'nonreturnable', overdueBtn:'overdue', partialBtn:'partial', fullBtn:'fullyreturned' };
+  filterPass(map[id] || 'all');
+});
+
+/* ── DOWNLOAD MODAL ── */
+let currentRange = "custom";
+
+function openModal() {
+  const today = new Date();
+  const prior = new Date(); prior.setDate(prior.getDate() - 30);
+  document.getElementById("toDate").value   = fmt(today);
+  document.getElementById("fromDate").value = fmt(prior);
+  setRange("custom");
+  document.getElementById("downloadModal").classList.add("open");
+}
+function closeModal() {
+  document.getElementById("downloadModal").classList.remove("open");
+}
+document.getElementById("downloadModal").addEventListener("click", function(e) {
+  if (e.target === this) closeModal();
+});
+
+function fmt(d) { return d.toISOString().split("T")[0]; }
+function fmtDisplay(d) {
+  return d.toLocaleDateString("en-IN", { day:"2-digit", month:"short", year:"numeric" });
+}
+
+function setRange(type) {
+  currentRange = type;
+  document.querySelectorAll(".range-tab").forEach(b => b.classList.remove("active"));
+  const idx = { custom:0, weekly:1, monthly:2 };
+  document.querySelectorAll(".range-tab")[idx[type]].classList.add("active");
+
+  const info   = document.getElementById("rangeInfo");
+  const custom = document.getElementById("customDateFields");
+
+  if (type === "weekly") {
+    custom.style.display = "none";
+    const today = new Date(), day = today.getDay() || 7;
+    const mon = new Date(today); mon.setDate(today.getDate() - day + 1);
+    const sun = new Date(mon);   sun.setDate(mon.getDate() + 6);
+    info.textContent = "📅 Exporting: " + fmtDisplay(mon) + " — " + fmtDisplay(sun);
+    info.classList.add("show");
+  } else if (type === "monthly") {
+    custom.style.display = "none";
+    const today = new Date();
+    const first = new Date(today.getFullYear(), today.getMonth(), 1);
+    const last  = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    info.textContent = "📅 Exporting: " + fmtDisplay(first) + " — " + fmtDisplay(last);
+    info.classList.add("show");
+  } else {
+    custom.style.display = "";
+    info.classList.remove("show");
+  }
+}
+
+function triggerDownload() {
+  const passType = document.getElementById("passTypeSelect").value;
+  if (passType === "overdue") {
+    let url = "/gatepass/download_overdue_csv?range=" + currentRange;
+    if (currentRange === "custom") {
+      const from = document.getElementById("fromDate").value;
+      const to   = document.getElementById("toDate").value;
+      if (!from || !to) { alert("Please select both From and To dates."); return; }
+      if (from > to)    { alert("From date cannot be after To date."); return; }
+      url += "&from=" + from + "&to=" + to;
+    }
+    window.location.href = url; closeModal(); return;
+  }
+  let url = "/gatepass/download_csv?range=" + currentRange + "&type=" + passType;
+  if (currentRange === "custom") {
+    const from = document.getElementById("fromDate").value;
+    const to   = document.getElementById("toDate").value;
+    if (!from || !to) { alert("Please select both From and To dates."); return; }
+    if (from > to)    { alert("From date cannot be after To date."); return; }
+    url += "&from=" + from + "&to=" + to;
+  }
+  window.location.href = url; closeModal();
+}
+
+/* ── SECURITY MODAL ── */
+let _secItemsData = [];
+
+function openSecurityModal(id, action, btnEl) {
+  _secItemsData = [];
+
+  document.getElementById("sec_gp_id").value   = id;
+  document.getElementById("sec_action").value  = action;
+  document.getElementById("sec_remarks").value = "";
+  document.getElementById("sec_security_name").value = "";
+  document.getElementById("sec_handover_email").value = "";
+  document.getElementById("sec_checklist_warn").style.display = "none";
+  document.getElementById("sec_remarks_warn").style.display   = "none";
+  document.getElementById("sec_name_warn").style.display      = "none";
+  document.getElementById("sec_handover_warn").style.display  = "none";
+
+  // Always reset the edit-ack inline form whenever the modal opens
+  const editView    = document.getElementById("sec_ack_edit_view");
+  const waitingView = document.getElementById("sec_ack_waiting_view");
+  if (editView)    editView.style.display    = "none";
+  if (waitingView) waitingView.style.display = "flex";
+  const editAlert = document.getElementById("sec_ack_edit_alert");
+  if (editAlert) editAlert.style.display = "none";
+
+  const isApprove = action === "Approved";
+
+  // Read ack state from data attributes on the button
+  const isAcknowledged = btnEl && btnEl.dataset.acknowledged === "true";
+  const ackSent        = btnEl && btnEl.dataset.ackSent === "true";
+  const ackBy          = (btnEl && btnEl.dataset.ackBy) || "";
+  const ackCompany     = (btnEl && btnEl.dataset.ackCompany) || "";
+  const handoverEmail  = (btnEl && btnEl.dataset.handoverEmail) || "";
+
+  // Show handover email field only when ack not yet sent
+  document.getElementById("sec_handover_wrap").style.display =
+    (isApprove && !ackSent && !isAcknowledged) ? "" : "none";
+
+  // Ack status area
+  const ackStatusWrap = document.getElementById("sec_ack_status_wrap");
+  const ackDone       = document.getElementById("sec_ack_done");
+  const ackWaiting    = document.getElementById("sec_ack_waiting");
+  const sendAckBtn    = document.getElementById("secSendAckBtn");
+  const confirmBtn    = document.getElementById("secConfirmBtn");
+
+  if (isApprove) {
+    ackStatusWrap.style.display = "";
+    if (isAcknowledged) {
+      // Already acknowledged — show green, enable Approve
+      ackDone.style.display    = "";
+      ackWaiting.style.display = "none";
+      document.getElementById("sec_ack_by_name").textContent = ackBy;
+      document.getElementById("sec_ack_company_txt").textContent = ackCompany ? ` (${ackCompany})` : "";
+      sendAckBtn.style.display  = "none";
+      confirmBtn.style.display  = "";
+      confirmBtn.disabled       = false;
+      confirmBtn.style.background = "#166534";
+      confirmBtn.textContent    = "✓ Approve";
+    } else if (ackSent) {
+      // Sent but not yet acknowledged — show waiting, hide both action buttons
+      ackWaiting.style.display = "";
+      ackDone.style.display    = "none";
+      document.getElementById("sec_ack_sent_email").textContent = handoverEmail;
+      sendAckBtn.style.display  = "none";
+      confirmBtn.style.display  = "none";
+    } else {
+      // Not sent yet — show Send Ack button
+      ackDone.style.display    = "none";
+      ackWaiting.style.display = "none";
+      sendAckBtn.style.display = "";
+      confirmBtn.style.display = "none";
+    }
+  } else {
+    // Decline flow — hide ack area, show Decline button
+    ackStatusWrap.style.display = "none";
+    sendAckBtn.style.display    = "none";
+    confirmBtn.style.display    = "";
+    confirmBtn.disabled         = false;
+    confirmBtn.style.background = "#991b1b";
+    confirmBtn.textContent      = "✕ Decline";
+  }
+
+  document.getElementById("secModalTitle").textContent = isApprove ? "✓ Approve GatePass" : "✕ Decline GatePass";
+  document.getElementById("secModalSub").textContent   = isApprove
+    ? "Physically verify each item, tick the checklist, then submit."
+    : "Provide a reason for declining this gate pass.";
+  document.getElementById("sec_remarks_label").innerHTML = isApprove
+    ? 'Verification Remarks <span style="color:#9ca3af;font-weight:400;">(optional)</span>'
+    : 'Decline Reason <span style="color:#dc2626;">*</span>';
+  document.getElementById("sec_remarks").placeholder = isApprove
+    ? "Enter physical verification notes, observations…"
+    : "Enter reason for declining this gate pass…";
+
+  if (isApprove) {
+    try {
+      const raw = _GP_ITEMS[String(id)];
+      if (Array.isArray(raw)) _secItemsData = raw;
+      else if (typeof raw === "string" && raw.trim()) _secItemsData = JSON.parse(raw);
+    } catch(e) {
+      console.warn("Could not load items for gatepass", id, e);
+      _secItemsData = [];
+    }
+  }
+
+  // Build checklist
+  const wrap = document.getElementById("sec_checklist_wrap");
+  const list = document.getElementById("sec_items_list");
+  list.innerHTML = "";
+
+  if (isApprove) {
+    wrap.style.display = "block";
+    if (_secItemsData.length > 0) {
+      _secItemsData.forEach((item, i) => {
+        const lbl = document.createElement("label");
+        lbl.style.cssText = "display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer;border-bottom:1px solid #f0f2f7;font-size:13px;transition:background 0.15s;";
+        if (i === _secItemsData.length - 1) lbl.style.borderBottom = "none";
+        lbl.onmouseenter = () => lbl.style.background = "#f8faff";
+        lbl.onmouseleave = () => lbl.style.background = "";
+        lbl.innerHTML = `
+          <input type="checkbox" id="sec_chk_${i}"
+                 style="width:18px;height:18px;accent-color:#166534;cursor:pointer;flex-shrink:0;"
+                 onchange="clearChecklistWarn()">
+          <span style="flex:1;line-height:1.5;">
+            <strong style="color:#1a202c;font-size:13.5px;">${item.item_name || '—'}</strong>
+            <span style="display:flex;gap:12px;margin-top:4px;flex-wrap:wrap;align-items:center;">
+              <span style="background:#dcfce7;color:#166534;font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:20px;">Qty: ${item.qty || '—'}</span>
+              ${item.serial_no ? '<span style="background:#eff6ff;color:#1d4ed8;font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:20px;">S/N: ' + item.serial_no + '</span>' : ''}
+              ${item.department ? '<span style="background:#f1f5f9;color:#475569;font-size:11.5px;padding:2px 8px;border-radius:20px;">' + item.department + '</span>' : ''}
+            </span>
+          </span>`;
+        list.appendChild(lbl);
+      });
+    } else {
+      list.innerHTML = '<div style="padding:14px 12px;color:#9ca3af;font-size:12.5px;text-align:center;font-style:italic;">No item list recorded for this pass.</div>';
+    }
+  } else {
+    wrap.style.display = "none";
+  }
+
+  document.getElementById("securityModal").classList.add("open");
+}
+
+function clearChecklistWarn() {
+  document.getElementById("sec_checklist_warn").style.display = "none";
+}
+
+function closeSecurityModal() {
+  document.getElementById("securityModal").classList.remove("open");
+}
+
+document.getElementById("securityModal").addEventListener("click", function(e) {
+  if (e.target === this) closeSecurityModal();
+});
+
+async function submitSecurity() {
+  const id            = document.getElementById("sec_gp_id").value;
+  const action        = document.getElementById("sec_action").value;
+  const remarks       = document.getElementById("sec_remarks").value.trim();
+  const security_name = document.getElementById("sec_security_name").value.trim();
+
+  // Require security officer name (always mandatory)
+  if (!security_name) {
+    document.getElementById("sec_name_warn").style.display = "block";
+    document.getElementById("sec_security_name").focus();
+    return;
+  }
+
+  // Require all items ticked for Approve
+  if (action === "Approved" && _secItemsData.length > 0) {
+    const allChecked = _secItemsData.every((_, i) => {
+      const chk = document.getElementById("sec_chk_" + i);
+      return chk && chk.checked;
+    });
+    if (!allChecked) {
+      document.getElementById("sec_checklist_warn").style.display = "block";
+      return;
+    }
+  }
+
+  // Require remarks when declining
+  if (action === "Declined" && !remarks) {
+    document.getElementById("sec_remarks_warn").style.display = "block";
+    document.getElementById("sec_remarks").focus();
+    return;
+  }
+
+  const btn = document.getElementById("secConfirmBtn");
+  btn.disabled = true;
+  btn.textContent = "Saving…";
+  showLoading(action === "Approved" ? "Approving gate pass…" : "Declining gate pass…");
+
+  try {
+    const resp = await fetch(`/gatepass/security-action/${id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: action, remarks, security_name })
+    });
+    const data = await resp.json();
+    if (resp.ok && data.success) {
+      closeSecurityModal();
+      showLoading("Refreshing…");
+      location.reload();
+    } else {
+      hideLoading();
+      alert("Error: " + (data.message || "Failed to update."));
+      btn.disabled = false;
+      btn.textContent = action === "Approved" ? "✓ Approve" : "✕ Decline";
+    }
+  } catch(e) {
+    hideLoading();
+    alert("Network error. Please try again.");
+    btn.disabled = false;
+    btn.textContent = action === "Approved" ? "✓ Approve" : "✕ Decline";
+  }
+}
+
+
+async function sendAckLink() {
+  const id             = document.getElementById("sec_gp_id").value;
+  const security_name  = document.getElementById("sec_security_name").value.trim();
+  const handover_email = document.getElementById("sec_handover_email").value.trim();
+  const btn            = document.getElementById("secSendAckBtn");
+
+  if (!security_name) {
+    document.getElementById("sec_name_warn").style.display = "block";
+    document.getElementById("sec_security_name").focus();
+    return;
+  }
+  if (!handover_email) {
+    document.getElementById("sec_handover_warn").style.display = "block";
+    document.getElementById("sec_handover_email").focus();
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = "Sending…";
+
+  try {
+    const resp = await fetch(`/gatepass/send-ack/${id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ handover_email, security_name })
+    });
+    const data = await resp.json();
+    if (resp.ok && data.success) {
+      // Keep dialog open, hide handover field, show waiting state
+      document.getElementById("sec_handover_wrap").style.display = "none";
+      document.getElementById("sec_ack_waiting").style.display   = "";
+      document.getElementById("sec_ack_done").style.display      = "none";
+      document.getElementById("sec_ack_sent_email").textContent  = handover_email;
+      btn.style.display = "none";
+      // Confirm button stays hidden — security must close and come back after ack
+    } else {
+      alert("Error: " + (data.message || "Failed to send."));
+      btn.disabled = false;
+      btn.textContent = "✉ Send Acknowledgement";
+    }
+  } catch(e) {
+    alert("Network error. Please try again.");
+    btn.disabled = false;
+    btn.textContent = "✉ Send Acknowledgement";
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// EDIT & RESEND ACK — swap waiting box into an inline edit form
+// ════════════════════════════════════════════════════════════════════════
+function openEditAckEmail() {
+  const currentEmail = document.getElementById("sec_ack_sent_email").textContent || "";
+  document.getElementById("sec_ack_current_email").textContent = currentEmail || "—";
+  document.getElementById("sec_ack_new_email").value = currentEmail;
+  document.getElementById("sec_ack_reason").value    = "";
+  document.getElementById("sec_ack_edit_alert").style.display = "none";
+  document.getElementById("sec_ack_waiting_view").style.display = "none";
+  document.getElementById("sec_ack_edit_view").style.display    = "block";
+  setTimeout(() => {
+    const inp = document.getElementById("sec_ack_new_email");
+    inp.focus(); inp.select();
+  }, 50);
+}
+
+function cancelEditAckEmail() {
+  document.getElementById("sec_ack_edit_view").style.display    = "none";
+  document.getElementById("sec_ack_waiting_view").style.display = "flex";
+  document.getElementById("sec_ack_edit_alert").style.display   = "none";
+  const btn = document.getElementById("secResendBtn");
+  if (btn) { btn.disabled = false; btn.textContent = "✉ Resend Link"; }
+}
+
+async function submitEditAckEmail() {
+  const id        = document.getElementById("sec_gp_id").value;
+  const newEmail  = document.getElementById("sec_ack_new_email").value.trim();
+  const reason    = document.getElementById("sec_ack_reason").value.trim();
+  const alertEl   = document.getElementById("sec_ack_edit_alert");
+  const btn       = document.getElementById("secResendBtn");
+
+  alertEl.style.display = "none";
+
+  if (!newEmail) {
+    alertEl.textContent = "Correct email is required.";
+    alertEl.style.display = "block";
+    return;
+  }
+  // Simple client-side check (server does real validation)
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(newEmail)) {
+    alertEl.textContent = "Invalid email format.";
+    alertEl.style.display = "block";
+    return;
+  }
+
+  btn.disabled    = true;
+  btn.textContent = "Sending…";
+
+  try {
+    const resp = await fetch(`/gatepass/resend-ack/${id}`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ new_email: newEmail, reason: reason })
+    });
+    const data = await resp.json();
+    if (resp.ok && data.success) {
+      // Update displayed email in the waiting banner
+      document.getElementById("sec_ack_sent_email").textContent = data.new_email || newEmail;
+      // Swap back to waiting view
+      cancelEditAckEmail();
+      // Also refresh the row's data-handover-email so subsequent opens show correct value
+      const row = document.querySelector(`tr.main-row[data-handover-email][onclick*="'detail-${id}'"]`);
+      if (row) row.dataset.handoverEmail = data.new_email || newEmail;
+      // Small toast
+      if (typeof showLoading === "function") {
+        showLoading("Link resent to " + (data.new_email || newEmail));
+        setTimeout(() => { if (typeof hideLoading === "function") hideLoading(); }, 1500);
+      }
+    } else {
+      alertEl.textContent   = data.message || "Failed to resend link.";
+      alertEl.style.display = "block";
+      btn.disabled    = false;
+      btn.textContent = "✉ Resend Link";
+    }
+  } catch(e) {
+    alertEl.textContent   = "Network error. Please try again.";
+    alertEl.style.display = "block";
+    btn.disabled    = false;
+    btn.textContent = "✉ Resend Link";
+  }
+}
+
+async function checkAckStatus() {
+  const id  = document.getElementById("sec_gp_id").value;
+  const btn = document.getElementById("secRefreshBtn");
+  btn.textContent = "Checking…";
+  btn.disabled    = true;
+
+  try {
+    const resp = await fetch(`/gatepass/ack-status/${id}`, {
+      credentials: "include"
+    });
+    const data = await resp.json();
+
+    if (data.acknowledged) {
+      // Update modal to show acknowledged state
+      document.getElementById("sec_ack_waiting").style.display = "none";
+      document.getElementById("sec_ack_done").style.display    = "";
+      document.getElementById("sec_ack_by_name").textContent   = data.acknowledged_by || "—";
+      document.getElementById("sec_ack_company_txt").textContent =
+        data.ack_company ? ` (${data.ack_company})` : "";
+      // Show Approve button
+      document.getElementById("secSendAckBtn").style.display  = "none";
+      document.getElementById("secConfirmBtn").style.display  = "";
+      document.getElementById("secConfirmBtn").disabled       = false;
+      document.getElementById("secConfirmBtn").style.background = "#166634";
+      document.getElementById("secConfirmBtn").textContent    = "✓ Approve";
+    } else {
+      btn.textContent = "🔄 Refresh";
+      btn.disabled    = false;
+    }
+  } catch(e) {
+    btn.textContent = "🔄 Refresh";
+    btn.disabled    = false;
+  }
+}
+
+/* ── OVERDUE EXTEND MODAL ── */
+function openOverdueModal(id, passNo) {
+  document.getElementById("overdue_gp_id").value = id;
+  document.getElementById("overdueModalSub").textContent =
+    "Pass: " + passNo + " — Log the reason and set a new return date.";
+  document.getElementById("overdue_new_date").value = "";
+  document.getElementById("overdue_new_date").min = new Date().toISOString().split("T")[0];
+  document.getElementById("overdue_reason").value = "";
+  document.getElementById("overdue_internal_remarks").value = "";
+  document.getElementById("overdue_warn").style.display = "none";
+  document.getElementById("overdueModal").style.display = "flex";
+}
+
+function closeOverdueModal() {
+  document.getElementById("overdueModal").style.display = "none";
+}
+
+document.getElementById("overdueModal").addEventListener("click", function(e) {
+  if (e.target === this) closeOverdueModal();
+});
+
+async function submitExtendReturn() {
+  const id       = document.getElementById("overdue_gp_id").value;
+  const newDate  = document.getElementById("overdue_new_date").value;
+  const reason   = document.getElementById("overdue_reason").value.trim();
+  const internal = document.getElementById("overdue_internal_remarks").value.trim();
+
+  if (!newDate || !reason) {
+    document.getElementById("overdue_warn").style.display = "block";
+    return;
+  }
+
+  const extBtn = document.querySelector("#overdueModal button[onclick=\'submitExtendReturn()\']");
+  if (extBtn) { extBtn.disabled = true; extBtn.textContent = "Saving…"; }
+  showLoading("Updating return date…");
+
+  try {
+    const resp = await fetch(`/gatepass/extend-return/${id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ new_date: newDate, reason, internal_remarks: internal })
+    });
+    const data = await resp.json();
+    if (resp.ok && data.success) {
+      closeOverdueModal();
+      showLoading("Refreshing…");
+      location.reload();
+    } else {
+      hideLoading();
+      if (extBtn) { extBtn.disabled = false; extBtn.textContent = "&#128197; Update Return Date"; }
+      alert("Error: " + (data.message || "Failed to update."));
+    }
+  } catch(e) {
+    hideLoading();
+    if (extBtn) { extBtn.disabled = false; extBtn.textContent = "&#128197; Update Return Date"; }
+    alert("Network error. Please try again.");
+  }
+}
+</script>
+
+
+<!-- ── GLOBAL LOADING OVERLAY ── -->
+<div id="loadingOverlay" style="display:none;position:fixed;inset:0;
+     background:rgba(15,23,42,0.55);z-index:9999;
+     align-items:center;justify-content:center;flex-direction:column;gap:16px;">
+  <div style="width:52px;height:52px;border:4px solid rgba(255,255,255,0.2);
+              border-top-color:#ffffff;border-radius:50%;
+              animation:spin 0.75s linear infinite;"></div>
+  <span id="loadingMsg" style="color:#ffffff;font-family:'DM Sans',sans-serif;
+        font-size:14px;font-weight:500;letter-spacing:0.3px;">Processing…</span>
+</div>
+<style>
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+
+<!-- ═══ ITEM-LEVEL RETURN MODAL (supports partial + full returns) ═══ -->
+<div id="returnModal"
+     style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.55);
+            z-index:9999;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:#fff;border-radius:14px;width:100%;max-width:720px;
+              max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.25);">
+
+    <!-- Header -->
+    <div style="background:#1e3a5f;padding:18px 24px;border-radius:14px 14px 0 0;">
+      <div style="color:#93c5fd;font-size:11px;letter-spacing:2px;font-weight:700;text-transform:uppercase;">
+        GatePass — Record Return
+      </div>
+      <div id="returnModalSub" style="color:#fff;font-size:16px;font-weight:700;margin-top:3px;">
+        Pass: —
+      </div>
+    </div>
+
+    <!-- Body -->
+    <div style="padding:22px 24px;">
+      <input type="hidden" id="return_gp_id" value="">
+
+      <!-- Items list -->
+      <div style="font-size:11.5px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">
+        Items Being Returned Now
+      </div>
+      <div id="returnItemsList"
+           style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;margin-bottom:16px;">
+        <div style="padding:20px;text-align:center;color:#94a3b8;font-size:13px;">Loading…</div>
+      </div>
+
+      <!-- Received by -->
+      <div style="margin-bottom:14px;">
+        <label style="font-size:11.5px;font-weight:600;color:#374151;display:block;margin-bottom:5px;">
+          Received By (Guard / Officer Name) <span style="color:#dc2626;">*</span>
+        </label>
+        <input type="text" id="return_received_by" placeholder="e.g. Rajesh Kumar"
+               style="width:100%;padding:9px 12px;border:1.5px solid #dde3ed;border-radius:8px;
+                      font-family:'DM Sans',sans-serif;font-size:13.5px;color:#1a202c;outline:none;">
+        <div id="return_name_warn" style="display:none;color:#dc2626;font-size:12px;margin-top:4px;">
+          ⚠ Guard / officer name is required.
+        </div>
+      </div>
+
+      <!-- Remarks -->
+      <div style="margin-bottom:14px;">
+        <label style="font-size:11.5px;font-weight:600;color:#374151;display:block;margin-bottom:5px;">
+          Remarks <span style="color:#9ca3af;font-weight:400;">(optional)</span>
+        </label>
+        <textarea id="return_remarks" rows="2"
+                  placeholder="Any notes on condition of returned items…"
+                  style="width:100%;padding:9px 12px;border:1.5px solid #dde3ed;border-radius:8px;
+                         font-family:'DM Sans',sans-serif;font-size:13.5px;resize:vertical;outline:none;"></textarea>
+      </div>
+
+      <!-- Error alert -->
+      <div id="return_alert"
+           style="display:none;padding:9px 13px;border-radius:7px;background:#fee2e2;
+                  color:#991b1b;font-size:12.5px;margin-bottom:12px;"></div>
+
+      <!-- Info tip -->
+      <div style="background:#f0fdf4;border-left:3px solid #22c55e;border-radius:7px;
+                  padding:9px 13px;font-size:12.5px;color:#166534;margin-bottom:18px;">
+        ℹ️ Tick items being returned now. If all items come back, pass becomes <b>Fully Returned</b>.
+        Partial returns keep the pass open for future items.
+      </div>
+
+      <div style="display:flex;justify-content:flex-end;gap:10px;">
+        <button onclick="closeReturnModal()"
+                style="background:white;color:#64748b;border:1.5px solid #dde3ed;
+                       padding:9px 18px;border-radius:8px;
+                       font-family:'DM Sans',sans-serif;font-size:13.5px;font-weight:500;cursor:pointer;">
+          Cancel
+        </button>
+        <button id="returnConfirmBtn" onclick="submitItemReturn()"
+                style="background:#166534;color:white;border:none;
+                       padding:9px 20px;border-radius:8px;
+                       font-family:'DM Sans',sans-serif;font-size:13.5px;font-weight:600;cursor:pointer;
+                       box-shadow:0 2px 6px rgba(22,101,52,0.3);">
+          ↩ Confirm Return
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════════════
+// ITEM-LEVEL RETURN MODAL — supports partial + full returns
+// ════════════════════════════════════════════════════════════════════════
+
+async function openItemReturnModal(id, passNo) {
+  document.getElementById("return_gp_id").value       = id;
+  document.getElementById("returnModalSub").textContent = "Pass: " + passNo;
+  document.getElementById("return_received_by").value  = "";
+  document.getElementById("return_remarks").value      = "";
+  document.getElementById("return_name_warn").style.display = "none";
+  document.getElementById("return_alert").style.display     = "none";
+  document.getElementById("returnConfirmBtn").disabled      = false;
+  document.getElementById("returnConfirmBtn").textContent   = "↩ Confirm Return";
+
+  const listEl = document.getElementById("returnItemsList");
+  listEl.innerHTML = '<div style="padding:20px;text-align:center;color:#94a3b8;font-size:13px;">Loading items…</div>';
+  document.getElementById("returnModal").style.display = "flex";
+
+  try {
+    const resp = await fetch(`/gatepass/return-info/${id}`);
+    const d    = await resp.json();
+    if (!d.success) {
+      listEl.innerHTML = '<div style="padding:20px;text-align:center;color:#dc2626;font-size:13px;">Could not load items.</div>';
+      return;
+    }
+    renderReturnItems(d.items);
+  } catch(e) {
+    listEl.innerHTML = '<div style="padding:20px;text-align:center;color:#dc2626;font-size:13px;">Network error loading items.</div>';
+  }
+}
+
+function renderReturnItems(items) {
+  const listEl = document.getElementById("returnItemsList");
+  const outstanding = items.filter(it => it.outstanding > 0);
+
+  if (!outstanding.length) {
+    listEl.innerHTML = '<div style="padding:20px;text-align:center;color:#166534;font-size:13px;font-weight:600;">✓ All items already returned.</div>';
+    document.getElementById("returnConfirmBtn").disabled = true;
+    return;
+  }
+
+  let html = '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
+  html += '<thead><tr style="background:#f4f6fb;color:#64748b;font-size:10.5px;text-transform:uppercase;letter-spacing:0.5px;">';
+  html += '<th style="padding:8px;width:36px;text-align:center;"></th>';
+  html += '<th style="padding:8px;text-align:left;">Item</th>';
+  html += '<th style="padding:8px;text-align:center;width:85px;">Outstanding</th>';
+  html += '<th style="padding:8px;text-align:center;width:120px;">Returning Now</th>';
+  html += '</tr></thead><tbody>';
+
+  items.forEach(it => {
+    if (it.outstanding <= 0) {
+      // Already returned — show in green, disabled
+      html += `<tr style="border-bottom:1px solid #f0f2f7;background:#f8fafc;">
+        <td style="padding:8px;text-align:center;color:#22c55e;font-weight:700;">✓</td>
+        <td style="padding:8px;color:#9ca3af;text-decoration:line-through;">
+          <strong>${escapeHtml(it.item_name)}</strong>
+          ${it.serial_no ? `<div style="font-size:11px;font-family:monospace;color:#cbd5e1;">${escapeHtml(it.serial_no)}</div>` : ''}
+        </td>
+        <td style="padding:8px;text-align:center;color:#22c55e;font-weight:600;">Done</td>
+        <td style="padding:8px;text-align:center;color:#cbd5e1;">—</td>
+      </tr>`;
+    } else {
+      const defaultQty = it.outstanding;
+      html += `<tr style="border-bottom:1px solid #f0f2f7;">
+        <td style="padding:8px;text-align:center;">
+          <input type="checkbox" class="ret-chk" data-idx="${it.index}" data-max="${it.outstanding}"
+                 style="width:16px;height:16px;cursor:pointer;">
+        </td>
+        <td style="padding:8px;">
+          <strong>${escapeHtml(it.item_name || '—')}</strong>
+          ${it.serial_no ? `<div style="font-size:11px;font-family:monospace;color:#64748b;">${escapeHtml(it.serial_no)}</div>` : ''}
+          ${it.qty_returned > 0 ? `<div style="font-size:11px;color:#b45309;margin-top:2px;">Already returned: ${it.qty_returned}</div>` : ''}
+        </td>
+        <td style="padding:8px;text-align:center;font-weight:600;color:#b45309;">${it.outstanding}</td>
+        <td style="padding:8px;text-align:center;">
+          <input type="number" min="1" max="${it.outstanding}" value="${defaultQty}"
+                 class="ret-qty" data-idx="${it.index}"
+                 style="width:70px;padding:5px 8px;border:1.5px solid #dde3ed;border-radius:6px;
+                        text-align:center;font-family:inherit;font-size:13px;">
+        </td>
+      </tr>`;
+    }
+  });
+
+  html += '</tbody></table>';
+  listEl.innerHTML = html;
+}
+
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
+
+function closeReturnModal() {
+  document.getElementById("returnModal").style.display = "none";
+}
+
+document.getElementById("returnModal").addEventListener("click", function(e) {
+  if (e.target === this) closeReturnModal();
+});
+
+async function submitItemReturn() {
+  const id          = document.getElementById("return_gp_id").value;
+  const receivedBy  = document.getElementById("return_received_by").value.trim();
+  const remarks     = document.getElementById("return_remarks").value.trim();
+  const alertEl     = document.getElementById("return_alert");
+  const warn        = document.getElementById("return_name_warn");
+  alertEl.style.display = "none";
+  warn.style.display    = "none";
+
+  if (!receivedBy) {
+    warn.style.display = "block";
+    document.getElementById("return_received_by").focus();
+    return;
+  }
+
+  // Build items array from ticked checkboxes
+  const items = [];
+  document.querySelectorAll(".ret-chk").forEach(chk => {
+    if (chk.checked) {
+      const idx     = parseInt(chk.dataset.idx, 10);
+      const max     = parseInt(chk.dataset.max, 10);
+      const qtyEl   = document.querySelector(`.ret-qty[data-idx="${idx}"]`);
+      const qty     = parseInt(qtyEl.value, 10);
+      if (!isNaN(qty) && qty > 0 && qty <= max) {
+        items.push({ index: idx, qty: qty });
+      }
+    }
+  });
+
+  if (!items.length) {
+    alertEl.textContent   = "Tick at least one item and enter a valid quantity.";
+    alertEl.style.display = "block";
+    return;
+  }
+
+  const btn = document.getElementById("returnConfirmBtn");
+  btn.disabled    = true;
+  btn.textContent = "Saving…";
+  if (typeof showLoading === "function") showLoading("Recording return…");
+
+  try {
+    const resp = await fetch(`/gatepass/record-item-return/${id}`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ received_by: receivedBy, remarks, items })
+    });
+    const data = await resp.json();
+    if (resp.ok && data.success) {
+      closeReturnModal();
+      if (typeof showLoading === "function") showLoading("Refreshing…");
+      location.reload();
+    } else {
+      if (typeof hideLoading === "function") hideLoading();
+      alertEl.textContent   = data.message || "Failed to record return.";
+      alertEl.style.display = "block";
+      btn.disabled    = false;
+      btn.textContent = "↩ Confirm Return";
+    }
+  } catch(e) {
+    if (typeof hideLoading === "function") hideLoading();
+    alertEl.textContent   = "Network error. Please try again.";
+    alertEl.style.display = "block";
+    btn.disabled    = false;
+    btn.textContent = "↩ Confirm Return";
+  }
+}
+</script>
+
+
+</body>
+</html>

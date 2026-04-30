@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GatePass — {{ gp.pass_no }}</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: Arial, sans-serif;
+  background: #fff;
+  color: #1a202c;
+  padding: 0;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* Screen only — print button */
+.print-actions {
+  background: #1e3a5f;
+  padding: 12px 28px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.print-actions span { color: #fff; font-size: 14px; font-weight: 600; }
+.btn-print {
+  background: #fff; color: #1e3a5f;
+  border: none; padding: 8px 22px;
+  border-radius: 7px; font-size: 14px; font-weight: 700;
+  cursor: pointer; font-family: inherit;
+}
+.btn-print:hover { background: #e8f0fe; }
+
+/* Main print area */
+.print-page {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 14px 20px;
+}
+
+/* Header */
+.doc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 3px solid #1e3a5f;
+  margin-bottom: 10px;
+}
+.logo-area { display: flex; align-items: center; gap: 10px; }
+.logo-area img { height: 36px; }
+.company-name { font-size: 18px; font-weight: 700; color: #1e3a5f; }
+.company-sub  { font-size: 11px; color: #64748b; margin-top: 2px; }
+.pass-badge {
+  text-align: right;
+}
+.pass-no-label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 1px; }
+.pass-no-value { font-size: 22px; font-weight: 700; color: #1e3a5f; }
+.pass-type-chip {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11px; font-weight: 700;
+  margin-top: 4px;
+}
+.chip-ret    { background: #e0f7fa; color: #0e7490; }
+.chip-nonret { background: #fef3c7; color: #b45309; }
+
+.section-title {
+  font-size: 9px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 1px;
+  color: #fff; background: #1e3a5f;
+  padding: 4px 8px; margin-bottom: 0;
+}
+.section-wrap { margin-bottom: 8px; border: 1px solid #cbd5e1; }
+
+/* Info grid */
+.info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-top: none;
+}
+.info-cell {
+  padding: 5px 8px;
+  border-bottom: 1px solid #e2e8f0;
+  border-right: 1px solid #e2e8f0;
+}
+.info-cell:nth-child(even) { border-right: none; }
+.info-label { font-size: 9px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; margin-bottom: 1px; }
+.info-value { font-size: 11px; color: #1a202c; font-weight: 500; }
+.info-cell.full { grid-column: span 2; border-right: none; }
+
+/* Items table */
+.items-table { width: 100%; border-collapse: collapse; }
+.items-table th {
+  background: #f4f6fb;
+  padding: 5px 8px;
+  font-size: 9px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.5px;
+  color: #64748b; text-align: left;
+  border-bottom: 1px solid #e2e8f0;
+}
+.items-table td {
+  padding: 5px 8px;
+  font-size: 11px;
+  border-bottom: 1px solid #f0f2f7;
+}
+.items-table tr:last-child td { border-bottom: none; }
+.items-table tr:nth-child(even) td { background: #f8faff; }
+
+/* Approval table */
+.approval-table { width: 100%; border-collapse: collapse; }
+.approval-table th {
+  background: #f4f6fb;
+  padding: 5px 8px;
+  font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.5px; color: #64748b; text-align: left;
+  border-bottom: 1px solid #e2e8f0;
+}
+.approval-table td {
+  padding: 5px 8px; font-size: 11px;
+  border-bottom: 1px solid #f0f2f7;
+}
+.approved-badge {
+  display: inline-block;
+  background: #dcfce7; color: #166534;
+  padding: 1px 6px; border-radius: 10px;
+  font-size: 10px; font-weight: 700;
+}
+.pending-badge {
+  display: inline-block;
+  background: #f1f5f9; color: #94a3b8;
+  padding: 1px 6px; border-radius: 10px;
+  font-size: 10px; font-weight: 600;
+}
+
+/* Signature section */
+.sig-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.sig-cell {
+  padding: 8px 10px;
+  border-right: 1px solid #e2e8f0;
+  min-height: 55px;
+  display: flex; flex-direction: column; justify-content: space-between;
+}
+.sig-cell:last-child { border-right: none; }
+.sig-label { font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 16px; }
+.sig-line { border-top: 1.5px solid #1e3a5f; padding-top: 4px; font-size: 10px; color: #64748b; }
+
+/* Footer */
+.doc-footer {
+  margin-top: 8px;
+  text-align: center;
+  font-size: 9px; color: #94a3b8;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 6px;
+}
+
+/* ── PRINT STYLES ── */
+@media print {
+  .print-actions { display: none !important; }
+  body { padding: 0; font-size: 11px; }
+  .print-page { padding: 6px 10px; max-width: 100%; }
+  @page { margin: 6mm; size: A4; }
+}
+</style>
+</head>
+<body>
+
+<!-- Screen only: print button bar -->
+<div class="print-actions">
+  <span>🖨 GatePass Print — {{ gp.pass_no }}</span>
+  <button class="btn-print" onclick="window.print()">Print / Save as PDF</button>
+</div>
+
+<div class="print-page">
+
+  <!-- HEADER -->
+  <div class="doc-header">
+    <div class="logo-area">
+      <img src="/static/images/Magnasoft.png" alt="Magnasoft Logo">
+      <div>
+        <div class="company-name">Magnasoft Consulting Pvt Ltd</div>
+        <div class="company-sub">GatePass Management System</div>
+      </div>
+    </div>
+    <div class="pass-badge">
+      <div class="pass-no-label">Gate Pass</div>
+      <div class="pass-no-value">{{ gp.pass_no }}</div>
+      <div>
+        {% if gp.pass_type == 'returnable' %}
+          <span class="pass-type-chip chip-ret">↩ Returnable</span>
+        {% else %}
+          <span class="pass-type-chip chip-nonret">✕ Non-Returnable</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- GENERAL INFORMATION -->
+  <div class="section-wrap">
+    <div class="section-title">General Information</div>
+    <div class="info-grid">
+      <div class="info-cell">
+        <div class="info-label">Pass Number</div>
+        <div class="info-value">{{ gp.pass_no }}</div>
+      </div>
+      <div class="info-cell">
+        <div class="info-label">Date Created</div>
+        <div class="info-value">{{ gp.created_at.strftime('%d-%m-%Y %H:%M') if gp.created_at else '—' }}</div>
+      </div>
+      <div class="info-cell">
+        <div class="info-label">Location</div>
+        <div class="info-value">{{ gp.location or '—' }}</div>
+      </div>
+      <div class="info-cell">
+        <div class="info-label">Department</div>
+        <div class="info-value">{{ gp.raised_by_role | title if gp.raised_by_role else '—' }}</div>
+      </div>
+      <div class="info-cell">
+        <div class="info-label">Requester</div>
+        <div class="info-value">{{ gp.requester or '—' }}</div>
+      </div>
+      <div class="info-cell">
+        <div class="info-label">Purpose</div>
+        <div class="info-value">{{ gp.purpose or '—' }}</div>
+      </div>
+      {% if gp.pass_type == 'returnable' %}
+      <div class="info-cell">
+        <div class="info-label">Expected Return Date</div>
+        <div class="info-value">{{ gp.expected_return_date.strftime('%d-%m-%Y') if gp.expected_return_date else '—' }}</div>
+      </div>
+      <div class="info-cell">
+        <div class="info-label">Pass Type</div>
+        <div class="info-value">Returnable</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- RECEIVER DETAILS -->
+  <div class="section-wrap">
+    <div class="section-title">Receiver Details</div>
+    <div class="info-grid">
+      <div class="info-cell">
+        <div class="info-label">Receiver Name</div>
+        <div class="info-value">{{ gp.sender_vendor or '—' }}</div>
+      </div>
+      <div class="info-cell">
+        <div class="info-label">Contact Details</div>
+        <div class="info-value">{{ gp.contact_details or '—' }}</div>
+      </div>
+      <div class="info-cell">
+        <div class="info-label">Email ID</div>
+        <div class="info-value">{{ gp.receiver_email or '—' }}</div>
+      </div>
+      <div class="info-cell">
+        <div class="info-label">EMP / Receiver ID</div>
+        <div class="info-value">{{ gp.invoice_no or '—' }}</div>
+      </div>
+      <div class="info-cell full">
+        <div class="info-label">Address</div>
+        <div class="info-value">{{ gp.destination or '—' }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ITEM DETAILS -->
+  <div class="section-wrap">
+    <div class="section-title">Item Details</div>
+    <table class="items-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Item Name</th>
+          <th>Qty</th>
+          <th>Model / Serial No</th>
+          <th>FAMS ID</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+        <tr>
+          <td style="color:#94a3b8;">{{ loop.index }}</td>
+          <td><strong>{{ item.item_name or '—' }}</strong></td>
+          <td>{{ item.qty or '—' }}</td>
+          <td style="font-family:monospace;font-size:11px;color:#64748b;">{{ item.serial_no or '—' }}</td>
+          <td style="font-family:monospace;font-size:11px;color:#64748b;">{{ item.fams_id or '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" style="color:#94a3b8;text-align:center;padding:14px;">No items recorded.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- APPROVAL DETAILS -->
+  <div class="section-wrap">
+    <div class="section-title">Approval Details</div>
+    <table class="approval-table">
+      <thead>
+        <tr>
+          <th>Approval</th>
+          <th>Status</th>
+          <th>Approved By</th>
+          <th>Date &amp; Time</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="font-weight:600;">IT Approval</td>
+          <td>
+            {% if gp.it_approved_at %}<span class="approved-badge">✓ Approved</span>
+            {% elif gp.it_declined_at %}<span style="background:#fee2e2;color:#991b1b;display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">✕ Declined</span>
+            {% elif not gp.needs_it_approval %}<span class="pending-badge">N/A</span>
+            {% else %}<span class="pending-badge">Pending</span>{% endif %}
+          </td>
+          <td>{{ gp.it_approved_by or gp.it_declined_by or '—' }}</td>
+          <td>{{ gp.it_approved_at.strftime('%d-%m-%Y %H:%M') if gp.it_approved_at else (gp.it_declined_at.strftime('%d-%m-%Y %H:%M') if gp.it_declined_at else '—') }}</td>
+        </tr>
+        <tr>
+          <td style="font-weight:600;">Admin Approval</td>
+          <td>
+            {% if gp.admin_approved_at %}<span class="approved-badge">✓ Approved</span>
+            {% elif gp.admin_declined_at %}<span style="background:#fee2e2;color:#991b1b;display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">✕ Declined</span>
+            {% elif not gp.needs_admin_approval %}<span class="pending-badge">N/A</span>
+            {% else %}<span class="pending-badge">Pending</span>{% endif %}
+          </td>
+          <td>{{ gp.admin_approved_by or gp.admin_declined_by or '—' }}</td>
+          <td>{{ gp.admin_approved_at.strftime('%d-%m-%Y %H:%M') if gp.admin_approved_at else (gp.admin_declined_at.strftime('%d-%m-%Y %H:%M') if gp.admin_declined_at else '—') }}</td>
+        </tr>
+        <tr>
+          <td style="font-weight:600;">Security Approval</td>
+          <td>
+            {% if gp.security_status == 'Approved' %}<span class="approved-badge">✓ Approved</span>
+            {% elif gp.security_status == 'Declined' %}<span style="background:#fee2e2;color:#991b1b;display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;">✕ Declined</span>
+            {% else %}<span class="pending-badge">Pending</span>{% endif %}
+          </td>
+          <td>{{ gp.security_name or '—' }}</td>
+          <td>{{ gp.security_checked_at.strftime('%d-%m-%Y %H:%M') if gp.security_checked_at else '—' }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- COLLECTOR ACKNOWLEDGEMENT -->
+  <div class="section-wrap">
+    <div class="section-title">Collector Acknowledgement</div>
+    <div class="info-grid">
+      <div class="info-cell">
+        <div class="info-label">Collector Email</div>
+        <div class="info-value">{{ gp.handover_email or '—' }}</div>
+      </div>
+      <div class="info-cell">
+        <div class="info-label">Acknowledged By</div>
+        <div class="info-value">{{ gp.acknowledged_by or '—' }}</div>
+      </div>
+      <div class="info-cell">
+        <div class="info-label">Company / Designation</div>
+        <div class="info-value">{{ gp.ack_company or '—' }}</div>
+      </div>
+      <div class="info-cell">
+        <div class="info-label">Acknowledged On</div>
+        <div class="info-value">{{ gp.acknowledged_at.strftime('%d-%m-%Y %H:%M') if gp.acknowledged_at else '—' }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SIGNATURE & SEAL -->
+  <div class="section-wrap">
+    <div class="section-title">Signature &amp; Seal</div>
+    <div class="sig-grid">
+      <div class="sig-cell">
+        <div class="sig-label">Authorized Signatory</div>
+        <div class="sig-line">Signature &amp; Name: _______________________</div>
+      </div>
+      <div class="sig-cell">
+        <div class="sig-label">Company Seal</div>
+        <div class="sig-line">Seal &amp; Date: _______________________</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="doc-footer">
+    This is a system-generated document from Magnasoft GatePass Management System.
+    Generated on {{ gp.acknowledged_at.strftime('%d-%m-%Y %H:%M') if gp.acknowledged_at else '' }}.
+  </div>
+
+</div>
+</body>
+</html>

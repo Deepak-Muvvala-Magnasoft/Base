@@ -60,11 +60,15 @@
 
     <!-- NEW: Change password button (only visible when logged in) -->
     {% if current_user %}
+      {% if user_role == "superadmin" or user_role == "super admin" %}
+        <a href="/user-management-preview" class="btn btn-outline-secondary">
+          User Management
+        </a>
+      {% endif %}
       <button id="btnChangePassword" class="btn btn-outline-secondary" type="button" data-bs-toggle="modal" data-bs-target="#changePasswordModal">
         Change password
       </button>
     {% endif %}
-
     {% if current_user %}
       <div class="d-flex align-items-center">
         <i class="bi bi-person-circle me-2 text-primary user-icon"></i>
@@ -204,20 +208,25 @@
             <h4>Excel Tool</h4>
         </a>
 
+        {% if can_access_vms %}
         <a href="{{ url_for('vms') }}{{ auth_qs }}" class="image-card">
             <img src="{{ url_for('static', filename='images/VMS.jpg') }}" alt="VMS">
-            <h4>Visitor Tool</h4>
+            <h4 style="overflow:visible;padding-bottom:12px;"><span style="position:relative;display:inline-block;">Visitor Tool<span style="position:absolute;bottom:-18px;right:-18px;font-size:20px;font-weight:700;color:#01050e;">V<span style="font-size:14px;">1.3</span></span></span></h4>
         </a>
+        {% endif %}
 
         <a href="{{ url_for('vms_demo') }}{{ auth_qs }}" class="image-card">
             <img src="{{ url_for('static', filename='images/QMS.png') }}" alt="QMS">
             <h4>QMS</h4>
         </a>
 
-        <a href="{{ url_for('vms_demo') }}{{ auth_qs }}" class="image-card">
+        {% if can_access_gatepass %}
+        <a href="{{ url_for('gatepass_home') }}{{ auth_qs }}" class="image-card">
             <img src="{{ url_for('static', filename='images/GatePass.jpg') }}" alt="GatePass">
-            <h4>GatePass</h4>
+       
+            <h4 style="overflow:visible;padding-bottom:12px;"><span style="position:relative;display:inline-block;">Gatepass<span style="position:absolute;bottom:-18px;right:-18px;font-size:20px;font-weight:700;color:#01050e;">V<span style="font-size:14px;">1.0</span></span></span></h4>
         </a>
+        {% endif %}
     </div>
 
     <!--Scripts-->

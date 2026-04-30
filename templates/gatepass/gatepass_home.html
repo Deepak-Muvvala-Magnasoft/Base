@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GatePass Management</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  --primary:       #1a56db;
+  --primary-dark:  #1341b0;
+  --primary-light: #e8f0fe;
+  --ret-color:     #0e7490;
+  --ret-light:     #e0f7fa;
+  --nonret-color:  #b45309;
+  --nonret-light:  #fef3c7;
+  --accent:        #0ea271;
+  --accent-light:  #e6f7f2;
+  --danger:        #dc2626;
+  --surface:       #ffffff;
+  --bg:            #f0f4f9;
+  --border:        #dde3ed;
+  --text:          #1a202c;
+  --text-muted:    #64748b;
+  --label:         #374151;
+  --radius:        10px;
+  --shadow:        0 1px 3px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.06);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── HEADER ── */
+.header {
+  background: linear-gradient(135deg, #1a56db 0%, #1341b0 60%, #0f2e80 100%);
+  padding: 0 20px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 2px 12px rgba(26,86,219,0.3);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.header-brand { display: flex; align-items: center; gap: 10px; }
+.header-icon {
+  width: 34px; height: 34px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; overflow: hidden;
+  background: transparent;
+}
+.header-icon img {
+  width: 34px; height: 34px;
+  object-fit: contain;
+}
+.header-title { color: white; font-size: 16px; font-weight: 600; line-height: 1.2; }
+.header-sub   { color: rgba(255,255,255,0.6); font-size: 11px; }
+
+.nav-btn {
+  background: rgba(255,255,255,0.12); color: white;
+  padding: 7px 13px; border-radius: 7px; text-decoration: none;
+  font-size: 12px; font-weight: 500; white-space: nowrap;
+  border: 1px solid rgba(255,255,255,0.2); transition: background 0.2s;
+}
+.nav-btn:hover { background: rgba(255,255,255,0.22); }
+
+/* ── PAGE ── */
+.page { max-width: 1060px; margin: 0 auto; padding: 24px 16px 60px; }
+
+.page-title { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
+.page-sub   { color: var(--text-muted); font-size: 13px; margin-top: 3px; }
+.page-header { margin-bottom: 20px; }
+
+/* ── CARD ── */
+.card {
+  background: var(--surface);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+/* ── PASS TYPE STRIP ── */
+.pass-type-strip {
+  padding: 14px 20px;
+  background: linear-gradient(to right, #f8faff, #eef3fd);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.strip-label {
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.9px;
+  color: var(--text-muted); white-space: nowrap;
+}
+.pass-toggle {
+  display: flex;
+  background: white;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.pass-toggle-btn {
+  padding: 9px 20px;
+  border: none; background: transparent;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px; font-weight: 500;
+  cursor: pointer; transition: all 0.2s;
+  display: flex; align-items: center; gap: 6px;
+  color: var(--text-muted); white-space: nowrap;
+}
+.pass-toggle-btn .dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: currentColor; opacity: 0.35; transition: opacity 0.2s; flex-shrink: 0;
+}
+.pass-toggle-btn.active-ret    { background: var(--ret-light);    color: var(--ret-color);    font-weight: 600; }
+.pass-toggle-btn.active-ret .dot { opacity: 1; }
+.pass-toggle-btn.active-nonret { background: var(--nonret-light); color: var(--nonret-color); font-weight: 600; }
+.pass-toggle-btn.active-nonret .dot { opacity: 1; background: var(--nonret-color); }
+
+.pass-badge {
+  font-size: 11px; padding: 3px 10px; border-radius: 20px; font-weight: 600;
+  background: var(--ret-light); color: var(--ret-color); transition: all 0.2s;
+  white-space: nowrap;
+}
+.pass-badge.nonret { background: var(--nonret-light); color: var(--nonret-color); }
+
+/* ── INFO PILL ── */
+.info-wrap { padding: 12px 20px 0; }
+.info-pill {
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  display: none;
+}
+.info-pill.ret    { background: #e0f7fa; color: #0e4f5c; border-left: 3px solid var(--ret-color); }
+.info-pill.nonret { background: #fef3c7; color: #78350f; border-left: 3px solid var(--nonret-color); }
+.info-pill.show   { display: block; }
+
+/* ── FORM BODY ── */
+.form-body { padding: 18px 20px 24px; }
+
+/* ── SECTION ── */
+.section { margin-bottom: 22px; }
+.section-header {
+  display: flex; align-items: center; gap: 9px;
+  margin-bottom: 14px; padding-bottom: 9px;
+  border-bottom: 1.5px solid var(--border);
+}
+.section-icon {
+  width: 26px; height: 26px; border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; background: var(--primary-light); flex-shrink: 0;
+}
+.section-icon.teal  { background: var(--ret-light); }
+.section-icon.amber { background: var(--nonret-light); }
+.section-icon.green { background: var(--accent-light); }
+.section-title {
+  font-size: 11.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.7px; color: var(--text-muted);
+}
+
+/* ── RESPONSIVE GRIDS ── */
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 12px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 12px; }
+.grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 12px; }
+
+@media (max-width: 768px) {
+  .grid-4 { grid-template-columns: repeat(2, 1fr); }
+  .grid-3 { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 480px) {
+  .grid-4,
+  .grid-3,
+  .grid-2 { grid-template-columns: 1fr; }
+}
+
+/* ── FIELD ── */
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field label {
+  font-size: 11.5px; font-weight: 600;
+  color: var(--label); letter-spacing: 0.1px;
+}
+.field input,
+.field select,
+.field textarea {
+  padding: 10px 13px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px; color: var(--text);
+  background: #fafbfd; outline: none; width: 100%;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+  -webkit-appearance: none;
+}
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  border-color: var(--primary);
+  background: white;
+  box-shadow: 0 0 0 3px rgba(26,86,219,0.1);
+}
+.field input::placeholder,
+.field textarea::placeholder { color: #b0bac8; }
+.field textarea { height: 80px; resize: vertical; }
+.field input[readonly] {
+  background: #f1f5f9; color: var(--text-muted);
+  cursor: default; font-weight: 600;
+}
+.field input.auto-filled {
+  background: #eef7f0; color: #166534;
+  border-color: #86efac; font-weight: 600;
+}
+.fetch-status {
+  font-size: 11px; margin-top: 4px; min-height: 16px;
+  display: flex; align-items: center; gap: 4px;
+}
+.fetch-status.loading { color: var(--text-muted); }
+.fetch-status.success { color: #166534; }
+.fetch-status.error   { color: var(--danger); }
+
+/* ── RECORD NUMBER FIELD ── */
+.record-no-field input[readonly] {
+  background: linear-gradient(to right, #eef3ff, #e8f0fe);
+  color: var(--primary);
+  border-color: #a5b4fc;
+  font-weight: 700;
+  font-size: 13.5px;
+  letter-spacing: 0.5px;
+  cursor: default;
+}
+.record-no-badge {
+  font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.6px;
+  color: var(--primary); margin-top: 3px;
+  display: flex; align-items: center; gap: 4px;
+}
+.record-no-badge.nonret { color: var(--nonret-color); }
+.record-no-field.nonret input[readonly] {
+  background: linear-gradient(to right, #fffbeb, #fef3c7);
+  color: var(--nonret-color);
+  border-color: #fcd34d;
+}
+
+/* ── ITEMS TABLE ── */
+.items-col-headers {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr 42px;
+  gap: 10px; padding-bottom: 7px;
+  border-bottom: 1px solid var(--border); margin-bottom: 8px;
+}
+.items-col-headers span {
+  font-size: 10.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.7px; color: var(--text-muted);
+}
+
+.item-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr 42px;
+  gap: 10px; margin-bottom: 8px; align-items: center;
+  animation: fadeIn 0.2s ease;
+}
+
+/* Mobile items — stack as cards */
+@media (max-width: 640px) {
+  .items-col-headers { display: none; }
+  .item-row {
+    grid-template-columns: 1fr 1fr;
+    background: #fafbfd;
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+    gap: 10px;
+    position: relative;
+  }
+  .item-row .item-action {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: flex-end;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-5px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.item-row select,
+.item-row input {
+  padding: 9px 11px;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px; color: var(--text);
+  background: #fafbfd; outline: none; width: 100%;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  -webkit-appearance: none;
+}
+.item-row select:focus,
+.item-row input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(26,86,219,0.1);
+  background: white;
+}
+.item-row input::placeholder { color: #b0bac8; }
+
+.add-btn {
+  background: var(--accent); color: white; border: none;
+  width: 36px; height: 36px; border-radius: 8px;
+  font-size: 22px; cursor: pointer; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.2s, transform 0.1s;
+}
+.add-btn:hover { background: #0b8a60; transform: scale(1.06); }
+
+.remove-btn {
+  background: #fee2e2; color: var(--danger); border: none;
+  width: 36px; height: 36px; border-radius: 8px;
+  font-size: 20px; cursor: pointer; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.2s, transform 0.1s;
+}
+.remove-btn:hover { background: #fca5a5; transform: scale(1.06); }
+
+/* Mobile: full-width add button */
+.add-item-btn-wrap { margin-top: 4px; }
+@media (max-width: 640px) {
+  .add-item-btn-wrap button {
+    width: 100%; height: 42px; border-radius: 8px;
+    font-size: 15px; display: flex; align-items: center;
+    justify-content: center; gap: 6px;
+  }
+}
+
+/* ── FOOTER ── */
+.form-footer {
+  padding: 16px 20px;
+  background: #f8faff;
+  border-top: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: flex-end; gap: 10px;
+  flex-wrap: wrap;
+}
+.btn-secondary {
+  padding: 10px 20px;
+  border: 1.5px solid var(--border); background: white;
+  color: var(--text-muted); border-radius: var(--radius);
+  font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 500;
+  cursor: pointer; transition: all 0.2s;
+}
+.btn-secondary:hover { border-color: #aab; color: var(--text); }
+
+.btn-primary {
+  padding: 10px 26px;
+  background: var(--primary); color: white; border: none;
+  border-radius: var(--radius);
+  font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600;
+  cursor: pointer;
+  display: flex; align-items: center; gap: 8px;
+  box-shadow: 0 2px 8px rgba(26,86,219,0.3);
+  transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+}
+.btn-primary:hover { background: var(--primary-dark); transform: translateY(-1px); box-shadow: 0 4px 14px rgba(26,86,219,0.35); }
+
+@media (max-width: 480px) {
+  .form-footer { justify-content: flex-end; }
+  .btn-secondary, .btn-primary {
+    white-space: nowrap;
+    font-size: 13px;
+    padding: 9px 16px;
+  }
+}
+
+/* ── SECTION FADE ── */
+#returnableSection, #nonReturnableSection { animation: fadeIn 0.22s ease; }
+
+/* ── MISC RESPONSIVE ── */
+@media (max-width: 640px) {
+  .header { height: auto; padding: 12px 16px; }
+  .header-sub { display: none; }
+  .page { padding: 16px 12px 50px; }
+  .page-title { font-size: 18px; }
+  .pass-type-strip { padding: 12px 14px; gap: 10px; }
+  .form-body { padding: 14px 14px 20px; }
+  .info-wrap { padding: 10px 14px 0; }
+  .pass-badge { display: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-brand">
+    <div class="header-icon"><img src="/static/images/Magnasoft.png" alt="Magnasoft Logo"></div>
+    <div>
+      <div class="header-title">GatePass Management</div>
+      <div class="header-sub">Material Movement Control System</div>
+    </div>
+  </div>
+  <a href="{{ url_for('landing_page') }}{{ auth_qs }}" class="nav-btn"> Home</a>
+  <a href="/gatepass/list" class="nav-btn"> GatePass List</a>
+</div>
+
+<div class="page">
+  <div class="page-header">
+    <div class="page-title">Create New GatePass</div>
+    <div class="page-sub">Fill in all required details to generate a gate pass</div>
+  </div>
+
+  <div class="card">
+  <form method="POST" action="/gatepass/create">
+
+    <!-- ── PASS TYPE STRIP ── -->
+    <div class="pass-type-strip">
+      <span class="strip-label">Pass Type</span>
+      <div class="pass-toggle">
+        <button type="button" id="retBtn" class="pass-toggle-btn active-ret"
+          onclick="selectPassType('returnable')">
+          <span class="dot"></span> ↩ Returnable
+        </button>
+        <button type="button" id="nonRetBtn" class="pass-toggle-btn"
+          onclick="selectPassType('nonreturnable')">
+          <span class="dot"></span> ✕ Non-Returnable
+        </button>
+      </div>
+      <span class="pass-badge" id="passBadge">Temporary Dispatch</span>
+      <input type="hidden" name="pass_type" id="passType" value="returnable">
+      <input type="hidden" name="returnable" id="returnableField" value="yes">
+    </div>
+
+    <!-- INFO PILLS -->
+    <div class="info-wrap">
+      <div class="info-pill ret show" id="retInfo">
+        <strong>Returnable Gate Pass</strong> — Materials are sent out temporarily with the intention of bringing them back (e.g., repair, work from home, testing, or demonstration).
+      </div>
+      <div class="info-pill nonret" id="nonRetInfo">
+        <strong>Non-Returnable Gate Pass</strong> — Materials are sent out of the company <strong>permanently</strong> and are <strong>not expected to return</strong>. Common for sales, scrap disposal, samples, or asset transfers.
+      </div>
+    </div>
+
+    <div class="form-body">
+
+      <!-- ══════════════════════════════
+           RETURNABLE SECTION
+      ══════════════════════════════ -->
+      <div id="returnableSection">
+
+        <!-- General Info -->
+        <div class="section">
+          <div class="section-header">
+
+            <span class="section-title">General Information</span>
+          </div>
+          <div class="grid-4">
+            <div class="field record-no-field">
+              <label>GatePass No</label>
+              <input name="pass_no" id="ret_register_records"
+                     placeholder="GP-R-01" readonly>
+              <span class="record-no-badge" id="ret_rec_badge">⟳ Auto-generated</span>
+            </div>
+            <div class="field">
+              <label>Date</label>
+              <input type="date" name="ret_date" id="ret_date" readonly>
+            </div>
+            <div class="field">
+              <label>Location <span style="color:#dc2626;">*</span></label>
+              <select id="ret_location">
+                <option value="" disabled selected>Select Location</option>
+                <option value="Bangalore">Bangalore</option>
+                <option value="Hyderabad">Hyderabad</option>
+                <option value="Hassan">Hassan</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Requesters <span style="color:#dc2626;">*</span></label>
+              <input name="requester" id="ret_requesters" placeholder="Enter requester name" readonly>
+            </div>
+          </div>
+          <div class="grid-3">
+            <div class="field">
+              <label>Department</label>
+              <input name="department[]" id="ret_department" placeholder="Auto-filled from location" readonly>
+            </div>
+            <div class="field">
+              <label>Purpose <span style="color:#dc2626;">*</span></label>
+              <input name="purpose" id="ret_purpose" placeholder="Repair / WFH / Demo">
+            </div>
+          </div>
+        </div>
+
+        <!-- Person Details -->
+        <div class="section">
+          <div class="section-header">
+            <span class="section-title">Reciever Details</span>
+          </div>
+          <div class="grid-3">
+            <div class="field">
+              <label>Reciever Name <span style="color:#dc2626;">*</span></label>
+              <input name="sender_vendor" id="ret_sender_vendor" placeholder="Contact Person Name">
+            </div>
+            <div class="field">
+              <label>EMP ID/ Reciever ID</label>
+              <input name="invoice_no" placeholder="Employee/ Reciever ID">
+            </div>
+            <div class="field">
+              <label>Contact Details <span style="color:#dc2626;">*</span></label>
+              <input name="contact_details" id="ret_contact_details" placeholder="Phone Number">
+            </div>
+          </div>
+          <div class="grid-3">
+            <div class="field" style="grid-column: span 3;">
+              <label>Email ID</label>
+              <input type="email" name="receiver_email" id="ret_receiver_email" placeholder="Receiver Email Address">
+            </div>
+          </div>
+          <div class="grid-3">
+            <div class="field" style="grid-column: span 3;">
+              <label>Address <span style="color:#dc2626;">*</span></label>
+              <textarea name="destination" id="ret_destination" placeholder="Address details"></textarea>
+            </div>
+          </div>
+          <div class="grid-2">
+            <div class="field">
+              <label>Expected Return Date <span style="color:#dc2626;">*</span></label>
+              <input type="date" name="expected_return_date" id="ret_expected_return_date">
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Item Details -->
+        <div class="section">
+          <div class="section-header">
+            <span class="section-title">Item Details</span>
+          </div>
+          <div class="grid-2" style="margin-bottom:14px;">
+            <div class="field">
+              <label>Type of Materials</label>
+              <input value="Returnable" readonly>
+            </div>
+          </div>
+
+          <div class="items-col-headers">
+            <span>Item / Material Name <span style="color:#dc2626;">*</span></span>
+            <span>Unit &amp; Qty <span style="color:#dc2626;">*</span></span>
+            <span>Model Name</span>
+            <span>FAMS ID</span>
+            <span></span>
+          </div>
+          <div id="retItemsContainer">
+            <div class="item-row">
+              <input name="item_name[]" placeholder="Item Name">
+              <input name="qty[]" placeholder="e.g. 2 Nos">
+              <input name="value[]" placeholder="Model Name">
+              <input name="fams_id[]" placeholder="FAMS ID">
+              <div class="item-action">
+                <button type="button" onclick="addItem('ret')" class="add-btn" title="Add row">+</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /returnableSection -->
+
+
+      <!-- ══════════════════════════════
+           NON-RETURNABLE SECTION
+      ══════════════════════════════ -->
+      <div id="nonReturnableSection" style="display:none">
+
+        <!-- General Info -->
+        <div class="section">
+          <div class="section-header">
+            <span class="section-title">General Information</span>
+          </div>
+          <div class="grid-4">
+            <div class="field record-no-field nonret">
+              <label>GatePass No</label>
+              <input name="pass_no" id="nonret_register_records"
+                     placeholder="GP-NR-01" readonly>
+              <span class="record-no-badge nonret" id="nonret_rec_badge">⟳ Auto-generated</span>
+            </div>
+            <div class="field">
+              <label>Date</label>
+              <input type="date" name="nonret_date" id="nonret_date" readonly>
+            </div>
+            <div class="field">
+              <label>Location <span style="color:#dc2626;">*</span></label>
+              <select id="nonret_location">
+                <option value="" disabled selected>Select Location</option>
+                <option value="Bangalore">Bangalore</option>
+                <option value="Hyderabad">Hyderabad</option>
+                <option value="Hassan">Hassan</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Requesters <span style="color:#dc2626;">*</span></label>
+              <input name="requester" id="nonret_requesters" placeholder="Enter requester name">
+            </div>
+          </div>
+          <div class="grid-3">
+            <div class="field">
+              <label>Department</label>
+              <input name="department[]" id="nonret_department" placeholder="Auto-filled from location" readonly>
+            </div>
+            <div class="field">
+              <label>Purpose <span style="color:#dc2626;">*</span></label>
+              <input name="purpose" id="nonret_purpose" placeholder="Sales / Scrap / Transfer">
+            </div>
+          </div>
+        </div>
+
+        <!-- Receiver Details -->
+        <div class="section">
+          <div class="section-header">
+            <span class="section-title">Receiver Details</span>
+          </div>
+          <div class="grid-3">
+            <div class="field">
+              <label>Receiver Name <span style="color:#dc2626;">*</span></label>
+              <input name="sender_vendor" id="nonret_sender_vendor" placeholder="Person / Company Name">
+            </div>
+            <div class="field">
+              <label>Contact Details <span style="color:#dc2626;">*</span></label>
+              <input name="contact_details" id="nonret_contact_details" placeholder="Phone Number">
+            </div>
+            <div class="field">
+              <label>Email ID</label>
+              <input type="email" name="receiver_email" id="nonret_receiver_email" placeholder="Receiver Email Address">
+            </div>
+          </div>
+          <div class="grid-3">
+            <div class="field" style="grid-column: span 3;">
+              <label>Address <span style="color:#dc2626;">*</span></label>
+              <textarea name="destination" id="nonret_destination" placeholder="Receiver address details"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <!-- Item Details -->
+        <div class="section">
+          <div class="section-header">
+            <span class="section-title">Item Details</span>
+          </div>
+          <div class="grid-2" style="margin-bottom:14px;">
+            <div class="field">
+              <label>Type of Materials</label>
+              <input value="Non-Returnable" readonly>
+            </div>
+          </div>
+
+          <div class="items-col-headers">
+            <span>Item / Material Name <span style="color:#dc2626;">*</span></span>
+            <span>Unit &amp; Qty <span style="color:#dc2626;">*</span></span>
+            <span>Model Name</span>
+            <span>FAMS ID</span>
+            <span></span>
+          </div>
+          <div id="nonRetItemsContainer">
+            <div class="item-row">
+              <input name="item_name[]" placeholder="Item Name">
+              <input name="qty[]" placeholder="e.g. 2 Nos">
+              <input name="value[]" placeholder="Model Name">
+              <input name="fams_id[]" placeholder="FAMS ID">
+              <div class="item-action">
+                <button type="button" onclick="addItem('nonret')" class="add-btn" title="Add row">+</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /nonReturnableSection -->
+
+    </div><!-- /form-body -->
+
+    <!-- FOOTER -->
+    <div class="form-footer">
+      <button type="submit" id="submitGPBtn" class="btn-primary">
+        ✓ Submit GatePass
+      </button>
+    </div>
+
+  </form>
+  </div>
+</div>
+
+<script>
+function selectPassType(type) {
+  document.getElementById("passType").value = type;
+  // Keep the returnable hidden field in sync
+  document.getElementById("returnableField").value = (type === "returnable") ? "yes" : "no";
+
+  const retBtn     = document.getElementById("retBtn");
+  const nonRetBtn  = document.getElementById("nonRetBtn");
+  const badge      = document.getElementById("passBadge");
+  const retSec     = document.getElementById("returnableSection");
+  const nonRetSec  = document.getElementById("nonReturnableSection");
+  const retInfo    = document.getElementById("retInfo");
+  const nonRetInfo = document.getElementById("nonRetInfo");
+
+  if (type === "returnable") {
+    retBtn.className     = "pass-toggle-btn active-ret";
+    nonRetBtn.className  = "pass-toggle-btn";
+    badge.textContent    = "Temporary Dispatch";
+    badge.className      = "pass-badge";
+    retSec.style.display    = "block";
+    nonRetSec.style.display = "none";
+    retInfo.classList.add("show");
+    nonRetInfo.classList.remove("show");
+  } else {
+    nonRetBtn.className  = "pass-toggle-btn active-nonret";
+    retBtn.className     = "pass-toggle-btn";
+    badge.textContent    = "Permanent Dispatch";
+    badge.className      = "pass-badge nonret";
+    nonRetSec.style.display = "block";
+    retSec.style.display    = "none";
+    nonRetInfo.classList.add("show");
+    retInfo.classList.remove("show");
+  }
+  setTimeout(() => {
+        window.onload(); // reuse same logic
+    }, 100);
+}
+
+
+function addItem(prefix) {
+  const containerId = prefix === 'ret' ? 'retItemsContainer' : 'nonRetItemsContainer';
+  const container = document.getElementById(containerId);
+  const row = document.createElement("div");
+  row.className = "item-row";
+
+  row.innerHTML = `
+    <input name="item_name[]" placeholder="Item Name">
+    <input name="qty[]" placeholder="e.g. 2 Nos">
+    <input name="value[]" placeholder="Model Name">
+    <input name="fams_id[]" placeholder="FAMS ID">
+    <div class="item-action">
+      <button type="button" onclick="removeItem(this)" class="remove-btn" title="Remove">−</button>
+    </div>
+  `;
+  container.appendChild(row);
+}
+
+// Disable all inputs in the inactive section before form submits
+// Disable inactive section fields before submit (prevents duplicate field names)
+// Also show loading overlay ONLY when form is genuinely valid and submitting
+document.addEventListener("DOMContentLoaded", function () {
+  const form = document.querySelector("form");
+  if (!form) return;
+
+  // ── Single hidden location field — backend reads only this ──────────────
+  const hiddenLocation = document.createElement("input");
+  hiddenLocation.type  = "hidden";
+  hiddenLocation.name  = "location";
+  hiddenLocation.id    = "hidden_location";
+  form.appendChild(hiddenLocation);
+
+  function syncLocation() {
+    const isRet = document.getElementById("passType").value === "returnable";
+    const sel   = document.getElementById(isRet ? "ret_location" : "nonret_location");
+    hiddenLocation.value = sel ? sel.value : "";
+  }
+  document.getElementById("ret_location").addEventListener("change", function() {
+    syncLocation();
+    clearLocWarn();
+  });
+  document.getElementById("nonret_location").addEventListener("change", function() {
+    syncLocation();
+    clearLocWarn();
+  });
+
+  function showLocWarn(selectEl) {
+    selectEl.style.borderColor = "#dc2626";
+    selectEl.style.boxShadow   = "0 0 0 3px rgba(220,38,38,0.15)";
+    let warn = document.getElementById("location_warn");
+    if (!warn) {
+      warn = document.createElement("div");
+      warn.id = "location_warn";
+      warn.style.cssText = "color:#dc2626;font-size:12px;margin-top:4px;font-weight:500;";
+      warn.textContent   = "⚠ Please select a location.";
+      selectEl.parentNode.appendChild(warn);
+    }
+    selectEl.focus();
+  }
+
+  function clearLocWarn() {
+    ["ret_location","nonret_location"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) { el.style.borderColor = ""; el.style.boxShadow = ""; }
+    });
+    const warn = document.getElementById("location_warn");
+    if (warn) warn.remove();
+  }
+
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+
+    const isRet      = document.getElementById("passType").value === "returnable";
+    const activeSec  = document.getElementById(isRet ? "returnableSection" : "nonReturnableSection");
+    const inactiveSec= document.getElementById(isRet ? "nonReturnableSection" : "returnableSection");
+
+    // ── Helper: mark a field red with inline message ─────────────────────────
+    function markError(el, msg) {
+      el.style.borderColor = "#dc2626";
+      el.style.boxShadow   = "0 0 0 3px rgba(220,38,38,0.15)";
+      let w = el.parentNode.querySelector(".field-warn");
+      if (!w) {
+        w = document.createElement("div");
+        w.className  = "field-warn";
+        w.style.cssText = "color:#dc2626;font-size:11.5px;margin-top:3px;font-weight:500;";
+        el.parentNode.appendChild(w);
+      }
+      w.textContent = "⚠ " + msg;
+      if (!firstError) { el.focus(); firstError = true; }
+    }
+    function clearErrors() {
+      activeSec.querySelectorAll(".field-warn").forEach(w => w.remove());
+      activeSec.querySelectorAll("input,select,textarea").forEach(el => {
+        el.style.borderColor = ""; el.style.boxShadow = "";
+      });
+      document.querySelectorAll("#ret_location,#nonret_location").forEach(el => {
+        el.style.borderColor = ""; el.style.boxShadow = "";
+      });
+      const lw = document.getElementById("location_warn");
+      if (lw) lw.remove();
+    }
+
+    clearErrors();
+    let firstError = false;
+
+    // 1. Location
+    syncLocation();
+    if (!hiddenLocation.value) {
+      const sel = document.getElementById(isRet ? "ret_location" : "nonret_location");
+      showLocWarn(sel);
+      firstError = true;
+    }
+
+    // 2. Requester
+    const reqEl = activeSec.querySelector("input[name='requester']");
+    if (reqEl && !reqEl.value.trim()) markError(reqEl, "Requester name is required.");
+
+    // 3. Purpose
+    const purpEl = activeSec.querySelector("input[name='purpose']");
+    if (purpEl && !purpEl.value.trim()) markError(purpEl, "Purpose is required.");
+
+    // 4. Receiver / Sender name
+    const vendorEl = activeSec.querySelector("input[name='sender_vendor']");
+    if (vendorEl && !vendorEl.value.trim()) markError(vendorEl, isRet ? "Receiver name is required." : "Receiver name is required.");
+
+    // 5. Contact Details
+    const contactEl = activeSec.querySelector("input[name='contact_details']");
+    if (contactEl && !contactEl.value.trim()) markError(contactEl, "Contact details is required.");
+
+    // 6. Address
+    const addrEl = activeSec.querySelector("textarea[name='destination']");
+    if (addrEl && !addrEl.value.trim()) markError(addrEl, "Address is required.");
+
+    // 7. Expected Return Date (Returnable only)
+    if (isRet) {
+      const retDateEl = document.getElementById("ret_expected_return_date");
+      if (retDateEl && !retDateEl.value) markError(retDateEl, "Expected return date is required.");
+    }
+
+    // 8. Item name (first row)
+    const firstItem = activeSec.querySelector("input[name='item_name[]']");
+    if (firstItem && !firstItem.value.trim()) markError(firstItem, "Item name is required.");
+
+    // 9. Item qty (first row)
+    const firstQty = activeSec.querySelector("input[name='qty[]']");
+    if (firstQty && !firstQty.value.trim()) markError(firstQty, "Qty is required.");
+
+    // Stop if any error
+    if (firstError || activeSec.querySelectorAll(".field-warn").length > 0) return;
+
+    // Disable inactive section so duplicate names don't post
+    inactiveSec.querySelectorAll("input, select, textarea").forEach(el => { el.disabled = true; });
+
+    // Show loading and submit
+    const btn = document.getElementById("submitGPBtn");
+    if (btn) { btn.disabled = true; btn.textContent = "Submitting…"; }
+    const overlay = document.getElementById("loadingOverlay");
+    if (overlay) overlay.style.display = "flex";
+
+    form.submit();
+  });
+});
+
+function removeItem(btn) {
+  btn.closest(".item-row").remove();
+}
+
+// Auto-fill today's date + generate record numbers on load
+document.addEventListener("DOMContentLoaded", () => {
+  const today = new Date().toISOString().split("T")[0];
+
+  // Auto-fill creation date fields (readonly)
+  ["ret_date", "nonret_date"].forEach(name => {
+    const el = document.querySelector(`input[name="${name}"]`);
+    if (el) el.value = today;
+  });
+
+  // Block past dates on Expected Return Date — min = today
+  const expRetEl = document.getElementById("ret_expected_return_date");
+  if (expRetEl) {
+    expRetEl.min = today;
+    // If user somehow typed a past date, clear it on change
+    expRetEl.addEventListener("change", function () {
+      if (this.value && this.value < today) {
+        this.value = "";
+        this.style.borderColor = "#dc2626";
+        this.style.boxShadow   = "0 0 0 3px rgba(220,38,38,0.15)";
+        let w = this.parentNode.querySelector(".field-warn");
+        if (!w) {
+          w = document.createElement("div");
+          w.className = "field-warn";
+          w.style.cssText = "color:#dc2626;font-size:11.5px;margin-top:3px;font-weight:500;";
+          this.parentNode.appendChild(w);
+        }
+        w.textContent = "⚠ Past dates are not allowed. Please select today or a future date.";
+      } else {
+        this.style.borderColor = "";
+        this.style.boxShadow   = "";
+        const w = this.parentNode.querySelector(".field-warn");
+        if (w) w.remove();
+      }
+    });
+  }
+   // ── Pre-fill Requester with logged-in user ──
+  const loggedInUser = "{{ current_user }}";   // Jinja injects this
+  ["ret_requesters", "nonret_requesters"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && loggedInUser) {
+      el.value = loggedInUser;
+      el.classList.add("auto-filled");
+    }
+  });
+  // Generate both record numbers for today
+  generateRecordNo("ret");
+  generateRecordNo("nonret");
+});
+
+/* ── Auto-generate Record Number: GP-R-DDMMYYYY-NN / GP-NR-DDMMYYYY-NN ── */
+async function generateRecordNo(prefix) {
+  const dateEl   = document.getElementById(`${prefix}_date`);
+  const recEl    = document.getElementById(`${prefix}_register_records`);
+  const badgeEl  = document.getElementById(`${prefix}_rec_badge`);
+  const dateVal  = dateEl ? dateEl.value : "";
+
+  if (!dateVal) return;
+
+  // Format date as DDMMYYYY
+  const typeCode = prefix === "ret" ? "R" : "NR";
+  const prefix_str = `GP-${typeCode}`;
+
+  badgeEl.textContent = "⟳ Generating…";
+
+  try {
+    const res  = await fetch(`/api/next_record_no?type=${prefix}`);
+    const data = await res.json();
+    const seq  = String(data.next_no || 1).padStart(2, "0");
+    recEl.value        = `${prefix_str}-${seq}`;
+    badgeEl.textContent = `✓ ${prefix_str}-${seq}`;
+  } catch (err) {
+    // Fallback: if API not reachable, show GP-R-DDMMYYYY-01 as default
+    recEl.value        = `${prefix_str}-01`;
+    badgeEl.textContent = `✓ ${prefix_str}-01`;
+  }
+}
+
+window.onload = function () {
+    fetch('/get_contact_person_by_email')
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                // Auto-fill requester name and department only.
+                // Location must be selected manually by the user.
+                if (document.getElementById('ret_requesters')) {
+                    document.getElementById('ret_requesters').value = data.person_name;
+                    document.getElementById('ret_department').value = data.department;
+                }
+                if (document.getElementById('nonret_requesters')) {
+                    document.getElementById('nonret_requesters').value = data.person_name;
+                    document.getElementById('nonret_department').value = data.department;
+                }
+            }
+        })
+        .catch(err => console.error(err));
+};
+</script>
+
+
+<!-- ── GLOBAL LOADING OVERLAY ── -->
+<div id="loadingOverlay" style="display:none;position:fixed;inset:0;
+     background:rgba(15,23,42,0.55);z-index:9999;
+     align-items:center;justify-content:center;flex-direction:column;gap:16px;">
+  <div style="width:52px;height:52px;border:4px solid rgba(255,255,255,0.2);
+              border-top-color:#ffffff;border-radius:50%;
+              animation:spin 0.75s linear infinite;"></div>
+  <span style="color:#ffffff;font-family:'DM Sans',sans-serif;
+        font-size:14px;font-weight:500;letter-spacing:0.3px;">Submitting GatePass…</span>
+</div>
+<style>
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+
+</body>
+</html>

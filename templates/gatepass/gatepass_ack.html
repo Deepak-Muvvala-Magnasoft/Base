@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GatePass Acknowledgement — Magnasoft</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'DM Sans', Arial, sans-serif;
+  background: linear-gradient(135deg, #0f2e80 0%, #1a56db 60%, #1341b0 100%);
+  min-height: 100vh;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.card {
+  background: #fff;
+  border-radius: 16px;
+  width: 100%; max-width: 560px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  overflow: hidden;
+}
+.card-header {
+  background: #1e3a5f;
+  padding: 24px 28px;
+}
+.card-header-sub { color: #93c5fd; font-size: 11px; letter-spacing: 2px; font-weight: 700; text-transform: uppercase; }
+.card-header-title { color: #fff; font-size: 20px; font-weight: 700; margin-top: 4px; }
+.card-body { padding: 28px; }
+
+.info-table { width: 100%; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 20px; }
+.info-table tr:nth-child(odd) td:first-child { background: #f8faff; }
+.info-table td { padding: 9px 14px; font-size: 13px; border-bottom: 1px solid #e2e8f0; }
+.info-table tr:last-child td { border-bottom: none; }
+.info-table td:first-child { font-weight: 600; color: #64748b; width: 40%; font-size: 12px; text-transform: uppercase; letter-spacing: 0.4px; }
+.info-table td:last-child { color: #1a202c; }
+
+.items-table { width: 100%; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; margin-bottom: 24px; border-collapse: collapse; }
+.items-table th { background: #f4f6fb; padding: 9px 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; text-align: left; border-bottom: 1px solid #e2e8f0; }
+.items-table td { padding: 9px 12px; font-size: 13px; border-bottom: 1px solid #f0f2f7; color: #1a202c; }
+.items-table tr:last-child td { border-bottom: none; }
+
+.section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; margin-bottom: 10px; }
+
+.form-group { margin-bottom: 14px; }
+.form-label { font-size: 13px; font-weight: 600; color: #374151; display: block; margin-bottom: 5px; }
+.form-input {
+  width: 100%; padding: 10px 13px;
+  border: 1.5px solid #dde3ed; border-radius: 8px;
+  font-size: 14px; font-family: inherit; outline: none;
+  transition: border-color .15s;
+}
+.form-input:focus { border-color: #1a56db; }
+
+.btn-submit {
+  width: 100%; padding: 12px;
+  background: #1a56db; color: #fff;
+  border: none; border-radius: 9px;
+  font-size: 15px; font-weight: 700; font-family: inherit;
+  cursor: pointer; transition: background .15s;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.btn-submit:hover { background: #1341b0; }
+.btn-submit:disabled { opacity: .6; cursor: not-allowed; }
+
+.alert { padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 14px; }
+.alert-danger  { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+.alert-success { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+
+.error-state { text-align: center; padding: 20px 0; }
+.error-icon  { font-size: 48px; margin-bottom: 12px; }
+.error-state h3 { font-size: 18px; font-weight: 700; color: #1a202c; margin-bottom: 8px; }
+.error-state p  { font-size: 14px; color: #64748b; line-height: 1.6; }
+
+.success-state { text-align: center; padding: 10px 0; display: none; }
+.success-state.show { display: block; }
+.spinner {
+  display: inline-block; width: 16px; height: 16px;
+  border: 2px solid rgba(255,255,255,0.4); border-top-color: #fff;
+  border-radius: 50%; animation: spin .6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="card-header">
+    <div class="card-header-sub">GatePass Management — Magnasoft</div>
+    <div class="card-header-title">
+      {% if error %}
+        {% if error == 'expired' %}⏰ Link Expired
+        {% elif error == 'used' %}✅ Already Acknowledged
+        {% else %}❌ Invalid Link
+        {% endif %}
+      {% else %}
+        📦 Acknowledge Item Receipt
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card-body">
+    {% if error == 'expired' %}
+      <div class="error-state">
+        <div class="error-icon">⏰</div>
+        <h3>Link Expired</h3>
+        <p>This acknowledgement link has expired (valid for 7 days only).<br>Please contact Magnasoft to resend the link.</p>
+      </div>
+
+    {% elif error == 'used' %}
+      <div class="error-state">
+        <div class="error-icon">✅</div>
+        <h3>Already Acknowledged</h3>
+        {% if gp %}
+          <p>GatePass <strong>{{ gp.pass_no }}</strong> was already acknowledged
+          {% if gp.acknowledged_by %}by <strong>{{ gp.acknowledged_by }}</strong>{% endif %}
+          {% if gp.acknowledged_at %}on {{ gp.acknowledged_at.strftime('%d-%m-%Y %H:%M') }}{% endif %}.</p>
+        {% else %}
+          <p>This gate pass has already been acknowledged.</p>
+        {% endif %}
+      </div>
+
+    {% elif error == 'invalid' %}
+      <div class="error-state">
+        <div class="error-icon">❌</div>
+        <h3>Invalid Link</h3>
+        <p>This acknowledgement link is not valid.<br>Please contact Magnasoft for assistance.</p>
+      </div>
+
+    {% else %}
+      {# Valid token — show form #}
+      <p style="font-size:14px;color:#374151;margin-bottom:20px;">
+        You are listed as the collector for the following items from
+        <strong>Magnasoft Consulting pvt ltd</strong>. Please verify the details and acknowledge receipt.
+      </p>
+
+      <table class="info-table">
+        <tr><td>Pass No</td><td><strong>{{ gp.pass_no }}</strong></td></tr>
+        <tr><td>Pass Type</td><td>{{ gp.pass_type | title }}</td></tr>
+        <tr><td>Location</td><td>{{ gp.location or '—' }}</td></tr>
+        <tr><td>Date</td><td>{% set ack_date = gp.ack_token_sent_at or gp.security_checked_at or gp.created_at %}{{ ack_date.strftime('%d-%m-%Y') if ack_date else '—' }}</td></tr>
+        <tr><td>Requester</td><td>{{ gp.requester or '—' }}</td></tr>
+      </table>
+
+      <div class="section-label">Items Being Collected</div>
+      <table class="items-table">
+        <thead>
+          <tr><th>#</th><th>Item Name</th><th>Qty</th><th>Model / Serial</th></tr>
+        </thead>
+        <tbody>
+          {% for item in items %}
+          <tr>
+            <td style="color:#94a3b8;">{{ loop.index }}</td>
+            <td><strong>{{ item.item_name or '—' }}</strong></td>
+            <td>{{ item.qty or '—' }}</td>
+            <td style="font-family:monospace;font-size:12px;color:#64748b;">{{ item.serial_no or '—' }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" style="color:#94a3b8;text-align:center;">No items recorded.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      <div class="section-label">Your Details</div>
+      <div id="formAlert" class="alert alert-danger" style="display:none;"></div>
+
+      <div id="ackForm">
+        <div class="form-group">
+          <label class="form-label">Your Full Name <span style="color:#dc2626;">*</span></label>
+          <input type="text" class="form-input" id="ackName" placeholder="Enter your full name">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Company / Designation</label>
+          <input type="text" class="form-input" id="ackCompany" placeholder="Your company or designation">
+        </div>
+        <button class="btn-submit" id="ackBtn" onclick="submitAck()">
+          <span id="ackBtnTxt">✓ Acknowledge Receipt</span>
+        </button>
+      </div>
+
+      <div class="success-state" id="successState">
+        <div style="font-size:48px;margin-bottom:12px;">🎉</div>
+        <h3 style="font-size:18px;font-weight:700;color:#1a202c;margin-bottom:8px;">Acknowledged!</h3>
+        <p style="font-size:14px;color:#64748b;line-height:1.6;">
+          Your acknowledgement has been recorded successfully.<br>
+          Thank you for confirming receipt of the items.
+        </p>
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+const TOKEN = "{{ token }}";
+
+async function submitAck() {
+  const name    = document.getElementById("ackName").value.trim();
+  const company = document.getElementById("ackCompany").value.trim();
+  const alertEl = document.getElementById("formAlert");
+  const btn     = document.getElementById("ackBtn");
+  const txt     = document.getElementById("ackBtnTxt");
+
+  if (!name) {
+    alertEl.textContent = "Your full name is required.";
+    alertEl.style.display = "block";
+    return;
+  }
+  alertEl.style.display = "none";
+  btn.disabled = true;
+  txt.innerHTML = '<span class="spinner"></span> Submitting…';
+
+  try {
+    const resp = await fetch(`/gatepass/acknowledge/${TOKEN}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ acknowledged_by: name, ack_company: company })
+    });
+    const data = await resp.json();
+    if (resp.ok && data.success) {
+      document.getElementById("ackForm").style.display = "none";
+      document.getElementById("successState").classList.add("show");
+    } else {
+      alertEl.textContent = data.message || "Something went wrong. Please try again.";
+      alertEl.style.display = "block";
+      btn.disabled = false;
+      txt.textContent = "✓ Acknowledge Receipt";
+    }
+  } catch(e) {
+    alertEl.textContent = "Network error. Please try again.";
+    alertEl.style.display = "block";
+    btn.disabled = false;
+    txt.textContent = "✓ Acknowledge Receipt";
+  }
+}
+</script>
+</body>
+</html>
