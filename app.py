@@ -3821,14 +3821,15 @@ def send_gatepass_returned_notification(gp, returned_by: str, remarks: str, retu
         rows_html = ('<tr><td colspan="4" style="padding:14px;color:#94a3b8;font-size:13px;'
                      'font-family:Arial,sans-serif;text-align:center;">No items recorded.</td></tr>')
 
+    remarks_display = remarks if remarks else "<em style='color:#9ca3af;'>No remarks</em>"
     remarks_html = (
-        f'<tr style="background-color:#f0fdf4;">'
-        f'<td width="38%" style="padding:10px 16px;font-size:13px;font-family:Arial,sans-serif;'
-        f'color:#64748b;border-bottom:1px solid #f1f5f9;">Received Remarks</td>'
-        f'<td style="padding:10px 16px;font-size:13px;font-family:Arial,sans-serif;'
-        f'color:#166534;font-weight:600;border-bottom:1px solid #f1f5f9;">'
-        f'{remarks if remarks else "<em style=\'color:#9ca3af;\'>No remarks</em>"}</td></tr>'
-    ) if True else ""
+        '<tr style="background-color:#f0fdf4;">'
+        '<td width="38%" style="padding:10px 16px;font-size:13px;font-family:Arial,sans-serif;'
+        'color:#64748b;border-bottom:1px solid #f1f5f9;">Received Remarks</td>'
+        '<td style="padding:10px 16px;font-size:13px;font-family:Arial,sans-serif;'
+        'color:#166534;font-weight:600;border-bottom:1px solid #f1f5f9;">'
+        f'{remarks_display}</td></tr>'
+    )
 
     def _build_body(to_name):
         return f"""<!DOCTYPE html>
