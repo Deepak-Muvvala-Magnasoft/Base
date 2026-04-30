@@ -1266,8 +1266,12 @@ def send_email_to_it(visitor_obj_or_dict, contact_name, contact_email, visitor_i
         base = VISITOR_BASE_URL or "http://myportal.magnasoft.com"
     base = base.rstrip('/')
 
-    approve_link = f"{base}/approve_electronics/{vid}"
-    decline_link = f"{base}/decline_electronics/{vid}"
+    # Pass the IT contact's email as ?actor= so the approve route can resolve
+    # the real person name from the contact_person table.
+    from urllib.parse import quote as _quote
+    _actor_q = _quote(contact_email or "", safe="")
+    approve_link = f"{base}/approve_electronics/{vid}?actor={_actor_q}"
+    decline_link = f"{base}/decline_electronics/{vid}?actor={_actor_q}"
 
     dept = ""
     try:
@@ -1389,8 +1393,12 @@ def send_email_to_contact(visitor_obj_or_dict, visitor_id=None):
         base = VISITOR_BASE_URL or "http://myportal.magnasoft.com"
     base = base.rstrip('/')
 
-    approve_link = f"{base}/approve_visitor/{vid}"
-    decline_link = f"{base}/decline_visitor/{vid}"
+    # Pass the contact's email as ?actor=... so the approve/decline route can
+    # resolve the real person name from the contact_person table.
+    from urllib.parse import quote as _quote
+    _actor_q = _quote(contact_email or "", safe="")
+    approve_link = f"{base}/approve_visitor/{vid}?actor={_actor_q}"
+    decline_link = f"{base}/decline_visitor/{vid}?actor={_actor_q}"
 
     # guard: if no email, nothing to send
     if not contact_email:
@@ -1461,22 +1469,83 @@ def _success_page(emoji, color, title, visitor_name, action_word, actor):
     )
 
 
+def _resolve_actor_name(actor_param: str, fallback_email: str = None, default: str = "") -> str:
+    """
+    Given the ?actor= query param (which we now pass as an email), look up the
+    real person name from the contact_person table. Falls back gracefully so we
+    always return *something* sensible to store in approved_by / declined_by.
+
+    Resolution order:
+      1. If ?actor= looks like an email → look up `username` (display name) by that email.
+      2. If ?actor= is non-empty and not an email → trust it as the name itself.
+      3. Otherwise try fallback_email (e.g., visitor.contact_email) → look up name.
+      4. Finally fall back to the email's local-part (before @) titled, or `default`.
+    """
+    actor_param = (actor_param or "").strip()
+    fallback_email = (fallback_email or "").strip()
+
+    def _lookup_by_email(em):
+        if not em:
+            return None
+        try:
+            row = db.session.execute(
+                text("SELECT username FROM contact_person WHERE email = :em LIMIT 1"),
+                {"em": em}
+            ).mappings().first()
+            if row and row.get("username"):
+                return row["username"].strip()
+        except Exception:
+            app.logger.exception("contact_person lookup failed for email=%s", em)
+        # nice-looking fallback from the email
+        local = em.split("@", 1)[0]
+        return local.replace(".", " ").replace("_", " ").title() if local else None
+
+    # 1. actor looks like an email → resolve
+    if "@" in actor_param:
+        name = _lookup_by_email(actor_param)
+        if name:
+            return name
+
+    # 2. actor is some plain text (already a name) → trust it, but reject obvious dept labels
+    dept_words = {"support", "admin", "it", "finance", "hr", "security"}
+    if actor_param and actor_param.lower() not in dept_words:
+        return actor_param
+
+    # 3. try fallback email
+    if fallback_email:
+        name = _lookup_by_email(fallback_email)
+        if name:
+            return name
+
+    return default or None
+
+
 @app.route("/approve_visitor/<int:visitor_id>")
 def approve_visitor(visitor_id):
     v = Visitor.query.get(visitor_id)
     if not v:
         return "Visitor not found", 404
-    # Idempotency: if already actioned, don't overwrite the tracking
+    visitor_name = v.name or f"#{visitor_id}"
+
+    # Person 2 clicked Approve, but someone already approved → show "already approved"
     if v.approved is True and v.approved_at:
-        return "Visitor already approved ✅."
+        return _already_taken_page(visitor_name, "approved", v.approved_by or "another approver", v.approved_at)
+    # Person 2 clicked Approve, but someone already declined → show "already declined"
+    if v.approved is False and v.declined_at:
+        return _already_taken_page(visitor_name, "declined", v.declined_by or "another approver", v.declined_at)
+
+    # First action — record it
     v.approved = True
     v.approved_at = datetime.now(IST).replace(tzinfo=None)
-    v.approved_by = (request.args.get("actor") or v.contact_person or "").strip() or None
-    # clear opposite action if it was previously declined
+    v.approved_by = _resolve_actor_name(
+        request.args.get("actor"),
+        fallback_email=v.contact_email,
+        default=None,
+    )
     v.declined_at = None
     v.declined_by = None
     db.session.commit()
-    return "Visitor approved ✅."
+    return _success_page("✅", "#166534", "Approved Successfully", visitor_name, "approved", v.approved_by)
 
 
 @app.route("/decline_visitor/<int:visitor_id>")
@@ -1484,15 +1553,24 @@ def decline_visitor(visitor_id):
     v = Visitor.query.get(visitor_id)
     if not v:
         return "Visitor not found", 404
+    visitor_name = v.name or f"#{visitor_id}"
+
     if v.approved is False and v.declined_at:
-        return "Visitor already declined ❌."
+        return _already_taken_page(visitor_name, "declined", v.declined_by or "another approver", v.declined_at)
+    if v.approved is True and v.approved_at:
+        return _already_taken_page(visitor_name, "approved", v.approved_by or "another approver", v.approved_at)
+
     v.approved = False
     v.declined_at = datetime.now(IST).replace(tzinfo=None)
-    v.declined_by = (request.args.get("actor") or v.contact_person or "").strip() or None
+    v.declined_by = _resolve_actor_name(
+        request.args.get("actor"),
+        fallback_email=v.contact_email,
+        default=None,
+    )
     v.approved_at = None
     v.approved_by = None
     db.session.commit()
-    return "Visitor declined ❌."
+    return _success_page("❌", "#991b1b", "Declined", visitor_name, "declined", v.declined_by)
 
 
 @app.route("/approve_electronics/<int:visitor_id>")
@@ -1500,16 +1578,33 @@ def approve_electronics(visitor_id):
     v = Visitor.query.get(visitor_id)
     if not v:
         return "Visitor not found", 404
+    visitor_name = v.name or f"#{visitor_id}"
+
     if v.electronics_approved is True and v.electronics_approved_at:
-        return "<html><body>Electronics already approved. You can close this window.</body></html>"
+        return _already_taken_page(
+            visitor_name, "approved (electronics)",
+            v.electronics_approved_by or "another approver",
+            v.electronics_approved_at,
+        )
+    if v.electronics_approved is False and v.electronics_declined_at:
+        return _already_taken_page(
+            visitor_name, "declined (electronics)",
+            v.electronics_declined_by or "another approver",
+            v.electronics_declined_at,
+        )
+
     v.electronics_approved = True
     v.electronics_approved_at = datetime.now(IST).replace(tzinfo=None)
-    v.electronics_approved_by = (request.args.get("actor") or "IT").strip() or None
+    v.electronics_approved_by = _resolve_actor_name(
+        request.args.get("actor"),
+        fallback_email=v.contact_email,
+        default="IT",
+    )
     v.electronics_declined_at = None
     v.electronics_declined_by = None
     db.session.commit()
-    app.logger.info("Electronics approved via link for id=%s", visitor_id)
-    return "<html><body>Electronics approved. You can close this window.</body></html>"
+    app.logger.info("Electronics approved via link for id=%s by=%s", visitor_id, v.electronics_approved_by)
+    return _success_page("✅", "#166534", "Electronics Approved", visitor_name, "approved (electronics)", v.electronics_approved_by)
 
 
 @app.route("/decline_electronics/<int:visitor_id>")
@@ -1517,16 +1612,33 @@ def decline_electronics(visitor_id):
     v = Visitor.query.get(visitor_id)
     if not v:
         return "Visitor not found", 404
+    visitor_name = v.name or f"#{visitor_id}"
+
     if v.electronics_approved is False and v.electronics_declined_at:
-        return "<html><body>Electronics already declined. You can close this window.</body></html>"
+        return _already_taken_page(
+            visitor_name, "declined (electronics)",
+            v.electronics_declined_by or "another approver",
+            v.electronics_declined_at,
+        )
+    if v.electronics_approved is True and v.electronics_approved_at:
+        return _already_taken_page(
+            visitor_name, "approved (electronics)",
+            v.electronics_approved_by or "another approver",
+            v.electronics_approved_at,
+        )
+
     v.electronics_approved = False
     v.electronics_declined_at = datetime.now(IST).replace(tzinfo=None)
-    v.electronics_declined_by = (request.args.get("actor") or "IT").strip() or None
+    v.electronics_declined_by = _resolve_actor_name(
+        request.args.get("actor"),
+        fallback_email=v.contact_email,
+        default="IT",
+    )
     v.electronics_approved_at = None
     v.electronics_approved_by = None
     db.session.commit()
-    app.logger.info("Electronics declined via link for id=%s", visitor_id)
-    return "<html><body>Electronics declined. You can close this window.</body></html>"
+    app.logger.info("Electronics declined via link for id=%s by=%s", visitor_id, v.electronics_declined_by)
+    return _success_page("❌", "#991b1b", "Electronics Declined", visitor_name, "declined (electronics)", v.electronics_declined_by)
 
 
 @app.route("/get_users")
